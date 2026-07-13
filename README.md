@@ -25,8 +25,8 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 
 Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
-chunk boundaries), **Nova multimodal embeddings**, **Pinecone** for vectors (dense + sparse
-hybrid), **S3** for artifacts. ~$0.002/page in LLM spend.
+chunk boundaries), **Nova multimodal embeddings**, **Pinecone or Qdrant** for
+vectors (both hybrid dense + sparse), **S3** for artifacts. ~$0.002/page in LLM spend.
 
 ## Quickstart
 
@@ -77,8 +77,9 @@ aws configure --profile ram-bedrock     # or your profile — set it in config.y
 ```
 
 Edit `config.yaml`: your AWS profile/account, S3 bucket name (globally
-unique), Pinecone index names. **The S3 bucket and Pinecone indexes (dense +
-sparse) are created automatically on first use** — no manual setup.
+unique), vector store choice and index/collection names. **The S3 bucket and
+the vector indexes/collection are created automatically on first use** — no
+manual setup.
 
 ### 5. Run
 
@@ -132,10 +133,11 @@ src/ingestlib/
 ```
 
 Strict downward dependencies. The `VectorStore` contract means backends drop
-in as connectors — **Pinecone** (hybrid dense + sparse) and **Qdrant** (dense;
-local docker or cloud) ship today; pick one with `vector_store: pinecone |
-qdrant` in config.yaml. Keys for both can sit in `.env` — only the selected
-connector ever builds a client.
+in as connectors — both ship **hybrid search**: **Pinecone** (dense + hosted
+sparse model, merged client-side) and **Qdrant** (dense + BM25 with
+server-side IDF and RRF fusion; local docker or cloud). Pick one with
+`vector_store: pinecone | qdrant` in config.yaml. Keys for both can sit in
+`.env` — only the selected connector ever builds a client.
 
 ## Logging
 
@@ -183,7 +185,6 @@ and handwriting are out of scope by design.
 ## Roadmap
 
 - Retrieval quality evaluation harness
-- Additional vector-store connectors (milvus, pgvector, opensearch)
 - Hover-highlight review UI (bbox provenance already shipped for it)
 - Extract: schema-driven field extraction with source provenance
 

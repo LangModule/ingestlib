@@ -1,5 +1,13 @@
 """QdrantStore — the VectorStore contract implemented on a Qdrant collection.
 
+Hybrid by default: every point carries a named "dense" vector (Nova embedding,
+passed in by the caller) and a named "sparse" vector (BM25 term frequencies
+computed locally; the server's IDF modifier supplies document frequencies, so
+there is no corpus state to manage). Queries that carry the original question
+text run both signals in ONE call — the server fuses them with Reciprocal Rank
+Fusion — and the caller's reranker produces the final order on top. Sparse
+failures degrade to dense-only with a warning.
+
 Backend quirks handled here so callers never see them:
   - point IDs must be UUIDs or unsigned ints, not arbitrary strings →
     deterministic uuid5 of "{document_id}:{chunk_id}", so re-ingestion still
@@ -10,20 +18,33 @@ Backend quirks handled here so callers never see them:
     and deletion filters on, which mirrors the isolation semantics
   - deletion works by filter directly (no ID listing dance); the count comes
     from an exact count call before deleting
-
-Dense-only: the `text` query param is accepted and ignored (a sparse/hybrid
-side is a connector v2, same shape as the Pinecone one).
 """
 import time
 import uuid
 from typing import Any
 
-from qdrant_client.models import FieldCondition, Filter, FilterSelector, MatchValue, PointStruct
+from qdrant_client.models import (
+    FieldCondition,
+    Filter,
+    FilterSelector,
+    Fusion,
+    FusionQuery,
+    MatchValue,
+    PointStruct,
+    Prefetch,
+    SparseVector,
+)
 
 from ingestlib.config import get_qdrant_config
 from ingestlib.operations.split.models import Chunk
 from ingestlib.storage.base import RetrievedChunk, VectorStore
-from ingestlib.storage.qdrant.client import ensure_collection, get_qdrant_client
+from ingestlib.storage.qdrant.client import (
+    DENSE_VECTOR,
+    SPARSE_VECTOR,
+    ensure_collection,
+    get_bm25,
+    get_qdrant_client,
+)
 from ingestlib.utils.logger import get_logger
 
 
@@ -90,8 +111,24 @@ def _filter(
     return Filter(must=must)
 
 
+def _query_sparse(text: str) -> SparseVector | None:
+    """BM25 sparse form of a query; None when nothing tokenizes."""
+    emb = next(iter(get_bm25().query_embed(text)))
+    indices = [int(i) for i in emb.indices]
+    if not indices:
+        return None
+    return SparseVector(indices=indices, values=[float(v) for v in emb.values])
+
+
 class QdrantStore(VectorStore):
-    """Vector storage on a Qdrant collection (auto-created on first use)."""
+    """Vector storage on a Qdrant collection (auto-created on first use).
+
+    hybrid=True (default) stores a BM25 sparse vector next to every dense one
+    and fuses both signals at query time; hybrid=False is dense-only.
+    """
+
+    def __init__(self, hybrid: bool = True):
+        self.hybrid = hybrid
 
     def upsert_chunks(
         self,
@@ -101,25 +138,47 @@ class QdrantStore(VectorStore):
         category: str = "",
         namespace: str = "",
     ) -> int:
-        """Store one point per chunk; deterministic IDs overwrite in place."""
+        """Store one point per chunk (dense + sparse when hybrid).
+
+        Returns the point count; deterministic IDs overwrite in place.
+        """
         self._validate_upsert(chunks, embeddings)
         collection = ensure_collection(dimension=len(embeddings[0]))
         client = get_qdrant_client()
 
-        points = [
-            PointStruct(
+        sparse_by_idx: dict[int, SparseVector] = {}
+        if self.hybrid:
+            try:
+                for i, emb in enumerate(get_bm25().embed([c.embedding_text for c in chunks])):
+                    indices = [int(v) for v in emb.indices]
+                    if indices:  # a chunk with no recognized tokens has no sparse form
+                        sparse_by_idx[i] = SparseVector(
+                            indices=indices, values=[float(v) for v in emb.values]
+                        )
+            except Exception as exc:
+                sparse_by_idx.clear()  # drop partial results — all-dense beats half-sparse
+                logger.warning(
+                    "BM25 encoding failed (%s: %s) — doc %s is dense-only until re-ingested",
+                    type(exc).__name__, exc, document_id[:12],
+                )
+
+        points = []
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
+            vector: dict[str, Any] = {DENSE_VECTOR: embedding}
+            if i in sparse_by_idx:
+                vector[SPARSE_VECTOR] = sparse_by_idx[i]
+            points.append(PointStruct(
                 id=_point_id(document_id, chunk.chunk_id),
-                vector=embedding,
+                vector=vector,
                 payload=_to_payload(document_id, chunk, category, namespace),
-            )
-            for chunk, embedding in zip(chunks, embeddings)
-        ]
+            ))
+
         t0 = time.perf_counter()
         for i in range(0, len(points), _UPSERT_BATCH):
             client.upsert(collection_name=collection, points=points[i : i + _UPSERT_BATCH])
         logger.info(
-            "upserted %d point(s) for doc %s in %.1fs",
-            len(points), document_id[:12], time.perf_counter() - t0,
+            "upserted %d point(s) (%d with sparse) for doc %s in %.1fs",
+            len(points), len(sparse_by_idx), document_id[:12], time.perf_counter() - t0,
         )
         return len(points)
 
@@ -133,21 +192,51 @@ class QdrantStore(VectorStore):
     ) -> list[RetrievedChunk]:
         """Nearest chunks, best first; filters are payload equality constraints.
 
-        `text` is ignored — this connector is dense-only.
+        When hybrid and `text` is given, dense and BM25 branches run in one
+        server call fused with RRF — scores are then RRF ranks, not cosine.
         """
         collection = ensure_collection(dimension=len(vector))
+        client = get_qdrant_client()
+        query_filter = _filter(namespace, filters)
+
+        sparse = None
+        if self.hybrid and text and text.strip():
+            try:
+                sparse = _query_sparse(text)
+            except Exception as exc:
+                logger.warning(
+                    "BM25 query encoding failed (%s: %s) — dense-only query",
+                    type(exc).__name__, exc,
+                )
+
         t0 = time.perf_counter()
-        response = get_qdrant_client().query_points(
-            collection_name=collection,
-            query=vector,
-            limit=top_k,
-            query_filter=_filter(namespace, filters),
-            with_payload=True,
-        )
+        if sparse is not None:
+            response = client.query_points(
+                collection_name=collection,
+                prefetch=[
+                    Prefetch(query=vector, using=DENSE_VECTOR,
+                             filter=query_filter, limit=top_k),
+                    Prefetch(query=sparse, using=SPARSE_VECTOR,
+                             filter=query_filter, limit=top_k),
+                ],
+                query=FusionQuery(fusion=Fusion.RRF),
+                limit=top_k,
+                with_payload=True,
+            )
+        else:
+            response = client.query_points(
+                collection_name=collection,
+                query=vector,
+                using=DENSE_VECTOR,
+                limit=top_k,
+                query_filter=query_filter,
+                with_payload=True,
+            )
         hits = [_from_point(p) for p in response.points]
         logger.info(
-            "query returned %d hit(s) in %.2fs (top_k=%d, filters=%s)",
-            len(hits), time.perf_counter() - t0, top_k, sorted(filters) if filters else None,
+            "query returned %d hit(s) in %.2fs (top_k=%d, hybrid=%s, filters=%s)",
+            len(hits), time.perf_counter() - t0, top_k, sparse is not None,
+            sorted(filters) if filters else None,
         )
         return hits
 

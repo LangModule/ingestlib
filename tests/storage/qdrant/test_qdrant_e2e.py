@@ -2,8 +2,8 @@
 
 Opt-in via RUN_QDRANT_E2E=1 — needs a reachable server at QDRANT_URL
 (e.g. docker run -p 6333:6333 qdrant/qdrant, or Qdrant Cloud with an API key).
-Creates the real collection on first run, upserts a sentinel document,
-queries it back, and deletes it.
+Creates the real collection on first run, upserts a sentinel document (dense +
+BM25 sparse), queries dense, hybrid-fused, and lexical, then deletes it.
 """
 import os
 
@@ -75,6 +75,28 @@ def test_query_filter_constrains_results(store, upserted):
     q = embed_text("revenue growth", purpose="GENERIC_RETRIEVAL")
     hits = store.query(q, top_k=5, filters={"section": "methods"})
     assert all(h.section == "methods" for h in hits)
+
+
+def test_hybrid_fusion_surfaces_lexical_match(store, upserted):
+    """RRF-fused query: exact tokens must surface the right chunk even when
+    the dense vector is deliberately off-topic."""
+    from ingestlib.foundations.llm import embed_text
+
+    off_topic = embed_text("quarterly financial performance", purpose="GENERIC_RETRIEVAL")
+    hits = store.query(off_topic, top_k=2, text="recruited Cairo community centers")
+    assert hits, "expected fused hits"
+    assert any(h.heading == "Participant recruitment" for h in hits), (
+        "BM25 branch should surface the Cairo chunk despite the off-topic dense vector"
+    )
+
+
+def test_hybrid_query_has_no_duplicates(store, upserted):
+    from ingestlib.foundations.llm import embed_text
+
+    q = embed_text("how were study participants recruited?", purpose="GENERIC_RETRIEVAL")
+    hits = store.query(q, top_k=5, text="how were study participants recruited?")
+    keys = [(h.document_id, h.chunk_id) for h in hits]
+    assert len(keys) == len(set(keys)), "fusion must yield each chunk once"
 
 
 def test_reupsert_overwrites_not_duplicates(store, upserted):
