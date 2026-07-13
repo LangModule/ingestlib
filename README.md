@@ -1,1 +1,188 @@
 # ingestlib
+
+Self-hosted document intelligence for RAG pipelines. One library that takes a
+raw document — PDF, DOCX, PPTX — and produces searchable, **cited**,
+retrieval-ready chunks: the territory of LlamaParse / Reducto /
+Unstructured.io, running on your own stack.
+
+```python
+from ingestlib.services import ingest, retrieve
+
+ingest("finance-10k.pdf")            # parse → classify → split → embed → vector store
+result = retrieve("what were the total revenues?")
+print(result.context)                # ranked chunks, each citing doc · page · section
+```
+
+## What it does
+
+| Stage | What you get |
+|---|---|
+| **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, **charts converted to data tables** (estimated values marked `~`), figures extracted as PNG crops with captions and AI descriptions — every block traceable to a bounding box on the page |
+| **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your categories, with confidence and alternatives. Works standalone with **no OCR** |
+| **Split** | Sections (pages grouped by role: `methods`, `results`, …) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
+| **Ingest** | The whole pipeline in one call, every stage persisted to S3, vectors upserted, deduplicated by content checksum |
+| **Retrieve** | Question → dense search → **Jina rerank** → hits with scores and citations, plus a prompt-ready context block |
+
+Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
+**Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
+chunk boundaries), **Nova multimodal embeddings**, **Pinecone** for vectors,
+**S3** for artifacts. ~$0.002/page in LLM spend.
+
+## Quickstart
+
+### 1. Requirements
+
+- Python 3.12+ and [uv](https://github.com/astral-sh/uv)
+- **AWS account** with Bedrock access (`us-east-1`): Nova 2 Lite + Nova 2
+  multimodal embeddings
+- **Pinecone account** (serverless, free tier works)
+- **Jina AI account** for reranking (free tier: 100 RPM)
+
+### 2. Install
+
+```bash
+git clone https://github.com/LangModule/ingestlib.git
+cd ingestlib
+uv sync
+```
+
+System dependency — LibreOffice (DOCX/PPTX → PDF conversion):
+
+```bash
+brew install --cask libreoffice          # macOS (binary is `soffice`)
+sudo apt install libreoffice-core libreoffice-writer libreoffice-impress   # Linux
+```
+
+### 3. Start the OCR inference server
+
+Parse runs PaddleOCR-VL-1.6 behind an inference server. First launch downloads
+~1.8 GB of weights; later launches load from cache in seconds.
+
+```bash
+# Apple Silicon (Metal GPU)
+uv run python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
+
+# NVIDIA (then set paddle_vl.backend: vllm-server in config.yaml)
+vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111
+```
+
+The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
+
+### 4. Configure
+
+```bash
+cp .env.example .env       # paste JINA_API_KEY and PINECONE_API_KEY
+aws configure --profile ram-bedrock     # or your profile — set it in config.yaml
+```
+
+Edit `config.yaml`: your AWS profile/account, S3 bucket name (globally
+unique), Pinecone index name. **The S3 bucket and Pinecone index are created
+automatically on first use** — no manual setup.
+
+### 5. Run
+
+```python
+from ingestlib.services import ingest, retrieve
+
+r = ingest("report.pdf")
+print(r.status, r.category, r.chunks, r.durations)
+
+res = retrieve("what does the report conclude?", top_k=5)
+for hit in res.hits:
+    print(hit.rerank_score, hit.citation, hit.chunk.heading)
+```
+
+## Using the operations directly
+
+Every operation also works standalone:
+
+```python
+from ingestlib.operations import parse, classify, split
+
+result = parse("report.pdf")            # ParseResult: pages, regions, figures
+print(result.markdown)                  # whole-document markdown
+result.save_images("out/")              # extracted figures/charts as PNGs
+
+label = classify("report.pdf")          # no OCR needed — native text + embedded images
+chunks = split(result, category=label.category)
+for c in chunks.chunks:
+    print(c.token_estimate, c.embedding_text.splitlines()[0])
+```
+
+Persistence and vector access are explicit too:
+
+```python
+from ingestlib.storage import artifacts, PineconeStore
+
+doc_id = artifacts.save_parse(result)   # S3: source, result.json, page PNGs, crops
+artifacts.list_documents()              # registry: filename, pages, category, chunks
+```
+
+## Architecture
+
+```
+src/ingestlib/
+├── services/       ingest · retrieve          — the product
+├── operations/     parse · classify · split   — the tools (each standalone)
+├── storage/        artifacts (S3) · base (VectorStore contract) · pinecone
+├── foundations/    llm (Bedrock Nova, Jina) · ocr (PaddleOCR-VL)
+├── utils/          logger · files
+└── config.py       config.yaml + .env → typed configs
+```
+
+Strict downward dependencies. The `VectorStore` contract means other backends
+(qdrant, milvus, pgvector, opensearch) drop in as connectors.
+
+## Logging
+
+```bash
+INGESTLIB_LOG_LEVEL=INFO           # DEBUG | INFO | WARNING | ERROR (default INFO)
+INGESTLIB_LOG_THIRD_PARTY=1        # also show paddlex/httpx/botocore chatter
+INGESTLIB_LOG_COLOR=0              # disable colored output
+```
+
+## Testing
+
+Tests hit **real APIs, never mocks**. Pure logic runs always; server-hitting
+suites are opt-in via env gates.
+
+```bash
+make test                  # fast suite (~170 tests, ~90s; e2e groups skip)
+make test-parse            # parse e2e            (needs VL server + Bedrock)
+make test-classify         # classify e2e         (needs Bedrock)
+make test-split            # split e2e            (needs Bedrock)
+make test-s3               # artifact store e2e   (needs AWS)
+make test-pinecone         # vector connector e2e (needs Pinecone + Bedrock)
+make test-services         # full product e2e     (needs the entire stack)
+make test-all              # everything
+```
+
+Fixture PDFs live in `tests/data/pdf/` — 14 real documents (research papers,
+earnings decks, insurance forms, timetables, 10-Ks).
+
+## Disk footprint
+
+| Component | Size | Location |
+|---|---|---|
+| Python deps | ~3 GB | `.venv/` |
+| PaddleOCR-VL-1.6 weights | ~1.8 GB | `~/.cache/huggingface/hub/` |
+| PP-DocLayoutV3 | ~126 MB | `~/.paddlex/official_models/` |
+| LibreOffice | ~600 MB | system |
+
+## Scope
+
+English documents; PDF / DOCX / PPTX input. Images, charts, and tables
+**inside** documents are fully extracted and interpreted; direct image files
+and handwriting are out of scope by design.
+
+## Roadmap
+
+- Retrieval quality evaluation harness
+- Hybrid (dense + sparse) search in the Pinecone connector
+- Additional vector-store connectors (qdrant, milvus, pgvector, opensearch)
+- Hover-highlight review UI (bbox provenance already shipped for it)
+- Extract: schema-driven field extraction with source provenance
+
+## License
+
+See [LICENSE](./LICENSE).
