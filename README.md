@@ -1,5 +1,7 @@
 # ingestlib
 
+![ingestlib — self-hosted document intelligence for RAG](assets/cover.png)
+
 Self-hosted document intelligence for RAG pipelines. One library that takes a
 raw document — PDF, DOCX, PPTX — and produces searchable, **cited**,
 retrieval-ready chunks: the territory of LlamaParse / Reducto /
