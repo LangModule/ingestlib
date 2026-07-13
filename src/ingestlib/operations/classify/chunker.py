@@ -34,7 +34,7 @@ class PageContent(NamedTuple):
     images: list[bytes]
 
 
-def extract_pages(source: "ParseResult | Path | str") -> list[PageContent]:
+def extract_pages(source: ParseResult | Path | str) -> list[PageContent]:
     """Normalize either input into per-page (text, images) records."""
     if isinstance(source, ParseResult):
         return [

@@ -21,7 +21,15 @@ paddle_vl:
 s3:
   bucket: ingestlib                                     # S3 names are GLOBAL — if taken by another account, pick a variant
 
+vector_store: pinecone                                  # which connector ingest/retrieve use: pinecone | qdrant
+
 pinecone:
   index_name: ingestlib                                 # created on first upsert if absent
+  sparse_index_name: ingestlib-sparse                   # lexical half of hybrid search, same bootstrap
+  sparse_model_id: pinecone-sparse-english-v0           # hosted sparse embeddings — no corpus state to manage
   cloud: aws                                            # serverless index location
   region: us-east-1                                     # API key comes from PINECONE_API_KEY in .env
+
+qdrant:
+  collection_name: ingestlib                            # created on first upsert if absent
+                                                        # URL + API key come from QDRANT_URL / QDRANT_API_KEY in .env

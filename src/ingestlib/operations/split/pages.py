@@ -155,7 +155,7 @@ def _blocks_from_text(page_num: int, text: str) -> list[Block]:
     ]
 
 
-def extract_split_pages(source: "ParseResult | Path | str") -> list[SplitPage]:
+def extract_split_pages(source: ParseResult | Path | str) -> list[SplitPage]:
     """Normalize either input into per-page block lists, applying the 500-page cap."""
     if isinstance(source, ParseResult):
         pages = [

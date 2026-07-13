@@ -55,18 +55,29 @@ class S3Config:
 class PineconeConfig:
     api_key: str                # from PINECONE_API_KEY env var
     index_name: str
+    sparse_index_name: str      # lexical half of hybrid search (created on first upsert)
+    sparse_model_id: str        # Pinecone-hosted sparse embedding model (no corpus state)
     cloud: str                  # serverless cloud provider (aws | gcp | azure)
     region: str
 
 
 @dataclass(frozen=True)
+class QdrantConfig:
+    api_key: str                # from QDRANT_API_KEY env var ("" for a local/unsecured server)
+    url: str                    # from QDRANT_URL env var (e.g. http://localhost:6333 or a cloud URL)
+    collection_name: str
+
+
+@dataclass(frozen=True)
 class IngestConfig:
+    vector_store: str           # which connector the services default to (pinecone | qdrant)
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
     paddle_vl: PaddleVLConfig
     s3: S3Config
     pinecone: PineconeConfig
+    qdrant: QdrantConfig
 
 
 def _load_config() -> IngestConfig:
@@ -111,20 +122,32 @@ def _load_config() -> IngestConfig:
     )
 
     pinecone_data = data.get("pinecone", {})
+    index_name = pinecone_data.get("index_name", "ingestlib")
     pinecone_config = PineconeConfig(
         api_key=os.environ.get("PINECONE_API_KEY", ""),
-        index_name=pinecone_data.get("index_name", "ingestlib"),
+        index_name=index_name,
+        sparse_index_name=pinecone_data.get("sparse_index_name", f"{index_name}-sparse"),
+        sparse_model_id=pinecone_data.get("sparse_model_id", "pinecone-sparse-english-v0"),
         cloud=pinecone_data.get("cloud", "aws"),
         region=pinecone_data.get("region", "us-east-1"),
     )
 
+    qdrant_data = data.get("qdrant", {})
+    qdrant_config = QdrantConfig(
+        api_key=os.environ.get("QDRANT_API_KEY", ""),
+        url=os.environ.get("QDRANT_URL", "http://localhost:6333"),
+        collection_name=qdrant_data.get("collection_name", "ingestlib"),
+    )
+
     return IngestConfig(
+        vector_store=data.get("vector_store", "pinecone"),
         aws=aws_config,
         bedrock=bedrock_config,
         jina=jina_config,
         paddle_vl=paddle_vl_config,
         s3=s3_config,
         pinecone=pinecone_config,
+        qdrant=qdrant_config,
     )
 
 
@@ -164,3 +187,8 @@ def get_s3_config() -> S3Config:
 def get_pinecone_config() -> PineconeConfig:
     """Pinecone index settings and API key."""
     return _config.pinecone
+
+
+def get_qdrant_config() -> QdrantConfig:
+    """Qdrant endpoint, API key, and collection settings."""
+    return _config.qdrant

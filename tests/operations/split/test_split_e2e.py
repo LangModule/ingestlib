@@ -16,6 +16,7 @@ pytestmark = pytest.mark.skipif(
 
 @pytest.fixture(scope="session")
 def result():
+    """One real end-to-end split, shared across every test in this module."""
     from ingestlib.operations.split import split
 
     return split(_TESTS_DIR / "data" / "pdf" / "clinical-study.pdf", category="research_paper")

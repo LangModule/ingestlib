@@ -24,6 +24,7 @@ dependencies = [
     "pypdfium2>=4.0",
     "python-dotenv>=1.0",
     "pyyaml>=6.0.2",
+    "qdrant-client>=1.18.0",
 ]
 
 [build-system]

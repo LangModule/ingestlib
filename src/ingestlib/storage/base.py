@@ -6,9 +6,10 @@ quirks — ID schemes, metadata encoding, deletion semantics — behind these
 three methods, so pipelines are written once and run against whichever
 database is configured.
 
-Principle: vectors in, records out. Embedding happens outside the store (via
-foundations.llm.embed_text on chunk.embedding_text), so connectors stay
-provider-agnostic.
+Principle: vectors in, records out. Dense embedding happens outside the store
+(via foundations.llm.embed_text on chunk.embedding_text), so connectors stay
+provider-agnostic; a connector with a lexical side may compute its own sparse
+form internally from the chunk text.
 """
 from abc import ABC, abstractmethod
 from typing import Any
@@ -72,11 +73,14 @@ class VectorStore(ABC):
         top_k: int = 10,
         filters: dict[str, Any] | None = None,
         namespace: str = "",
+        text: str | None = None,
     ) -> list[RetrievedChunk]:
         """Nearest chunks to `vector`, best first.
 
         filters are equality constraints on payload fields, e.g.
         {"category": "research_paper", "section": "methods"}.
+        `text` is the original query text — connectors with a lexical/hybrid
+        side use it for sparse search; dense-only connectors ignore it.
         """
 
     @abstractmethod

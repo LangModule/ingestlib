@@ -21,12 +21,12 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your categories, with confidence and alternatives. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, …) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
 | **Ingest** | The whole pipeline in one call, every stage persisted to S3, vectors upserted, deduplicated by content checksum |
-| **Retrieve** | Question → dense search → **Jina rerank** → hits with scores and citations, plus a prompt-ready context block |
+| **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **Jina rerank** → hits with scores and citations, plus a prompt-ready context block |
 
 Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
-chunk boundaries), **Nova multimodal embeddings**, **Pinecone** for vectors,
-**S3** for artifacts. ~$0.002/page in LLM spend.
+chunk boundaries), **Nova multimodal embeddings**, **Pinecone** for vectors (dense + sparse
+hybrid), **S3** for artifacts. ~$0.002/page in LLM spend.
 
 ## Quickstart
 
@@ -35,7 +35,8 @@ chunk boundaries), **Nova multimodal embeddings**, **Pinecone** for vectors,
 - Python 3.12+ and [uv](https://github.com/astral-sh/uv)
 - **AWS account** with Bedrock access (`us-east-1`): Nova 2 Lite + Nova 2
   multimodal embeddings
-- **Pinecone account** (serverless, free tier works)
+- **Vector database** — Pinecone account (serverless, free tier works;
+  the default) or a Qdrant server (local docker or Qdrant Cloud)
 - **Jina AI account** for reranking (free tier: 100 RPM)
 
 ### 2. Install
@@ -71,13 +72,13 @@ The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
 ### 4. Configure
 
 ```bash
-cp .env.example .env       # paste JINA_API_KEY and PINECONE_API_KEY
+cp .env.example .env       # paste your API keys (Jina + Pinecone and/or Qdrant)
 aws configure --profile ram-bedrock     # or your profile — set it in config.yaml
 ```
 
 Edit `config.yaml`: your AWS profile/account, S3 bucket name (globally
-unique), Pinecone index name. **The S3 bucket and Pinecone index are created
-automatically on first use** — no manual setup.
+unique), Pinecone index names. **The S3 bucket and Pinecone indexes (dense +
+sparse) are created automatically on first use** — no manual setup.
 
 ### 5. Run
 
@@ -124,14 +125,17 @@ artifacts.list_documents()              # registry: filename, pages, category, c
 src/ingestlib/
 ├── services/       ingest · retrieve          — the product
 ├── operations/     parse · classify · split   — the tools (each standalone)
-├── storage/        artifacts (S3) · base (VectorStore contract) · pinecone
+├── storage/        artifacts (S3) · base (VectorStore contract) · pinecone · qdrant
 ├── foundations/    llm (Bedrock Nova, Jina) · ocr (PaddleOCR-VL)
 ├── utils/          logger · files
 └── config.py       config.yaml + .env → typed configs
 ```
 
-Strict downward dependencies. The `VectorStore` contract means other backends
-(qdrant, milvus, pgvector, opensearch) drop in as connectors.
+Strict downward dependencies. The `VectorStore` contract means backends drop
+in as connectors — **Pinecone** (hybrid dense + sparse) and **Qdrant** (dense;
+local docker or cloud) ship today; pick one with `vector_store: pinecone |
+qdrant` in config.yaml. Keys for both can sit in `.env` — only the selected
+connector ever builds a client.
 
 ## Logging
 
@@ -147,12 +151,13 @@ Tests hit **real APIs, never mocks**. Pure logic runs always; server-hitting
 suites are opt-in via env gates.
 
 ```bash
-make test                  # fast suite (~170 tests, ~90s; e2e groups skip)
+make test                  # fast suite (~180 tests, ~90s; e2e groups skip)
 make test-parse            # parse e2e            (needs VL server + Bedrock)
 make test-classify         # classify e2e         (needs Bedrock)
 make test-split            # split e2e            (needs Bedrock)
 make test-s3               # artifact store e2e   (needs AWS)
 make test-pinecone         # vector connector e2e (needs Pinecone + Bedrock)
+make test-qdrant           # vector connector e2e (needs a Qdrant server + Bedrock)
 make test-services         # full product e2e     (needs the entire stack)
 make test-all              # everything
 ```
@@ -178,8 +183,7 @@ and handwriting are out of scope by design.
 ## Roadmap
 
 - Retrieval quality evaluation harness
-- Hybrid (dense + sparse) search in the Pinecone connector
-- Additional vector-store connectors (qdrant, milvus, pgvector, opensearch)
+- Additional vector-store connectors (milvus, pgvector, opensearch)
 - Hover-highlight review UI (bbox provenance already shipped for it)
 - Extract: schema-driven field extraction with source provenance
 

@@ -1,16 +1,18 @@
 """retrieve() / aretrieve() — question in, ranked cited chunks out.
 
-Dense vector search over the ingested chunks, then Jina reranking on the
-candidates (the reranker reads full text, catching what embedding similarity
-misses). Every hit carries provenance — document, pages, region_ids — so
-answers can cite their exact source location.
+Cascading retrieval: dense vector search plus, on hybrid stores, lexical
+sparse search over the same chunks — then Jina reranking on the merged
+candidates (the reranker reads full text, so it both catches what embedding
+similarity misses AND produces one comparable order from the two incomparable
+score scales). Every hit carries provenance — document, pages, region_ids —
+so answers can cite their exact source location.
 """
 import asyncio
 from typing import Any
 
 from ingestlib.foundations.llm import aembed_text, jina_arerank
 from ingestlib.services.retrieve.models import Hit, RetrievalResult
-from ingestlib.storage import PineconeStore, VectorStore
+from ingestlib.storage import VectorStore, default_store
 from ingestlib.utils.logger import get_logger
 
 
@@ -35,11 +37,12 @@ async def aretrieve(
     top_k    — hits to return
     filters  — payload constraints, e.g. {"category": "research_paper"}
     rerank   — rerank candidates with Jina (recommended; needs JINA_API_KEY)
-    store    — vector store connector; defaults to PineconeStore()
+    store    — vector store connector; defaults to the one selected by
+               config.yaml's `vector_store` key
     """
     if not question.strip():
         raise ValueError("question must be a non-empty string")
-    store = store or PineconeStore()
+    store = store or default_store()
 
     vector = await aembed_text(question, purpose="GENERIC_RETRIEVAL")
     candidates = store.query(
@@ -47,6 +50,7 @@ async def aretrieve(
         top_k=top_k * _CANDIDATE_MULTIPLIER if rerank else top_k,
         filters=filters,
         namespace=namespace,
+        text=question,  # hybrid stores add lexical hits; dense-only stores ignore it
     )
     if not candidates:
         logger.info("retrieve: no hits for %r", question[:60])

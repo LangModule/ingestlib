@@ -15,7 +15,7 @@ from ingestlib.operations.classify import aclassify
 from ingestlib.operations.parse import aparse
 from ingestlib.operations.split import asplit
 from ingestlib.services.ingest.models import IngestResult
-from ingestlib.storage import PineconeStore, VectorStore, artifacts
+from ingestlib.storage import VectorStore, artifacts, default_store
 from ingestlib.utils.files import sha256_of_file
 from ingestlib.utils.logger import get_logger
 
@@ -47,7 +47,8 @@ async def aingest(
     """Run a document through the full pipeline (async).
 
     path             — PDF/DOCX/PPTX to ingest
-    store            — vector store connector; defaults to PineconeStore()
+    store            — vector store connector; defaults to the one selected
+                       by config.yaml's `vector_store` key
     namespace        — vector-store namespace for multi-corpus setups
     skip_existing    — return status="skipped" when this exact file (by
                        checksum) was already ingested
@@ -69,7 +70,7 @@ async def aingest(
             chunks=meta.chunks,
         )
 
-    store = store or PineconeStore()
+    store = store or default_store()
     durations: dict[str, float] = {}
     logger.info("ingest start: %s", path.name)
 
