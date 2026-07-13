@@ -1,0 +1,45 @@
+# Copy this file to config.yaml and fill in your values.
+# API keys go in .env (see .env.example), never here.
+
+# Your AWS profile from ~/.aws/credentials, with Bedrock access.
+aws:
+  profile: your-aws-profile
+  region: us-east-1
+  account_id: "000000000000"
+
+bedrock:
+  llm_model_id: us.amazon.nova-2-lite-v1:0
+  embedding_model_id: amazon.nova-2-multimodal-embeddings-v1:0
+  rerank_model_id: amazon.rerank-v1:0
+  rerank_region: us-west-2
+
+jina:
+  base_url: https://api.jina.ai/v1
+  rerank_model_id: jina-reranker-v3
+
+# mlx-vlm-server for Apple Silicon, vllm-server for NVIDIA.
+paddle_vl:
+  backend: mlx-vlm-server
+  server_url: http://localhost:8111/
+  api_model_name: PaddlePaddle/PaddleOCR-VL-1.6
+
+# Bucket names are global across all of AWS — pick something unique.
+# Created automatically on first use.
+s3:
+  bucket: your-unique-bucket-name
+
+# Which vector database ingest/retrieve use: pinecone | qdrant
+vector_store: pinecone
+
+# Indexes are created automatically on first use.
+pinecone:
+  index_name: ingestlib
+  sparse_index_name: ingestlib-sparse
+  sparse_model_id: pinecone-sparse-english-v0
+  cloud: aws
+  region: us-east-1
+
+# Collection is created automatically on first use.
+# Server URL and API key come from QDRANT_URL / QDRANT_API_KEY in .env.
+qdrant:
+  collection_name: ingestlib

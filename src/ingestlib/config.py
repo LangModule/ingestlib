@@ -1,9 +1,18 @@
-"""Loads config.yaml at project root plus .env for secrets (JINA_API_KEY, etc.).
+"""Typed configuration for ingestlib — loaded lazily on first use.
 
-AWS credentials resolve via the profile field against ~/.aws/credentials.
-Other provider API keys come from environment variables loaded from .env.
+Importing ingestlib never touches the filesystem; config loads when the
+first operation needs it. Discovery order for config.yaml:
+
+    1. INGESTLIB_CONFIG environment variable (explicit path)
+    2. config.yaml in the current working directory, then each parent
+
+Secrets never live in config.yaml: a .env sitting next to the discovered
+config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
+QDRANT_URL/_API_KEY), and AWS credentials resolve via the profile field
+against ~/.aws/credentials — the standard boto3 chain.
 """
 import os
+import threading
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -11,10 +20,10 @@ import yaml
 from dotenv import load_dotenv
 
 
-_PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
-_CONFIG_PATH = _PROJECT_ROOT / "config.yaml"
+_CONFIG_ENV_VAR = "INGESTLIB_CONFIG"
+_CONFIG_FILENAME = "config.yaml"
 
-load_dotenv(_PROJECT_ROOT / ".env")
+_lock = threading.Lock()
 
 
 @dataclass(frozen=True)
@@ -80,11 +89,34 @@ class IngestConfig:
     qdrant: QdrantConfig
 
 
-def _load_config() -> IngestConfig:
-    if not _CONFIG_PATH.exists():
-        raise FileNotFoundError(f"Config file not found: {_CONFIG_PATH}")
+def _find_config_path() -> Path:
+    """Locate config.yaml: INGESTLIB_CONFIG first, then CWD and its parents."""
+    explicit = os.environ.get(_CONFIG_ENV_VAR)
+    if explicit:
+        path = Path(explicit).expanduser()
+        if not path.is_file():
+            raise FileNotFoundError(
+                f"{_CONFIG_ENV_VAR} points to {path}, which does not exist"
+            )
+        return path
+    cwd = Path.cwd()
+    for directory in (cwd, *cwd.parents):
+        candidate = directory / _CONFIG_FILENAME
+        if candidate.is_file():
+            return candidate
+    raise FileNotFoundError(
+        f"{_CONFIG_FILENAME} not found in {cwd} or any parent directory — "
+        f"copy config.example.yaml from https://github.com/LangModule/ingestlib "
+        f"into your project, or set {_CONFIG_ENV_VAR}=/path/to/config.yaml"
+    )
 
-    with open(_CONFIG_PATH, "r") as f:
+
+def _load_config() -> IngestConfig:
+    config_path = _find_config_path()
+    # secrets conventionally sit next to the config file
+    load_dotenv(config_path.parent / ".env")
+
+    with open(config_path, "r") as f:
         data = yaml.safe_load(f)
 
     aws_data = data["aws"]
@@ -151,44 +183,49 @@ def _load_config() -> IngestConfig:
     )
 
 
-_config = _load_config()
+_config: IngestConfig | None = None
 
 
 def get_config() -> IngestConfig:
-    """Full typed configuration loaded from config.yaml + .env."""
+    """Full typed configuration, loaded lazily from config.yaml + .env and cached."""
+    global _config
+    if _config is None:
+        with _lock:
+            if _config is None:
+                _config = _load_config()
     return _config
 
 
 def get_aws_config() -> AWSConfig:
     """AWS profile/region/account settings."""
-    return _config.aws
+    return get_config().aws
 
 
 def get_bedrock_config() -> BedrockConfig:
     """Bedrock model IDs and rerank region."""
-    return _config.bedrock
+    return get_config().bedrock
 
 
 def get_jina_config() -> JinaConfig:
     """Jina reranker endpoint and API key."""
-    return _config.jina
+    return get_config().jina
 
 
 def get_paddle_vl_config() -> PaddleVLConfig:
     """PaddleOCR-VL inference server settings."""
-    return _config.paddle_vl
+    return get_config().paddle_vl
 
 
 def get_s3_config() -> S3Config:
     """S3 artifact bucket settings."""
-    return _config.s3
+    return get_config().s3
 
 
 def get_pinecone_config() -> PineconeConfig:
     """Pinecone index settings and API key."""
-    return _config.pinecone
+    return get_config().pinecone
 
 
 def get_qdrant_config() -> QdrantConfig:
     """Qdrant endpoint, API key, and collection settings."""
-    return _config.qdrant
+    return get_config().qdrant

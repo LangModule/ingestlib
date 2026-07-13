@@ -72,14 +72,19 @@ The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
 ### 4. Configure
 
 ```bash
-cp .env.example .env       # paste your API keys (Jina + Pinecone and/or Qdrant)
-aws configure --profile ram-bedrock     # or your profile — set it in config.yaml
+cp .env.example .env                 # paste your API keys (Jina + Pinecone and/or Qdrant)
+cp config.example.yaml config.yaml   # your AWS profile, bucket name, vector store choice
+aws configure --profile your-aws-profile   # Bedrock-enabled credentials
 ```
 
 Edit `config.yaml`: your AWS profile/account, S3 bucket name (globally
 unique), vector store choice and index/collection names. **The S3 bucket and
 the vector indexes/collection are created automatically on first use** — no
 manual setup.
+
+Config is discovered at call time, never at import: `INGESTLIB_CONFIG=/path/to/config.yaml`
+wins, otherwise the working directory and its parents are searched — so
+installed usage works the same as running inside this repo.
 
 ### 5. Run
 

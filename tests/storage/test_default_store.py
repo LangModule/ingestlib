@@ -12,9 +12,8 @@ def test_current_config_selects_a_known_connector():
 def test_unknown_name_raises_with_choices(monkeypatch):
     import ingestlib.config as config_module
 
-    bad = config_module._config.__class__(
-        **{**config_module._config.__dict__, "vector_store": "chroma"}
-    )
+    current = config_module.get_config()  # materialize the lazy singleton
+    bad = current.__class__(**{**current.__dict__, "vector_store": "chroma"})
     monkeypatch.setattr(config_module, "_config", bad)
     with pytest.raises(ValueError, match="pinecone.*qdrant|qdrant.*pinecone"):
         default_store()

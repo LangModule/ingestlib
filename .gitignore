@@ -222,3 +222,6 @@ __marimo__/
 
 # Internal design notes — not for the public repo
 plan.md
+
+# Personal settings — copy config.example.yaml and fill in your values
+config.yaml
