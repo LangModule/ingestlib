@@ -19,7 +19,7 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 
 | Stage | What you get |
 |---|---|
-| **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, **charts converted to data tables** (estimated values marked `~`), figures extracted as PNG crops with captions and AI descriptions — every block traceable to a bounding box on the page |
+| **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, **charts converted to data tables** (estimated values marked `~`, printed callouts and growth labels captured), figures extracted as PNG crops with captions and AI descriptions — every block traceable to a bounding box on the page |
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your categories, with confidence and alternatives. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, …) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
 | **Ingest** | The whole pipeline in one call, every stage persisted to S3, vectors upserted, deduplicated by content checksum |
@@ -169,10 +169,20 @@ make test-pinecone         # vector connector e2e (needs Pinecone + Bedrock)
 make test-qdrant           # vector connector e2e (needs a Qdrant server + Bedrock)
 make test-services         # full product e2e     (needs the entire stack)
 make test-all              # everything
+make eval                  # retrieval quality eval (see below)
 ```
 
 Fixture PDFs live in `tests/data/pdf/` — 14 real documents (research papers,
 earnings decks, insurance forms, timetables, 10-Ks).
+
+### Retrieval quality
+
+Beyond pass/fail tests, `evals/` measures retrieval quality: 22 ground-truth
+questions over the fixture corpus, run through the real `retrieve()` flow
+under dense/hybrid × rerank on/off, scored by hit@k and MRR. Measured so far:
+**with reranking, every answer lands in the top 3 hits (hit@3 = 1.00)**;
+hit@1 ranges 0.86–1.00 across runs. Each run saves a timestamped snapshot to
+`evals/results/`, so quality changes are visible over time.
 
 ## Disk footprint
 
@@ -191,7 +201,6 @@ and handwriting are out of scope by design.
 
 ## Roadmap
 
-- Retrieval quality evaluation harness
 - Hover-highlight review UI (bbox provenance already shipped for it)
 - Extract: schema-driven field extraction with source provenance
 

@@ -1,0 +1,146 @@
+# Retrieval eval ground truth over the fixture corpus (tests/data/pdf).
+#
+# Ground truth is (doc, pages, keywords) — never chunk IDs, which change
+# whenever splitting logic changes. A retrieved chunk is a hit when it comes
+# from the right document, overlaps the expected pages, and contains at
+# least one keyword (case-insensitive, matched against chunk markdown+text).
+#
+# Mix by design: semantic questions, exact-number lookups, exact-token
+# lexical questions (the hybrid/sparse exercisers), and chart-derived
+# answers (test parse's chart-to-data-table enrichment).
+
+- id: apple-total-net-sales
+  question: what were Apple's total net sales in fiscal 2023?
+  doc: finance-10k.pdf
+  pages: [1]
+  keywords: ["383,285"]
+
+- id: apple-buybacks
+  question: how much did Apple spend repurchasing common stock in 2023?
+  doc: finance-10k.pdf
+  pages: [3]
+  keywords: ["77,550"]
+
+- id: apple-total-assets
+  question: what were Apple's total assets at the end of fiscal 2023?
+  doc: finance-10k.pdf
+  pages: [2]
+  keywords: ["352,583"]
+
+- id: uber-gross-bookings-arr
+  question: what is Uber's gross bookings annual run rate and how fast is it growing?
+  doc: uber-earnings.pdf
+  pages: [2]
+  keywords: ["$82B", "82B"]
+
+- id: uber-grocery-share
+  question: what share of Uber delivery customers order from grocery and retail?
+  doc: uber-earnings.pdf
+  pages: [3]
+  keywords: ["18%"]
+
+- id: sbs-trial-size
+  question: how many Syrian refugees were randomized in the Step-by-Step trial?
+  doc: clinical-study.pdf
+  pages: [1]
+  keywords: ["538"]
+
+- id: sbs-female-share
+  question: what percentage of the trial participants were female?
+  doc: clinical-study.pdf
+  pages: [2]
+  keywords: ["67.3"]
+
+- id: sbs-remission-rate
+  question: what was the full remission rate on the HSCL-25 in the intervention group?
+  doc: clinical-study.pdf
+  pages: [4]
+  keywords: ["20.0"]
+
+- id: pico-operating-temp
+  question: what is the maximum operating temperature of the Raspberry Pi Pico?
+  doc: component-datasheet.pdf
+  pages: [3]
+  keywords: ["85"]
+
+- id: pico-led-gpio
+  question: which GPIO pin is connected to the user LED on the Pico board?
+  doc: component-datasheet.pdf
+  pages: [2]
+  keywords: ["GPIO25"]
+
+- id: pico-sram
+  question: how much SRAM does the RP2040 microcontroller have?
+  doc: component-datasheet.pdf
+  pages: [1]
+  keywords: ["264"]
+
+- id: palisades-fire-loss
+  question: what was the insured loss from the Palisades Fire?
+  doc: catastrophe-recap.pdf
+  pages: [1]
+  keywords: ["23.0"]
+
+- id: eowyn-windstorm-loss
+  question: how much insured loss did Windstorm Eowyn cause in Ireland and the UK?
+  doc: catastrophe-recap.pdf
+  pages: [1]
+  keywords: ["690"]
+
+# Chart-annotation exerciser: the answer is a "+360%" callout printed on the
+# chart — captured only if the enricher extracts annotations, not just data.
+- id: electrolyser-growth
+  question: how much did electrolyser deployment grow in 2023?
+  doc: clean-energy.pdf
+  pages: [1]
+  keywords: ["360"]
+
+- id: egdi-highest-region
+  question: which region has the highest average e-government development index?
+  doc: egov-survey.pdf
+  pages: [1]
+  keywords: ["Europe"]
+
+- id: micron-energy-fy24
+  question: what was Micron's total energy consumption in fiscal year 2024?
+  doc: esg-metrics.pdf
+  pages: [1]
+  keywords: ["11,792,797"]
+
+# The net loss appears on both the operations statement (p2) and the cash
+# flow statement (p3) — either page is a correct retrieval.
+- id: usps-net-loss
+  question: what was the Postal Service's net loss in fiscal 2025?
+  doc: postal-10k.pdf
+  pages: [2, 3]
+  keywords: ["8,978"]
+
+- id: apwu-acronym
+  question: what does the acronym APWU stand for?
+  doc: postal-10k.pdf
+  pages: [1]
+  keywords: ["American Postal Workers Union"]
+
+- id: johnstown-buyer
+  question: who is buying the Johnstown sanitary sewer collection assets?
+  doc: purchase-agreement.pdf
+  pages: [1]
+  keywords: ["Greater Johnstown Water Authority"]
+
+- id: sewer-pipe-length
+  question: how many linear feet of sanitary sewer pipes are included in the sale?
+  doc: purchase-agreement.pdf
+  pages: [1]
+  keywords: ["425,000"]
+
+- id: producer-price-increase
+  question: how much did manufacturing producer prices increase between July 2020 and July 2022?
+  doc: manufacturing-report.pdf
+  pages: [3]
+  keywords: ["33.4"]
+
+- id: pancreas-mortality-trend
+  question: which cancer site had increasing mortality in the EU between 2011 and 2021?
+  doc: health-report.pdf
+  pages: [1]
+  keywords: ["pancreas"]

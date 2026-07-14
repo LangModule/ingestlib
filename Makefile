@@ -1,4 +1,4 @@
-.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-services
+.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-services eval
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -69,3 +69,9 @@ test-qdrant:
 
 test-services:
 	RUN_SERVICES_E2E=1 uv run pytest tests/services/
+
+# --- retrieval quality eval — measurement, not a test (needs the full stack;
+#     first run also needs the VL server to ingest the fixture corpus) ---
+
+eval:
+	uv run python evals/run_eval.py

@@ -11,6 +11,9 @@ from ingestlib.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
+# Attempts per call — 429s back off and retry before giving up.
+_MAX_ATTEMPTS = 3
+
 
 def rerank(
     query: str,
@@ -42,15 +45,26 @@ def rerank(
         cfg.rerank_model_id, len(query), len(documents), top_n,
     )
     t0 = time.perf_counter()
-    response = httpx.post(
-        f"{cfg.base_url}/rerank",
-        headers={
-            "Content-Type": "application/json",
-            "Authorization": f"Bearer {cfg.api_key}",
-        },
-        json=payload,
-        timeout=60.0,
-    )
+    for attempt in range(1, _MAX_ATTEMPTS + 1):
+        response = httpx.post(
+            f"{cfg.base_url}/rerank",
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {cfg.api_key}",
+            },
+            json=payload,
+            timeout=60.0,
+        )
+        if response.status_code == 429 and attempt < _MAX_ATTEMPTS:
+            # rate-limited — honor Retry-After when present, else back off
+            wait = float(response.headers.get("retry-after", 2.0 * attempt))
+            logger.warning(
+                "Jina rerank rate-limited (429) — retrying in %.0fs (attempt %d/%d)",
+                wait, attempt, _MAX_ATTEMPTS,
+            )
+            time.sleep(wait)
+            continue
+        break
     response.raise_for_status()
     results = [(r["index"], r["relevance_score"]) for r in response.json()["results"]]
     logger.info(
