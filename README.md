@@ -44,6 +44,12 @@ vectors (both hybrid dense + sparse), **S3** for artifacts. ~$0.002/page in LLM 
 ### 2. Install
 
 ```bash
+pip install ingestlib          # or: uv add ingestlib
+```
+
+Or work from source:
+
+```bash
 git clone https://github.com/LangModule/ingestlib.git
 cd ingestlib
 uv sync
