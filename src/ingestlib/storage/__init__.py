@@ -8,19 +8,23 @@ Sub-packages / modules:
                 vector database via connectors)
     pinecone  — Pinecone serverless connector, hybrid dense + sparse
     qdrant    — Qdrant connector, dense (local docker or Qdrant Cloud)
+    sqlite    — embedded zero-infrastructure connector (sqlite-vec + FTS5),
+                hybrid, no server or credentials — one local file
 
 Services pick their connector via default_store(), driven by config.yaml's
-`vector_store` key — both providers' keys can sit in .env; only the selected
+`vector_store` key — every provider's keys can sit in .env; only the selected
 one ever builds a client.
 """
 from ingestlib.storage.base import RetrievedChunk, VectorStore
 from ingestlib.storage.pinecone import PineconeStore
 from ingestlib.storage.qdrant import QdrantStore
 from ingestlib.storage.s3 import ensure_bucket, get_s3_client, reset_s3_client
+from ingestlib.storage.sqlite import SqliteStore
 
 _STORES: dict[str, type[VectorStore]] = {
     "pinecone": PineconeStore,
     "qdrant": QdrantStore,
+    "sqlite": SqliteStore,
 }
 
 
@@ -45,5 +49,6 @@ __all__ = [
     "RetrievedChunk",
     "PineconeStore",
     "QdrantStore",
+    "SqliteStore",
     "default_store",
 ]

@@ -7,7 +7,8 @@ from ingestlib.storage.base import RetrievedChunk
 class Hit(BaseModel):
     """One retrieved chunk with both scoring signals.
 
-    vector_score — cosine similarity from the vector store
+    vector_score — the store's retrieval score: cosine similarity on dense
+                   queries, an RRF rank score on fused hybrid queries
     rerank_score — Jina reranker relevance (None when reranking was off)
     """
 

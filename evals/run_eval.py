@@ -11,7 +11,9 @@ models, chunking, and data — a report tells you, a red CI run blocks you.
 Usage:
     uv run python evals/run_eval.py                # ensure corpus ingested, run all configs
     uv run python evals/run_eval.py --skip-ingest  # corpus already ingested
-    uv run python evals/run_eval.py --store qdrant
+    uv run python evals/run_eval.py --store qdrant   # or sqlite
+    uv run python evals/run_eval.py --store sqlite --backfill   # fresh/wiped store:
+                                   # re-embed S3 split artifacts into it (no VL server)
     uv run python evals/run_eval.py --top-k 5
 """
 import argparse
@@ -23,9 +25,10 @@ from pathlib import Path
 
 import yaml
 
+from ingestlib.foundations.llm import aembed_text
 from ingestlib.services.ingest.ingestor import aingest
 from ingestlib.services.retrieve.retriever import aretrieve
-from ingestlib.storage import PineconeStore, QdrantStore, VectorStore, artifacts
+from ingestlib.storage import PineconeStore, QdrantStore, SqliteStore, VectorStore, artifacts
 from ingestlib.utils.files import sha256_of_file
 
 EVALS_DIR = Path(__file__).resolve().parent
@@ -40,7 +43,11 @@ CONFIGS = [
     ("hybrid+rerank", True, True),
 ]
 
-STORES: dict[str, type[VectorStore]] = {"pinecone": PineconeStore, "qdrant": QdrantStore}
+STORES: dict[str, type[VectorStore]] = {
+    "pinecone": PineconeStore,
+    "qdrant": QdrantStore,
+    "sqlite": SqliteStore,
+}
 
 
 def load_dataset() -> list[dict]:
@@ -48,7 +55,12 @@ def load_dataset() -> list[dict]:
 
 
 async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
-    """Ingest any fixture not yet in the artifact store (checksum-skipped otherwise)."""
+    """Ingest any fixture not yet in the artifact store (checksum-skipped otherwise).
+
+    Only checks S3 artifacts — it cannot see whether the *vector store* has
+    the corpus. Pointing at a store the corpus was never upserted into
+    (fresh sqlite file, wiped index) needs --backfill.
+    """
     for pdf in pdfs:
         doc_id = sha256_of_file(pdf)
         if artifacts.document_exists(doc_id):
@@ -56,6 +68,26 @@ async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
         print(f"  ingesting {pdf.name} (needs the VL inference server) ...")
         result = await aingest(pdf, store=store)
         print(f"    -> {result.status}: {result.chunks} chunks in {result.total_seconds:.0f}s")
+
+
+async def backfill_store(store: VectorStore) -> None:
+    """Re-embed every document's S3 split artifact into the store.
+
+    Parse/classify/split are reused from S3 — only embedding (Bedrock) and
+    upsert run, so no VL server is needed. Upserts are idempotent, so
+    re-backfilling an already-populated store is safe.
+    """
+    semaphore = asyncio.Semaphore(8)
+
+    async def embed(text: str) -> list[float]:
+        async with semaphore:
+            return await aembed_text(text)
+
+    for meta in artifacts.list_documents():
+        chunks = artifacts.load_split(meta.doc_id).chunks
+        embeddings = list(await asyncio.gather(*[embed(c.embedding_text) for c in chunks]))
+        store.upsert_chunks(meta.doc_id, chunks, embeddings, category=meta.category)
+        print(f"  backfilled {meta.filename}: {len(chunks)} chunks ({meta.category})")
 
 
 def is_hit(hit, expected_doc_id: str, pages: list[int], keywords: list[str]) -> bool:
@@ -123,6 +155,9 @@ async def main() -> None:
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--skip-ingest", action="store_true",
                         help="skip the corpus-completeness check (no VL server needed)")
+    parser.add_argument("--backfill", action="store_true",
+                        help="re-embed S3 split artifacts into the selected store — for a "
+                             "store the corpus was never upserted into (no VL server needed)")
     args = parser.parse_args()
 
     dataset = load_dataset()
@@ -136,6 +171,9 @@ async def main() -> None:
     if not args.skip_ingest:
         print(f"ensuring corpus is ingested into {args.store} ...")
         await ensure_ingested(sorted(set(pdfs)), store_cls())
+    if args.backfill:
+        print(f"backfilling {args.store} from S3 split artifacts ...")
+        await backfill_store(store_cls())
 
     results = []
     t0 = time.perf_counter()

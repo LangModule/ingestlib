@@ -9,7 +9,8 @@ first operation needs it. Discovery order for config.yaml:
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
 QDRANT_URL/_API_KEY), and AWS credentials resolve via the profile field
-against ~/.aws/credentials — the standard boto3 chain.
+against ~/.aws/credentials — the standard boto3 chain. The sqlite connector
+needs no secrets at all — just a file path.
 """
 import os
 import threading
@@ -78,8 +79,13 @@ class QdrantConfig:
 
 
 @dataclass(frozen=True)
+class SqliteConfig:
+    path: Path                  # database file; relative paths resolve against config.yaml's directory
+
+
+@dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # which connector the services default to (pinecone | qdrant)
+    vector_store: str           # which connector the services default to (pinecone | qdrant | sqlite)
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
@@ -87,6 +93,7 @@ class IngestConfig:
     s3: S3Config
     pinecone: PineconeConfig
     qdrant: QdrantConfig
+    sqlite: SqliteConfig
 
 
 def _find_config_path() -> Path:
@@ -171,6 +178,13 @@ def _load_config() -> IngestConfig:
         collection_name=qdrant_data.get("collection_name", "ingestlib"),
     )
 
+    sqlite_data = data.get("sqlite", {})
+    sqlite_path = Path(sqlite_data.get("path", "ingestlib.db")).expanduser()
+    if not sqlite_path.is_absolute():
+        # anchor to the config file, not CWD — the same DB regardless of launch dir
+        sqlite_path = (config_path.parent / sqlite_path).resolve()
+    sqlite_config = SqliteConfig(path=sqlite_path)
+
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
         aws=aws_config,
@@ -180,6 +194,7 @@ def _load_config() -> IngestConfig:
         s3=s3_config,
         pinecone=pinecone_config,
         qdrant=qdrant_config,
+        sqlite=sqlite_config,
     )
 
 
@@ -229,3 +244,8 @@ def get_pinecone_config() -> PineconeConfig:
 def get_qdrant_config() -> QdrantConfig:
     """Qdrant endpoint, API key, and collection settings."""
     return get_config().qdrant
+
+
+def get_sqlite_config() -> SqliteConfig:
+    """SQLite database file settings."""
+    return get_config().sqlite

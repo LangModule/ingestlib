@@ -1,4 +1,4 @@
-.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-services eval
+.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-services eval
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -64,6 +64,11 @@ test-pinecone:
 
 test-qdrant:
 	RUN_QDRANT_E2E=1 uv run pytest tests/storage/qdrant/
+
+# --- sqlite connector — no gate: no server exists, in-process IS the real thing ---
+
+test-sqlite:
+	uv run pytest tests/storage/sqlite/
 
 # --- services (ingest + retrieve) — needs the FULL stack ---
 

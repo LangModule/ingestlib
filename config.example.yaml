@@ -28,7 +28,7 @@ paddle_vl:
 s3:
   bucket: your-unique-bucket-name
 
-# Which vector database ingest/retrieve use: pinecone | qdrant
+# Which vector database ingest/retrieve use: pinecone | qdrant | sqlite
 vector_store: pinecone
 
 # Indexes are created automatically on first use.
@@ -43,3 +43,8 @@ pinecone:
 # Server URL and API key come from QDRANT_URL / QDRANT_API_KEY in .env.
 qdrant:
   collection_name: ingestlib
+
+# Local file, no server, no keys — created automatically on first use.
+# A relative path resolves against this file's directory.
+sqlite:
+  path: ingestlib.db

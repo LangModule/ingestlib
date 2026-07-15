@@ -1,7 +1,7 @@
 """Vector-store contract — the interface every connector implements.
 
 ingestlib works with any vector database: a connector (pinecone, qdrant,
-milvus, pgvector, ...) subclasses VectorStore and handles its backend's
+sqlite, ...) subclasses VectorStore and handles its backend's
 quirks — ID schemes, metadata encoding, deletion semantics — behind these
 three methods, so pipelines are written once and run against whichever
 database is configured.
