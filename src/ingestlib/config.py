@@ -8,9 +8,10 @@ first operation needs it. Discovery order for config.yaml:
 
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
-QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL), and AWS credentials resolve
-via the profile field against ~/.aws/credentials — the standard boto3 chain.
-The sqlite connector needs no secrets at all — just a file path.
+QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL, MILVUS_URL/_TOKEN), and AWS
+credentials resolve via the profile field against ~/.aws/credentials — the
+standard boto3 chain. The sqlite connector needs no secrets at all — just a
+file path.
 """
 import os
 import threading
@@ -97,8 +98,15 @@ class MongodbConfig:
 
 
 @dataclass(frozen=True)
+class MilvusConfig:
+    url: str                    # from MILVUS_URL env var (e.g. http://localhost:19530 or Zilliz Cloud)
+    token: str                  # from MILVUS_TOKEN env var ("" for a local/unsecured server)
+    collection_name: str
+
+
+@dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # services' default connector (pinecone | qdrant | sqlite | pgvector | mongodb)
+    vector_store: str           # services' default (pinecone | qdrant | sqlite | pgvector | mongodb | milvus)
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
@@ -109,6 +117,7 @@ class IngestConfig:
     sqlite: SqliteConfig
     pgvector: PgvectorConfig
     mongodb: MongodbConfig
+    milvus: MilvusConfig
 
 
 def _find_config_path() -> Path:
@@ -213,6 +222,13 @@ def _load_config() -> IngestConfig:
         collection_name=mongodb_data.get("collection_name", "ingestlib"),
     )
 
+    milvus_data = data.get("milvus", {})
+    milvus_config = MilvusConfig(
+        url=os.environ.get("MILVUS_URL", "http://localhost:19530"),
+        token=os.environ.get("MILVUS_TOKEN", ""),
+        collection_name=milvus_data.get("collection_name", "ingestlib"),
+    )
+
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
         aws=aws_config,
@@ -225,6 +241,7 @@ def _load_config() -> IngestConfig:
         sqlite=sqlite_config,
         pgvector=pgvector_config,
         mongodb=mongodb_config,
+        milvus=milvus_config,
     )
 
 
@@ -289,3 +306,8 @@ def get_pgvector_config() -> PgvectorConfig:
 def get_mongodb_config() -> MongodbConfig:
     """MongoDB connection URL, database, and collection settings."""
     return get_config().mongodb
+
+
+def get_milvus_config() -> MilvusConfig:
+    """Milvus endpoint, token, and collection settings."""
+    return get_config().milvus

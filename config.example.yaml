@@ -29,7 +29,7 @@ s3:
   bucket: your-unique-bucket-name
 
 # Which vector database ingest/retrieve use:
-# pinecone | qdrant | sqlite | pgvector | mongodb
+# pinecone | qdrant | sqlite | pgvector | mongodb | milvus
 vector_store: pinecone
 
 # Indexes are created automatically on first use.
@@ -60,4 +60,9 @@ pgvector:
 # Connection URL comes from MONGODB_URL in .env.
 mongodb:
   database: ingestlib
+  collection_name: ingestlib
+
+# Collection is created automatically on first use (local docker or Zilliz
+# Cloud). Endpoint and token come from MILVUS_URL / MILVUS_TOKEN in .env.
+milvus:
   collection_name: ingestlib

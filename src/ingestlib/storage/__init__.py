@@ -14,12 +14,15 @@ Sub-packages / modules:
                 hybrid — one connection URL to the Postgres you already run
     mongodb   — MongoDB connector (Atlas Vector Search + Atlas Search BM25),
                 hybrid — Atlas any tier, atlas-local docker, or 8.2+ mongot
+    milvus    — Milvus connector (dense ANN + server-side BM25, RRF fused
+                server-side), hybrid — local docker or Zilliz Cloud
 
 Services pick their connector via default_store(), driven by config.yaml's
 `vector_store` key — every provider's keys can sit in .env; only the selected
 one ever builds a client.
 """
 from ingestlib.storage.base import RetrievedChunk, VectorStore
+from ingestlib.storage.milvus import MilvusStore
 from ingestlib.storage.mongodb import MongodbStore
 from ingestlib.storage.pgvector import PgvectorStore
 from ingestlib.storage.pinecone import PineconeStore
@@ -33,6 +36,7 @@ _STORES: dict[str, type[VectorStore]] = {
     "sqlite": SqliteStore,
     "pgvector": PgvectorStore,
     "mongodb": MongodbStore,
+    "milvus": MilvusStore,
 }
 
 
@@ -60,5 +64,6 @@ __all__ = [
     "SqliteStore",
     "PgvectorStore",
     "MongodbStore",
+    "MilvusStore",
     "default_store",
 ]
