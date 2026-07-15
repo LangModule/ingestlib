@@ -28,7 +28,7 @@ paddle_vl:
 s3:
   bucket: your-unique-bucket-name
 
-# Which vector database ingest/retrieve use: pinecone | qdrant | sqlite
+# Which vector database ingest/retrieve use: pinecone | qdrant | sqlite | pgvector
 vector_store: pinecone
 
 # Indexes are created automatically on first use.
@@ -48,3 +48,8 @@ qdrant:
 # A relative path resolves against this file's directory.
 sqlite:
   path: ingestlib.db
+
+# Table, indexes, and the vector extension bootstrap automatically on first use.
+# Connection URL comes from PGVECTOR_URL in .env.
+pgvector:
+  table_name: ingestlib

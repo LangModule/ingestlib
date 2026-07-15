@@ -10,12 +10,15 @@ Sub-packages / modules:
     qdrant    — Qdrant connector, dense (local docker or Qdrant Cloud)
     sqlite    — embedded zero-infrastructure connector (sqlite-vec + FTS5),
                 hybrid, no server or credentials — one local file
+    pgvector  — Postgres connector (pgvector HNSW + built-in full-text),
+                hybrid — one connection URL to the Postgres you already run
 
 Services pick their connector via default_store(), driven by config.yaml's
 `vector_store` key — every provider's keys can sit in .env; only the selected
 one ever builds a client.
 """
 from ingestlib.storage.base import RetrievedChunk, VectorStore
+from ingestlib.storage.pgvector import PgvectorStore
 from ingestlib.storage.pinecone import PineconeStore
 from ingestlib.storage.qdrant import QdrantStore
 from ingestlib.storage.s3 import ensure_bucket, get_s3_client, reset_s3_client
@@ -25,6 +28,7 @@ _STORES: dict[str, type[VectorStore]] = {
     "pinecone": PineconeStore,
     "qdrant": QdrantStore,
     "sqlite": SqliteStore,
+    "pgvector": PgvectorStore,
 }
 
 
@@ -50,5 +54,6 @@ __all__ = [
     "PineconeStore",
     "QdrantStore",
     "SqliteStore",
+    "PgvectorStore",
     "default_store",
 ]

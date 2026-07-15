@@ -27,9 +27,9 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 
 Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
-chunk boundaries), **Nova multimodal embeddings**, **Pinecone, Qdrant, or
-SQLite** for vectors (all hybrid dense + sparse), **S3** for artifacts.
-~$0.002/page in LLM spend.
+chunk boundaries), **Nova multimodal embeddings**, **Pinecone, Qdrant,
+SQLite, or Postgres/pgvector** for vectors (all hybrid dense + sparse),
+**S3** for artifacts. ~$0.002/page in LLM spend.
 
 ## Quickstart
 
@@ -39,8 +39,9 @@ SQLite** for vectors (all hybrid dense + sparse), **S3** for artifacts.
 - **AWS account** with Bedrock access (`us-east-1`): Nova 2 Lite + Nova 2
   multimodal embeddings
 - **Vector database** — Pinecone account (serverless, free tier works;
-  the default), a Qdrant server (local docker or Qdrant Cloud), or none at
-  all: the sqlite connector stores vectors in a local file
+  the default), a Qdrant server (local docker or Qdrant Cloud), a Postgres
+  with pgvector (RDS/Supabase/Neon or self-hosted — one connection URL), or
+  none at all: the sqlite connector stores vectors in a local file
 - **Jina AI account** for reranking (free tier: 100 RPM)
 
 ### 2. Install
@@ -141,19 +142,22 @@ artifacts.list_documents()              # registry: filename, pages, category, c
 src/ingestlib/
 ├── services/       ingest · retrieve          — the product
 ├── operations/     parse · classify · split   — the tools (each standalone)
-├── storage/        artifacts (S3) · base (VectorStore contract) · pinecone · qdrant · sqlite
+├── storage/        artifacts (S3) · base (VectorStore contract) · pinecone · qdrant · sqlite · pgvector
 ├── foundations/    llm (Bedrock Nova, Jina) · ocr (PaddleOCR-VL)
 ├── utils/          logger · files
 └── config.py       config.yaml + .env → typed configs
 ```
 
 Strict downward dependencies. The `VectorStore` contract means backends drop
-in as connectors — all three ship **hybrid search**: **Pinecone** (dense +
+in as connectors — all four ship **hybrid search**: **Pinecone** (dense +
 hosted sparse model, merged client-side), **Qdrant** (dense + BM25 with
-server-side IDF and RRF fusion; local docker or cloud), and **SQLite**
+server-side IDF and RRF fusion; local docker or cloud), **SQLite**
 (sqlite-vec KNN + built-in FTS5 BM25 with porter stemming, RRF fusion — one
-local file, no server, no keys). Pick one with `vector_store: pinecone |
-qdrant | sqlite` in config.yaml. Cloud keys can sit in `.env` together
+local file, no server, no keys), and **Postgres/pgvector** (HNSW cosine +
+built-in full-text over a generated weighted tsvector, RRF fusion — one
+connection URL to the Postgres you already run; the extension and table
+bootstrap automatically). Pick one with `vector_store: pinecone | qdrant |
+sqlite | pgvector` in config.yaml. Connection secrets sit in `.env` together
 (sqlite needs none) — only the selected connector ever builds a client.
 
 ## Logging
@@ -171,7 +175,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~200 tests, ~90s; e2e groups skip)
+make test                  # fast suite (~215 tests, ~90s; e2e groups skip)
 make test-parse            # parse e2e            (needs VL server + Bedrock)
 make test-classify         # classify e2e         (needs Bedrock)
 make test-split            # split e2e            (needs Bedrock)
@@ -179,6 +183,7 @@ make test-s3               # artifact store e2e   (needs AWS)
 make test-pinecone         # vector connector e2e (needs Pinecone + Bedrock)
 make test-qdrant           # vector connector e2e (needs a Qdrant server + Bedrock)
 make test-sqlite           # vector connector suite (no gate — nothing to need)
+make test-pgvector         # vector connector e2e (needs Postgres at PGVECTOR_URL)
 make test-services         # full product e2e     (needs the entire stack)
 make test-all              # everything
 make eval                  # retrieval quality eval (see below)
@@ -192,7 +197,7 @@ earnings decks, insurance forms, timetables, 10-Ks).
 Beyond pass/fail tests, `evals/` measures retrieval quality: 22 ground-truth
 questions over the fixture corpus, run through the real `retrieve()` flow
 under dense/hybrid × rerank on/off, scored by hit@k and MRR. Measured so far
-(consistent across all three connectors): **with reranking, every answer
+(consistent across all four connectors): **with reranking, every answer
 lands in the top 3 hits (hit@3 = 1.00)**; hit@1 ranges 0.86–1.00 across runs.
 Each run saves a timestamped snapshot to `evals/results/`, so quality changes
 are visible over time.

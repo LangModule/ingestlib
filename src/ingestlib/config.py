@@ -8,9 +8,9 @@ first operation needs it. Discovery order for config.yaml:
 
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
-QDRANT_URL/_API_KEY), and AWS credentials resolve via the profile field
-against ~/.aws/credentials — the standard boto3 chain. The sqlite connector
-needs no secrets at all — just a file path.
+QDRANT_URL/_API_KEY, PGVECTOR_URL), and AWS credentials resolve via the
+profile field against ~/.aws/credentials — the standard boto3 chain. The
+sqlite connector needs no secrets at all — just a file path.
 """
 import os
 import threading
@@ -84,8 +84,14 @@ class SqliteConfig:
 
 
 @dataclass(frozen=True)
+class PgvectorConfig:
+    url: str                    # from PGVECTOR_URL env var (postgresql://user:pass@host:port/db)
+    table_name: str
+
+
+@dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # which connector the services default to (pinecone | qdrant | sqlite)
+    vector_store: str           # connector the services default to (pinecone | qdrant | sqlite | pgvector)
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
@@ -94,6 +100,7 @@ class IngestConfig:
     pinecone: PineconeConfig
     qdrant: QdrantConfig
     sqlite: SqliteConfig
+    pgvector: PgvectorConfig
 
 
 def _find_config_path() -> Path:
@@ -185,6 +192,12 @@ def _load_config() -> IngestConfig:
         sqlite_path = (config_path.parent / sqlite_path).resolve()
     sqlite_config = SqliteConfig(path=sqlite_path)
 
+    pgvector_data = data.get("pgvector", {})
+    pgvector_config = PgvectorConfig(
+        url=os.environ.get("PGVECTOR_URL", ""),
+        table_name=pgvector_data.get("table_name", "ingestlib"),
+    )
+
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
         aws=aws_config,
@@ -195,6 +208,7 @@ def _load_config() -> IngestConfig:
         pinecone=pinecone_config,
         qdrant=qdrant_config,
         sqlite=sqlite_config,
+        pgvector=pgvector_config,
     )
 
 
@@ -249,3 +263,8 @@ def get_qdrant_config() -> QdrantConfig:
 def get_sqlite_config() -> SqliteConfig:
     """SQLite database file settings."""
     return get_config().sqlite
+
+
+def get_pgvector_config() -> PgvectorConfig:
+    """Postgres/pgvector connection URL and table settings."""
+    return get_config().pgvector
