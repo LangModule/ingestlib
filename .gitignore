@@ -222,9 +222,13 @@ __marimo__/
 
 # Internal design notes — not for the public repo
 plan.md
+CLAUDE.md
 
 # Personal settings — copy config.example.yaml and fill in your values
 config.yaml
 
 # Eval score snapshots — local measurement history
 evals/results/
+
+# Local sqlite vector store (+ WAL sidecars)
+ingestlib.db*

@@ -12,7 +12,7 @@ Four layers, strict downward dependencies:
 ```
 services/       ingest · retrieve            — the product
 operations/     parse · classify · split     — the tools (each standalone)
-storage/        artifacts (S3) · base (VectorStore) · pinecone · qdrant
+storage/        artifacts (S3) · base (VectorStore) · pinecone · qdrant · sqlite
 foundations/    llm (Bedrock Nova, Jina) · ocr (PaddleOCR-VL)
 ```
 
@@ -28,7 +28,7 @@ making architectural changes.
 ## Commands
 
 ```bash
-make test          # fast suite (~180 tests, ~90s) — e2e groups skip
+make test          # fast suite (~200 tests, ~90s) — e2e groups skip
 make test-all      # everything (needs VL server + full stack)
 make eval          # retrieval quality measurement (evals/, NOT a test)
 uv run ruff check src/ tests/ evals/
@@ -45,7 +45,9 @@ uv run python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.
 - **Tests hit real APIs, never mocks.** Pure logic always runs; anything
   touching a server is opt-in via `RUN_*_E2E=1` gates (strict `!= "1"`).
   In-process/embedded modes of vendors are NOT equivalent to their real
-  servers — verify against the real thing at least once.
+  servers — verify against the real thing at least once. (SQLite is the
+  exception that proves the rule: it has no server, so its suite runs
+  ungated in `make test`.)
 - **Evals measure, tests assert.** Quality numbers live in `evals/` with
   timestamped snapshots; never turn them into hard CI assertions.
 - Config loads lazily; discovery is `INGESTLIB_CONFIG` env var → config.yaml
