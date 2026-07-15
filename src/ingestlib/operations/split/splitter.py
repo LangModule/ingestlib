@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 _NOVA_CONCURRENCY = 8
 
-DEFAULT_MAX_CHUNK_TOKENS = 1024
+DEFAULT_MAX_CHUNK_TOKENS = 768
 
 
 def _dominant_kind(blocks: list[Block]) -> str:
@@ -133,13 +133,19 @@ async def asplit(
     )
 
     descriptions = {s.name: s.description for s in vocabulary}
-    built = list(await asyncio.gather(*[
-        _build_section(
+    tasks = [
+        asyncio.ensure_future(_build_section(
             name, descriptions.get(name, ""), section_pages,
             category, max_chunk_tokens, semaphore,
-        )
+        ))
         for name, section_pages in grouped
-    ]))
+    ]
+    try:
+        built = list(await asyncio.gather(*tasks))
+    except BaseException:
+        for task in tasks:  # don't leave sibling section builds running
+            task.cancel()
+        raise
     sections = _renumber_chunks(built)
 
     result = SplitResult(

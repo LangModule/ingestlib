@@ -1,4 +1,4 @@
-"""Shared boto3 session, Bedrock clients, and generation-keyed model cache."""
+"""Shared boto3 session, Bedrock clients, and a client-keyed model cache."""
 import threading
 
 import boto3
@@ -15,12 +15,11 @@ _lock = threading.Lock()
 _session: boto3.Session | None = None
 _runtime_client = None              # bedrock-runtime      (LLM inference + embeddings)
 _rerank_agent_client = None         # bedrock-agent-runtime in cfg.rerank_region (for rerank)
-_client_generation: int = 0
-_model_cache: dict[str, tuple[object, int]] = {}
+_model_cache: dict[str, object] = {}
 
 
 def _build_clients() -> None:
-    global _session, _runtime_client, _rerank_agent_client, _client_generation
+    global _session, _runtime_client, _rerank_agent_client
 
     aws = get_aws_config()
     bedrock = get_bedrock_config()
@@ -51,9 +50,8 @@ def _build_clients() -> None:
     _rerank_agent_client = _session.client(
         "bedrock-agent-runtime", region_name=bedrock.rerank_region, config=retry_cfg
     )
-    _client_generation += 1
     _model_cache.clear()
-    logger.debug("clients built (generation=%d)", _client_generation)
+    logger.debug("clients built")
 
 
 def _ensure() -> None:
@@ -86,16 +84,16 @@ def reset_clients() -> None:
 
 
 def get_model(key: str) -> object | None:
-    """Return a cached model instance if still valid for the current client generation."""
+    """Return a cached model instance, or None (reset_clients empties the cache)."""
     with _lock:
         _ensure()
-        entry = _model_cache.get(key)
-        if entry is not None and entry[1] == _client_generation:
-            return entry[0]
-        return None
+        return _model_cache.get(key)
 
 
-def cache_model(key: str, model: object) -> None:
-    """Store a model instance keyed to the current client generation."""
+def cache_model(key: str, model: object, client: object) -> None:
+    """Store a model instance — but only if `client` (the client the model was
+    built around) is still the live runtime client. A reset that raced the
+    build makes this a no-op instead of caching a dead-client model."""
     with _lock:
-        _model_cache[key] = (model, _client_generation)
+        if client is _runtime_client:
+            _model_cache[key] = model

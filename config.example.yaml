@@ -1,5 +1,11 @@
 # Copy this file to config.yaml and fill in your values.
 # API keys go in .env (see .env.example), never here.
+#
+# Only three things typically need editing:
+#   1. aws — your profile, region, and account id
+#   2. s3.bucket — a globally unique bucket name
+#   3. vector_store — which database ingest/retrieve use
+# Everything else ships with working defaults.
 
 # Your AWS profile from ~/.aws/credentials, with Bedrock access.
 aws:
@@ -7,6 +13,7 @@ aws:
   region: us-east-1
   account_id: "000000000000"
 
+# Model IDs — these defaults are what the library is tested against.
 bedrock:
   llm_model_id: us.amazon.nova-2-lite-v1:0
   embedding_model_id: amazon.nova-2-multimodal-embeddings-v1:0
@@ -17,6 +24,7 @@ jina:
   base_url: https://api.jina.ai/v1
   rerank_model_id: jina-reranker-v3
 
+# The OCR inference server (needed for parse/ingest, not for retrieval).
 # mlx-vlm-server for Apple Silicon, vllm-server for NVIDIA.
 paddle_vl:
   backend: mlx-vlm-server
@@ -28,9 +36,14 @@ paddle_vl:
 s3:
   bucket: your-unique-bucket-name
 
-# Which vector database ingest/retrieve use:
-# pinecone | qdrant | sqlite | pgvector | mongodb | milvus
+# ---------- vector store ----------
+# Which database ingest/retrieve use:
+#   pinecone | qdrant | sqlite | pgvector | mongodb | milvus
+# Secrets/URLs for the selected store go in .env (see .env.example).
 vector_store: pinecone
+
+# The per-store sections below are ALL optional — every value has the
+# default shown. Keep only the section you use, or delete them all.
 
 # Indexes are created automatically on first use.
 pinecone:
@@ -41,7 +54,6 @@ pinecone:
   region: us-east-1
 
 # Collection is created automatically on first use.
-# Server URL and API key come from QDRANT_URL / QDRANT_API_KEY in .env.
 qdrant:
   collection_name: ingestlib
 
@@ -51,18 +63,15 @@ sqlite:
   path: ingestlib.db
 
 # Table, indexes, and the vector extension bootstrap automatically on first use.
-# Connection URL comes from PGVECTOR_URL in .env.
 pgvector:
   table_name: ingestlib
 
 # Search indexes are created automatically on first use (Atlas any tier,
 # atlas-local docker, or self-managed 8.2+ with mongot).
-# Connection URL comes from MONGODB_URL in .env.
 mongodb:
   database: ingestlib
   collection_name: ingestlib
 
-# Collection is created automatically on first use (local docker or Zilliz
-# Cloud). Endpoint and token come from MILVUS_URL / MILVUS_TOKEN in .env.
+# Collection is created automatically on first use (local docker or Zilliz Cloud).
 milvus:
   collection_name: ingestlib

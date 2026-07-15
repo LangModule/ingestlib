@@ -54,16 +54,23 @@ def _strip_fence(text: str) -> str:
     return match.group(1) if match else text
 
 
-def _format_blocks(regions: list[Region]) -> str:
+def _format_blocks(regions: list[Region]) -> tuple[str, set[int]]:
+    """Prompt listing of reviewable blocks + the region_ids that were truncated.
+
+    Truncated regions must not accept corrections — Nova only saw a prefix, so
+    applying its "corrected" block would silently cut the stored content.
+    """
     lines: list[str] = []
+    truncated: set[int] = set()
     for r in regions:
         content = (r.content or r.text or "").strip()
         if not content:
             continue
         if len(content) > _REGION_CONTENT_LIMIT:
             content = content[: _REGION_CONTENT_LIMIT - 3] + "..."
+            truncated.add(r.region_id)
         lines.append(f"[region {r.region_id} | {r.region_type}]\n{content}")
-    return "\n\n".join(lines)
+    return "\n\n".join(lines), truncated
 
 
 def _parse_corrections(response: str) -> dict[int, str]:
@@ -96,7 +103,7 @@ async def review_page(
     reviewable come back unchanged without a Nova call.
     """
     reviewable = [r for r in regions if r.region_type in _REVIEWABLE_TYPES]
-    blocks = _format_blocks(reviewable)
+    blocks, truncated = _format_blocks(reviewable)
     if not blocks:
         return regions
 
@@ -116,6 +123,14 @@ async def review_page(
             system=_SYSTEM_PROMPT,
         )
     corrections = _parse_corrections(response)
+    dropped = truncated & corrections.keys()
+    if dropped:
+        logger.warning(
+            "dropping correction(s) for truncated region(s) %s — Nova only saw "
+            "a %d-char prefix, applying would cut the stored content",
+            sorted(dropped), _REGION_CONTENT_LIMIT,
+        )
+        corrections = {k: v for k, v in corrections.items() if k not in dropped}
     logger.info(
         "review done: %.1fs, %d correction(s) across %d block(s)",
         time.perf_counter() - t0, len(corrections), len(reviewable),

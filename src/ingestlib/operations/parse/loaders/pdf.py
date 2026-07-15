@@ -49,9 +49,12 @@ _METADATA_KEYS: tuple[str, ...] = (
 def _render_page_png(page: Any, dpi: int) -> bytes:
     """Rasterize one PdfPage to PNG bytes at the requested DPI."""
     bitmap = page.render(scale=dpi / 72.0)
-    buf = BytesIO()
-    bitmap.to_pil().save(buf, format="PNG")
-    return buf.getvalue()
+    try:
+        buf = BytesIO()
+        bitmap.to_pil().save(buf, format="PNG")
+        return buf.getvalue()
+    finally:
+        bitmap.close()
 
 
 def _page_dims(page: Any, *, render: bool, dpi: int) -> tuple[int, int]:
@@ -87,21 +90,30 @@ def load_pdf_from_bytes(
     Returns (pages, metadata). When render=False the loader skips rasterization
     and each LoadedPage has image_bytes=None.
     """
+    # native handles are closed explicitly — GC finalizers are too lazy for a
+    # long-running server parsing large documents
     pdf = pdfium.PdfDocument(pdf_bytes)
+    try:
+        pages: list[LoadedPage] = []
+        for page in pdf:
+            textpage = page.get_textpage()
+            try:
+                native_text = textpage.get_text_range() or ""
+            finally:
+                textpage.close()
+            image_bytes = _render_page_png(page, dpi) if render else None
+            width, height = _page_dims(page, render=render, dpi=dpi)
+            page.close()
+            pages.append(LoadedPage(
+                image_bytes=image_bytes,
+                native_text=native_text,
+                width=width,
+                height=height,
+            ))
 
-    pages: list[LoadedPage] = []
-    for page in pdf:
-        native_text = page.get_textpage().get_text_range() or ""
-        image_bytes = _render_page_png(page, dpi) if render else None
-        width, height = _page_dims(page, render=render, dpi=dpi)
-        pages.append(LoadedPage(
-            image_bytes=image_bytes,
-            native_text=native_text,
-            width=width,
-            height=height,
-        ))
-
-    return pages, _extract_metadata(pdf)
+        return pages, _extract_metadata(pdf)
+    finally:
+        pdf.close()
 
 
 def load_pdf(
@@ -141,7 +153,11 @@ def _extract_embedded_images(page: Any) -> list[bytes]:
     pils: list[Image.Image] = []
     for obj in page.get_objects(filter=(pdfium_c.FPDF_PAGEOBJ_IMAGE,), max_depth=4):
         try:
-            pil = obj.get_bitmap(render=False).to_pil()
+            bitmap = obj.get_bitmap(render=False)
+            try:
+                pil = bitmap.to_pil()
+            finally:
+                bitmap.close()
         except Exception:  # malformed/unsupported image object — skip it
             continue
         if pil.width >= _MIN_IMAGE_SIDE and pil.height >= _MIN_IMAGE_SIDE:
@@ -170,14 +186,19 @@ def load_pdf_content_from_bytes(
     pictures inside the PDF rather than rasterized pages.
     """
     pdf = pdfium.PdfDocument(pdf_bytes)
-    pages = [
-        ContentPage(
-            text=page.get_textpage().get_text_range() or "",
-            images=_extract_embedded_images(page),
-        )
-        for page in pdf
-    ]
-    return pages, _extract_metadata(pdf)
+    try:
+        pages: list[ContentPage] = []
+        for page in pdf:
+            textpage = page.get_textpage()
+            try:
+                text = textpage.get_text_range() or ""
+            finally:
+                textpage.close()
+            pages.append(ContentPage(text=text, images=_extract_embedded_images(page)))
+            page.close()
+        return pages, _extract_metadata(pdf)
+    finally:
+        pdf.close()
 
 
 def load_pdf_content(path: Path) -> tuple[list[ContentPage], dict[str, Any]]:

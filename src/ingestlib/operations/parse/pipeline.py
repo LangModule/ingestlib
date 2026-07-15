@@ -119,11 +119,21 @@ async def aparse(path: Path | str, *, dpi: int = 200) -> ParseResult:
 
     ocr_semaphore = asyncio.Semaphore(_OCR_CONCURRENCY)
     nova_semaphore = asyncio.Semaphore(_NOVA_CONCURRENCY)
-    pages = list(await asyncio.gather(*[
-        _process_page(lp, page_num=i, dpi=dpi,
-                      ocr_semaphore=ocr_semaphore, nova_semaphore=nova_semaphore)
+    tasks = [
+        asyncio.ensure_future(_process_page(
+            lp, page_num=i, dpi=dpi,
+            ocr_semaphore=ocr_semaphore, nova_semaphore=nova_semaphore,
+        ))
         for i, lp in enumerate(loaded_pages, start=1)
-    ]))
+    ]
+    try:
+        pages = list(await asyncio.gather(*tasks))
+    except BaseException:
+        # one failed page must not leave siblings running as orphans, holding
+        # the OCR semaphore and spending Nova calls
+        for task in tasks:
+            task.cancel()
+        raise
 
     duration = time.perf_counter() - start
     logger.info("parse complete: pages=%d duration=%.2fs", len(pages), duration)

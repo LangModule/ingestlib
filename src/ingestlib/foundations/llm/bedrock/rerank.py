@@ -41,12 +41,12 @@ def rerank(
         cfg.rerank_model_id, len(query), len(documents), top_n,
     )
     t0 = time.perf_counter()
-    response = client.rerank(
-        rerankingConfiguration={
+    request: dict[str, Any] = {
+        "rerankingConfiguration": {
             "type": "BEDROCK_RERANKING_MODEL",
             "bedrockRerankingConfiguration": reranking_config,
         },
-        sources=[
+        "sources": [
             {
                 "type": "INLINE",
                 "inlineDocumentSource": {
@@ -56,9 +56,17 @@ def rerank(
             }
             for doc in documents
         ],
-        queries=[{"type": "TEXT", "textQuery": {"text": query}}],
-    )
-    results = [(r["index"], r["relevanceScore"]) for r in response["results"]]
+        "queries": [{"type": "TEXT", "textQuery": {"text": query}}],
+    }
+    # the Rerank API paginates — follow nextToken or large calls silently truncate
+    results: list[tuple[int, float]] = []
+    next_token: str | None = None
+    while True:
+        response = client.rerank(**request, **({"nextToken": next_token} if next_token else {}))
+        results.extend((r["index"], r["relevanceScore"]) for r in response["results"])
+        next_token = response.get("nextToken")
+        if not next_token:
+            break
     logger.info(
         "AWS rerank done: %.2fs returned=%d",
         time.perf_counter() - t0, len(results),

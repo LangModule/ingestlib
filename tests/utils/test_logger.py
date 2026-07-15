@@ -30,9 +30,19 @@ def test_unknown_level_string_falls_back_to_info():
 
 
 def test_third_party_loggers_quieted_by_default():
+    for name in _THIRD_PARTY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.NOTSET)  # fresh slate
     configure(level="DEBUG")
     for name in _THIRD_PARTY_LOGGERS:
         assert logging.getLogger(name).level == logging.WARNING
+
+
+def test_third_party_level_set_by_host_app_survives():
+    probe = logging.getLogger(_THIRD_PARTY_LOGGERS[0])
+    probe.setLevel(logging.ERROR)  # the host application's explicit choice
+    configure(level="DEBUG")
+    assert probe.level == logging.ERROR, "configure() must not clobber it"
+    probe.setLevel(logging.NOTSET)
 
 
 def test_third_party_loggers_follow_level_when_opted_in():
@@ -40,6 +50,8 @@ def test_third_party_loggers_follow_level_when_opted_in():
     for name in _THIRD_PARTY_LOGGERS:
         assert logging.getLogger(name).level == logging.DEBUG
     # restore the default policy for any tests that run after this one
+    for name in _THIRD_PARTY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.NOTSET)
     configure(level="INFO")
 
 

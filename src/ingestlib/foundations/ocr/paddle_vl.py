@@ -28,7 +28,12 @@ os.environ.setdefault("PADDLE_PDX_DISABLE_MODEL_SOURCE_CHECK", "True")
 from paddleocr import PaddleOCRVL  # noqa: E402
 
 from ingestlib.config import get_paddle_vl_config  # noqa: E402
-from ingestlib.foundations.ocr.models import BoundingBox, LayoutResult, Region, RegionType  # noqa: E402
+from ingestlib.foundations.ocr.models import (  # noqa: E402
+    BoundingBox,
+    LayoutResult,
+    Region,
+    RegionType,
+)
 from ingestlib.utils.logger import get_logger  # noqa: E402
 
 
@@ -73,7 +78,9 @@ _LABEL_MAP: dict[str, RegionType] = {
     "formula": "formula",
     "formula_number": "formula",
     "chart": "chart",
-    "chart_title": "chart",
+    # a chart's title is caption text — typing it "chart" would send a text
+    # crop through the chart→data-table enricher (fabrication risk)
+    "chart_title": "figure_caption",
     "seal": "seal",
     "reference": "reference",
     "references": "reference",
@@ -94,7 +101,7 @@ _lock = threading.Lock()
 def _check_server(server_url: str, backend: str) -> None:
     """Fail fast with a clear message if the VLM inference server isn't reachable."""
     try:
-        httpx.get(f"{server_url.rstrip('/')}/v1/models", timeout=3.0)
+        httpx.get(f"{server_url.rstrip('/')}/v1/models", timeout=3.0).raise_for_status()
     except httpx.HTTPError as exc:
         raise RuntimeError(
             f"PaddleOCR-VL inference server not reachable at {server_url} "
@@ -253,6 +260,11 @@ def run_full_pipeline(image_bytes: bytes) -> LayoutResult:
         w, h = Image.open(BytesIO(image_bytes)).size
         logger.warning("run_full_pipeline: predict returned no results, empty page %dx%d", w, h)
         return LayoutResult(regions=[], page_width=w, page_height=h)
+    if len(results) > 1:
+        logger.warning(
+            "run_full_pipeline: predict returned %d page results for one image — "
+            "using the first, dropping the rest", len(results),
+        )
     pp = results[0]
     res = _get_res(pp)
     width, height = _page_dims_from_result(res, image_bytes)

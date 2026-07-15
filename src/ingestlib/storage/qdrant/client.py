@@ -29,7 +29,7 @@ logger = get_logger(__name__)
 
 _lock = threading.Lock()
 _client: QdrantClient | None = None
-_collection_ready = False
+_collection_dimension: int | None = None    # verified dense dimension, once ready
 _bm25: SparseTextEmbedding | None = None
 
 # Named vectors on every point.
@@ -75,9 +75,16 @@ def ensure_collection(dimension: int) -> str:
     indexes are (re)ensured for every filterable field. Returns the
     collection name.
     """
-    global _collection_ready
+    global _collection_dimension
     cfg = get_qdrant_config()
-    if _collection_ready:
+    if _collection_dimension is not None:
+        # the ready short-circuit must not skip the mismatch guard
+        if _collection_dimension != dimension:
+            raise ValueError(
+                f"Qdrant collection {cfg.collection_name!r} has dense dimension "
+                f"{_collection_dimension}, but embeddings have dimension {dimension} — "
+                f"use a matching embedding dimension or a different collection"
+            )
         return cfg.collection_name
 
     client = get_qdrant_client()
@@ -102,7 +109,8 @@ def ensure_collection(dimension: int) -> str:
                 raise
     else:
         params = client.get_collection(cfg.collection_name).config.params
-        dense = (params.vectors or {}).get(DENSE_VECTOR) if isinstance(params.vectors, dict) else None
+        vectors = params.vectors if isinstance(params.vectors, dict) else {}
+        dense = vectors.get(DENSE_VECTOR)
         if dense is None:
             raise ValueError(
                 f"Qdrant collection {cfg.collection_name!r} predates the named-vector "
@@ -124,13 +132,13 @@ def ensure_collection(dimension: int) -> str:
             field_schema=PayloadSchemaType.KEYWORD,
         )
 
-    _collection_ready = True
+    _collection_dimension = dimension
     return cfg.collection_name
 
 
 def reset_qdrant_client() -> None:
     """Force client recreation on the next call (e.g. after endpoint change)."""
-    global _client, _collection_ready
+    global _client, _collection_dimension
     with _lock:
         _client = None
-        _collection_ready = False
+        _collection_dimension = None

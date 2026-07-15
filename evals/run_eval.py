@@ -63,7 +63,14 @@ STORES: dict[str, type[VectorStore]] = {
 
 
 def load_dataset() -> list[dict]:
-    return yaml.safe_load((EVALS_DIR / "dataset.yaml").read_text())
+    """Ground-truth entries from dataset.yaml — ids must be unique (they key
+    the per-question rank maps in every snapshot)."""
+    entries = yaml.safe_load((EVALS_DIR / "dataset.yaml").read_text())
+    ids = [e["id"] for e in entries]
+    duplicates = sorted({i for i in ids if ids.count(i) > 1})
+    if duplicates:
+        raise SystemExit(f"dataset.yaml has duplicate ids: {duplicates}")
+    return entries
 
 
 async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
@@ -103,6 +110,8 @@ async def backfill_store(store: VectorStore) -> None:
 
 
 def is_hit(hit, expected_doc_id: str, pages: list[int], keywords: list[str]) -> bool:
+    """Ground-truth match: right document, page overlap (when given), and at
+    least one keyword in the chunk's markdown+text (case-insensitive)."""
     chunk = hit.chunk
     if chunk.document_id != expected_doc_id:
         return False
@@ -137,17 +146,17 @@ async def eval_config(
 
     n = len(dataset)
     ranks = [r for r in per_question.values() if r is not None]
-    metrics = {
-        "hit@1": sum(1 for r in ranks if r <= 1) / n,
-        "hit@3": sum(1 for r in ranks if r <= 3) / n,
-        f"hit@{top_k}": len(ranks) / n,
-        "mrr": sum(1.0 / r for r in ranks) / n,
-    }
+    # dedup keeps the table sane when top_k collides with 1 or 3
+    ks = sorted({k for k in (1, 3, top_k) if k <= top_k})
+    metrics = {f"hit@{k}": sum(1 for r in ranks if r <= k) / n for k in ks}
+    metrics["mrr"] = sum(1.0 / r for r in ranks) / n
     return {"config": label, "metrics": metrics, "ranks": per_question}
 
 
-def print_table(results: list[dict], top_k: int) -> None:
-    cols = ["hit@1", "hit@3", f"hit@{top_k}", "mrr"]
+def print_table(results: list[dict]) -> None:
+    """Config comparison table, then per-question ranks for every question
+    at least one config missed or ranked below 1 — the debugging view."""
+    cols = list(results[0]["metrics"])
     print(f"\n{'config':<16}" + "".join(f"{c:>9}" for c in cols))
     for r in results:
         print(f"{r['config']:<16}" + "".join(f"{r['metrics'][c]:>9.2f}" for c in cols))
@@ -196,7 +205,7 @@ async def main() -> None:
         ))
     duration = time.perf_counter() - t0
 
-    print_table(results, args.top_k)
+    print_table(results)
 
     RESULTS_DIR.mkdir(exist_ok=True)
     stamp = datetime.now(timezone.utc).strftime("%Y%m%d-%H%M%S")

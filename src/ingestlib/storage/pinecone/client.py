@@ -20,7 +20,7 @@ logger = get_logger(__name__)
 
 _lock = threading.Lock()
 _client: Pinecone | None = None
-_index_ready = False
+_index_dimension: int | None = None     # verified dense dimension, once ready
 _sparse_index_ready = False
 
 # create_index is async server-side; poll readiness up to this long.
@@ -61,9 +61,16 @@ def ensure_index(dimension: int) -> str:
     comes from the first embedding batch, so index shape always matches what
     is actually being stored. Returns the index name.
     """
-    global _index_ready
+    global _index_dimension
     cfg = get_pinecone_config()
-    if _index_ready:
+    if _index_dimension is not None:
+        # the ready short-circuit must not skip the mismatch guard
+        if _index_dimension != dimension:
+            raise ValueError(
+                f"Pinecone index {cfg.index_name!r} has dimension "
+                f"{_index_dimension}, but embeddings have dimension {dimension} — "
+                f"use a matching embedding dimension or a different index"
+            )
         return cfg.index_name
 
     client = get_pinecone_client()
@@ -93,7 +100,7 @@ def ensure_index(dimension: int) -> str:
                 f"use a matching embedding dimension or a different index"
             )
 
-    _index_ready = True
+    _index_dimension = dimension
     return cfg.index_name
 
 
@@ -160,8 +167,8 @@ def embed_sparse(texts: list[str], input_type: str) -> list[tuple[list[int], lis
 
 def reset_pinecone_client() -> None:
     """Force client recreation on the next call (e.g. after key rotation)."""
-    global _client, _index_ready, _sparse_index_ready
+    global _client, _index_dimension, _sparse_index_ready
     with _lock:
         _client = None
-        _index_ready = False
+        _index_dimension = None
         _sparse_index_ready = False

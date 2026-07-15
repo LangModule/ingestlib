@@ -90,13 +90,20 @@ async def label_pages(
     An invalid label inherits its left neighbor's label (section continuity) —
     deterministic, and logged so drift is visible.
     """
-    labels = list(await asyncio.gather(*[
-        label_page(p, vocabulary, semaphore) for p in pages
-    ]))
+    tasks = [
+        asyncio.ensure_future(label_page(p, vocabulary, semaphore)) for p in pages
+    ]
+    try:
+        labels = list(await asyncio.gather(*tasks))
+    except BaseException:
+        for task in tasks:  # don't leave sibling label calls running
+            task.cancel()
+        raise
     allowed = {s.name for s in vocabulary}
     for i, label in enumerate(labels):
         if label not in allowed:
-            fallback = labels[i - 1] if i > 0 and labels[i - 1] in allowed else vocabulary[0].name
+            # labels[i-1] is already repaired (left-to-right), so it's always allowed
+            fallback = labels[i - 1] if i > 0 else vocabulary[0].name
             logger.warning(
                 "page %d got label %r outside vocabulary — using %r",
                 pages[i].page_num, label, fallback,

@@ -1,6 +1,6 @@
 [project]
 name = "ingestlib"
-version = "0.2.0"
+version = "0.3.0"
 description = "Self-hosted document intelligence for RAG — parse, classify, and split PDF/DOCX/PPTX into searchable, cited, retrieval-ready chunks"
 readme = "README.md"
 license = "MIT"

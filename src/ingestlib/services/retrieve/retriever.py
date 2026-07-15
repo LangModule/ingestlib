@@ -45,7 +45,9 @@ async def aretrieve(
     store = store or default_store()
 
     vector = await aembed_text(question, purpose="GENERIC_RETRIEVAL")
-    candidates = store.query(
+    # store.query is a sync SDK network call — keep it off the event loop
+    candidates = await asyncio.to_thread(
+        store.query,
         vector,
         top_k=top_k * _CANDIDATE_MULTIPLIER if rerank else top_k,
         filters=filters,

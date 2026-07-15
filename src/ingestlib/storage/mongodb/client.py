@@ -22,6 +22,7 @@ import time
 
 from pymongo import MongoClient
 from pymongo.collection import Collection
+from pymongo.errors import CollectionInvalid
 from pymongo.operations import SearchIndexModel
 
 from ingestlib.config import get_mongodb_config
@@ -163,12 +164,20 @@ def ensure_collection(dimension: int) -> Collection:
             )
             # search indexes need the collection to exist first
             if cfg.collection_name not in collection.database.list_collection_names():
-                collection.database.create_collection(cfg.collection_name)
+                try:
+                    collection.database.create_collection(cfg.collection_name)
+                except CollectionInvalid:
+                    pass  # another process won the creation race
             collection.create_search_indexes(missing)
-        _wait_until_queryable(collection, {VECTOR_INDEX, TEXT_INDEX})
 
+    # poll OUTSIDE the lock — up to 120s; holding it would stall every other
+    # mongo-touching thread behind an index build. A concurrent thread may
+    # duplicate the wait, which is harmless.
+    _wait_until_queryable(collection, {VECTOR_INDEX, TEXT_INDEX})
+
+    with _lock:
         _ready[key] = dimension
-        return collection
+    return collection
 
 
 def reset_mongodb_client() -> None:

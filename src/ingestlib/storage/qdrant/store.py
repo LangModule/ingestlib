@@ -10,8 +10,9 @@ failures degrade to dense-only with a warning.
 
 Backend quirks handled here so callers never see them:
   - point IDs must be UUIDs or unsigned ints, not arbitrary strings →
-    deterministic uuid5 of "{document_id}:{chunk_id}", so re-ingestion still
-    overwrites in place
+    deterministic uuid5 of "{namespace}:{document_id}:{chunk_id}" (namespace
+    omitted when empty, keeping pre-namespace IDs stable), so re-ingestion
+    overwrites in place and namespaces never collide
   - payloads are native JSON (no flattening needed), but JSON object keys are
     strings → region_ids page numbers round-trip through str and back to int
   - Qdrant has no namespaces → the namespace is a payload field every query
@@ -30,6 +31,7 @@ from qdrant_client.models import (
     Fusion,
     FusionQuery,
     MatchValue,
+    PointIdsList,
     PointStruct,
     Prefetch,
     SparseVector,
@@ -52,13 +54,16 @@ logger = get_logger(__name__)
 
 _UPSERT_BATCH = 100
 
-# Fixed namespace for uuid5 so "{document_id}:{chunk_id}" always maps to the
-# same point ID across processes and runs.
+# Fixed namespace for uuid5 so the same chunk key always maps to the same
+# point ID across processes and runs (see _point_id for the key format).
 _POINT_ID_NAMESPACE = uuid.UUID("6e6763a2-9a1b-4a3e-9c1f-8d2e5b7c4f01")
 
 
-def _point_id(document_id: str, chunk_id: int) -> str:
-    return str(uuid.uuid5(_POINT_ID_NAMESPACE, f"{document_id}:{chunk_id}"))
+def _point_id(document_id: str, chunk_id: int, namespace: str = "") -> str:
+    name = f"{document_id}:{chunk_id}"
+    if namespace:  # empty namespace keeps the original (pre-namespace) IDs
+        name = f"{namespace}:{name}"
+    return str(uuid.uuid5(_POINT_ID_NAMESPACE, name))
 
 
 def _to_payload(
@@ -168,7 +173,7 @@ class QdrantStore(VectorStore):
             if i in sparse_by_idx:
                 vector[SPARSE_VECTOR] = sparse_by_idx[i]
             points.append(PointStruct(
-                id=_point_id(document_id, chunk.chunk_id),
+                id=_point_id(document_id, chunk.chunk_id, namespace),
                 vector=vector,
                 payload=_to_payload(document_id, chunk, category, namespace),
             ))
@@ -180,7 +185,44 @@ class QdrantStore(VectorStore):
             "upserted %d point(s) (%d with sparse) for doc %s in %.1fs",
             len(points), len(sparse_by_idx), document_id[:12], time.perf_counter() - t0,
         )
+        # a re-parse can yield FEWER chunks — drop the previous ingest's
+        # leftovers or they keep surfacing as hits pointing at dead chunks
+        self._prune_stale(
+            client, collection, document_id, namespace, {str(p.id) for p in points}
+        )
         return len(points)
+
+    @staticmethod
+    def _prune_stale(
+        client: Any,
+        collection: str,
+        document_id: str,
+        namespace: str,
+        keep_ids: set[str],
+    ) -> None:
+        """Delete this document's points whose chunk_ids no longer exist."""
+        stale: list[str] = []
+        offset = None
+        while True:
+            records, offset = client.scroll(
+                collection_name=collection,
+                scroll_filter=_filter(namespace, document_id=document_id),
+                with_payload=False,
+                with_vectors=False,
+                limit=1000,
+                offset=offset,
+            )
+            stale.extend(str(r.id) for r in records if str(r.id) not in keep_ids)
+            if offset is None:
+                break
+        if stale:
+            client.delete(
+                collection_name=collection,
+                points_selector=PointIdsList(points=stale),
+            )
+            logger.info(
+                "pruned %d stale point(s) for doc %s", len(stale), document_id[:12]
+            )
 
     def query(
         self,

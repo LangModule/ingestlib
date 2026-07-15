@@ -83,16 +83,21 @@ def configure(
     Idempotent. Safe to call multiple times — old handlers are removed first
     so log lines never duplicate.
 
-    Third-party loggers (paddlex, httpx, botocore, ...) are set to WARNING so
-    their INFO chatter doesn't drown ingestlib's own logs. Pass
-    include_third_party=True to raise them to `level` instead (debugging aid).
+    Third-party loggers (paddlex, httpx, botocore, ...) are quieted to WARNING
+    so their INFO chatter doesn't drown ingestlib's own logs — but only when
+    the host application hasn't set their level itself (level NOTSET). Pass
+    include_third_party=True to force them to follow `level` (debugging aid).
 
     Args:
         level: numeric or string level ("DEBUG", "INFO", "WARNING", ...).
         include_third_party: if True, third-party loggers follow `level`.
     """
+    bad_level: str | None = None
     if isinstance(level, str):
-        level = getattr(logging, level.upper(), logging.INFO)
+        resolved = getattr(logging, level.upper(), None)
+        if not isinstance(resolved, int):
+            bad_level, resolved = level, logging.INFO
+        level = resolved
 
     root = logging.getLogger(_ROOT_LOGGER_NAME)
     root.setLevel(level)
@@ -113,7 +118,13 @@ def configure(
 
     third_party_level = level if include_third_party else logging.WARNING
     for name in _THIRD_PARTY_LOGGERS:
-        logging.getLogger(name).setLevel(third_party_level)
+        third_party = logging.getLogger(name)
+        # never clobber a level the host application set explicitly
+        if include_third_party or third_party.level == logging.NOTSET:
+            third_party.setLevel(third_party_level)
+
+    if bad_level is not None:
+        root.warning("unknown log level %r — using INFO", bad_level)
 
 
 def _auto_configure() -> None:

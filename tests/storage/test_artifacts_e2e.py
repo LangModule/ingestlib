@@ -89,6 +89,18 @@ def test_load_parse_with_images_restores_bytes(saved_doc):
     assert loaded.pages[0].figures[0].image_bytes == b"\x89PNG-fig"
 
 
+def test_ingest_complete_requires_the_manifest(saved_doc):
+    """Parse artifacts alone must NOT count as fully ingested — only the
+    manifest (the pipeline's last write) does, so failed runs get retried."""
+    from ingestlib.storage import artifacts
+
+    assert artifacts.document_exists(saved_doc) is True
+    assert artifacts.ingest_complete(saved_doc) is False
+    artifacts.save_ingest_manifest(saved_doc, {"store": "TestStore", "vector_ids": []})
+    assert artifacts.ingest_complete(saved_doc) is True
+    assert artifacts.load_ingest_manifest(saved_doc)["store"] == "TestStore"
+
+
 def test_classify_and_split_round_trip(saved_doc):
     from ingestlib.operations.classify.models import ClassifyResult
     from ingestlib.operations.split.models import Chunk, Section, SplitResult

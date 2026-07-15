@@ -81,6 +81,11 @@ class VectorStore(ABC):
         {"category": "research_paper", "section": "methods"}.
         `text` is the original query text — connectors with a lexical/hybrid
         side use it for sparse search; dense-only connectors ignore it.
+
+        A hybrid connector that cannot fuse its two signals server-side
+        (pinecone) may return MORE than top_k results — the dense top_k in
+        order, then lexical-only extras — expecting a reranker to produce
+        the final order; callers skipping reranking should slice [:top_k].
         """
 
     @abstractmethod

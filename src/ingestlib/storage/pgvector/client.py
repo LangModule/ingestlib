@@ -150,9 +150,11 @@ def ensure_schema(conn: psycopg.Connection, dimension: int) -> None:
                 " — first use",
                 table, dimension,
             )
+            # IF NOT EXISTS everywhere — two processes bootstrapping
+            # concurrently must not die on DuplicateTable/DuplicateIndex
             with conn.transaction():
                 conn.execute(f"""
-                    CREATE TABLE {table} (
+                    CREATE TABLE IF NOT EXISTS {table} (
                         id bigserial PRIMARY KEY,
                         document_id text NOT NULL,
                         chunk_id int NOT NULL,
@@ -171,14 +173,14 @@ def ensure_schema(conn: psycopg.Connection, dimension: int) -> None:
                     )
                 """)
                 conn.execute(
-                    f"CREATE INDEX {table}_embedding_idx ON {table}"
+                    f"CREATE INDEX IF NOT EXISTS {table}_embedding_idx ON {table}"
                     f" USING hnsw (embedding vector_cosine_ops)"
                 )
                 conn.execute(
-                    f"CREATE INDEX {table}_fts_idx ON {table} USING gin (fts)"
+                    f"CREATE INDEX IF NOT EXISTS {table}_fts_idx ON {table} USING gin (fts)"
                 )
                 conn.execute(
-                    f"CREATE INDEX {table}_document_idx ON {table}"
+                    f"CREATE INDEX IF NOT EXISTS {table}_document_idx ON {table}"
                     f" (namespace, document_id)"
                 )
         else:

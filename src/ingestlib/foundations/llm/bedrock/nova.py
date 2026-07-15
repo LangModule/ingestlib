@@ -67,7 +67,7 @@ def get_llm(
         temperature=temperature,
         max_tokens=max_tokens,
     )
-    cache_model(key, instance)
+    cache_model(key, instance, client)
     return instance
 
 
@@ -75,9 +75,16 @@ def get_llm_with_thinking(
     effort: ReasoningEffort = DEFAULT_REASONING_EFFORT,
     max_tokens: MaxTokens = DEFAULT_THINKING_MAX_TOKENS,
 ) -> ChatBedrockConverse:
-    """Cached ChatBedrockConverse with Nova reasoning enabled, keyed by (effort, max_tokens)."""
+    """Cached ChatBedrockConverse with Nova reasoning enabled.
+
+    Keyed by (effort, max_tokens) — except at effort="high", where Nova rejects
+    max_tokens entirely, so all max_tokens values share one cache entry.
+    """
     _validate_max_tokens(max_tokens)
-    key = f"llm_thinking:{effort}:{max_tokens}"
+    # max_tokens is not sent at effort="high" (Nova rejects it) — normalize the
+    # key so behaviorally identical instances share one cache entry.
+    key_tokens = 0 if effort == "high" else max_tokens
+    key = f"llm_thinking:{effort}:{key_tokens}"
     cached = get_model(key)
     if cached is not None:
         logger.debug("get_llm_with_thinking cache hit: %s", key)
@@ -100,7 +107,7 @@ def get_llm_with_thinking(
         kwargs["max_tokens"] = max_tokens
 
     instance = ChatBedrockConverse(**kwargs)
-    cache_model(key, instance)
+    cache_model(key, instance, client)
     return instance
 
 
@@ -263,6 +270,7 @@ def chat_structured(
     )
     t0 = time.perf_counter()
     result = None
+    last_exc: Exception | None = None
     for attempt in (1, 2):
         try:
             result = llm.invoke(messages)
@@ -271,7 +279,8 @@ def chat_structured(
                 "structured output attempt %d failed (%s: %s)",
                 attempt, type(exc).__name__, exc,
             )
-            result = None
+            result, last_exc = None, exc
+            continue
         if result is not None:
             break
         # with_structured_output returns None when the model skipped the tool
@@ -282,7 +291,7 @@ def chat_structured(
         raise RuntimeError(
             f"Nova produced no valid structured output for schema {schema.__name__} "
             f"after 2 attempts"
-        )
+        ) from last_exc
     logger.info(
         "Nova structured done: %.2fs schema=%s", time.perf_counter() - t0, schema.__name__,
     )

@@ -5,8 +5,8 @@ from pydantic import BaseModel, ConfigDict, Field
 class IngestResult(BaseModel):
     """Outcome of one document's journey through the full pipeline.
 
-    status    — "ingested" (fresh run) or "skipped" (checksum already present
-                and skip_existing was True)
+    status    — "ingested" (fresh run) or "skipped" (this checksum already
+                completed the full pipeline and skip_existing was True)
     doc_id    — the document's content checksum; keys every artifact and vector
     durations — per-stage wall-clock seconds (parse/classify/split/embed/upsert)
     """

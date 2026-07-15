@@ -36,6 +36,10 @@ logger = get_logger(__name__)
 
 _UPSERT_BATCH = 100
 
+# Pinecone caps metadata at 40 KB per vector; leave headroom for the
+# non-body fields. Only giant single-block chunks (whole tables) get near it.
+_BODY_BUDGET = 35_000
+
 
 def _vector_id(document_id: str, chunk_id: int) -> str:
     return f"{document_id}:{chunk_id}"
@@ -43,6 +47,18 @@ def _vector_id(document_id: str, chunk_id: int) -> str:
 
 def _to_metadata(document_id: str, chunk: Chunk, category: str) -> dict[str, Any]:
     """Chunk → flat Pinecone metadata (lists of strings, JSON-encoded dicts)."""
+    markdown, text = chunk.markdown, chunk.text
+    overflow = len(markdown) + len(text) - _BODY_BUDGET
+    if overflow > 0:
+        # keep markdown (the citation/rerank body) — sacrifice text first
+        text = text[: max(0, len(text) - overflow)]
+        overflow = len(markdown) + len(text) - _BODY_BUDGET
+        if overflow > 0:
+            markdown = markdown[: len(markdown) - overflow]
+        logger.warning(
+            "chunk %s:%d body exceeds Pinecone's metadata cap — truncated to fit",
+            document_id[:12], chunk.chunk_id,
+        )
     return {
         "document_id": document_id,
         "chunk_id": chunk.chunk_id,
@@ -53,8 +69,8 @@ def _to_metadata(document_id: str, chunk: Chunk, category: str) -> dict[str, Any
         "token_estimate": chunk.token_estimate,
         "pages": [str(p) for p in chunk.pages],
         "region_ids": json.dumps(chunk.region_ids),
-        "markdown": chunk.markdown,
-        "text": chunk.text,
+        "markdown": markdown,
+        "text": text,
     }
 
 
@@ -132,7 +148,35 @@ class PineconeStore(VectorStore):
         )
         if self.hybrid:
             self._upsert_sparse(document_id, chunks, category, namespace)
+        # a re-parse can yield FEWER chunks — drop the previous ingest's
+        # leftovers or they keep surfacing as hits pointing at dead chunks
+        self._prune_stale(document_id, {v["id"] for v in vectors}, namespace)
         return len(vectors)
+
+    @staticmethod
+    def _prune_stale(document_id: str, keep_ids: set[str], namespace: str) -> None:
+        """Delete this document's vectors whose chunk_ids no longer exist —
+        from both indexes, regardless of the hybrid flag (a sparse index may
+        hold rows from an earlier hybrid instance)."""
+        client = get_pinecone_client()
+        cfg = get_pinecone_config()
+        for index_name in (cfg.index_name, cfg.sparse_index_name):
+            if not client.has_index(index_name):
+                continue
+            index = client.Index(index_name)
+            stale: list[str] = []
+            for id_batch in index.list(prefix=f"{document_id}:", namespace=namespace):
+                stale.extend(
+                    vec_id
+                    for vec_id in (getattr(item, "id", item) for item in id_batch)
+                    if vec_id not in keep_ids
+                )
+            if stale:
+                index.delete(ids=stale, namespace=namespace)
+                logger.info(
+                    "pruned %d stale vector(s) for doc %s from %r",
+                    len(stale), document_id[:12], index_name,
+                )
 
     def _upsert_sparse(
         self,
@@ -180,7 +224,10 @@ class PineconeStore(VectorStore):
         When hybrid and `text` is given, the sparse index is searched with the
         same top_k and its extra hits are appended after the dense results.
         """
-        index = get_pinecone_client().Index(ensure_index(dimension=len(vector)))
+        client = get_pinecone_client()
+        if not client.has_index(get_pinecone_config().index_name):
+            return []  # nothing was ever stored — don't create infra on the read path
+        index = client.Index(ensure_index(dimension=len(vector)))
         t0 = time.perf_counter()
         response = index.query(
             vector=vector,
@@ -207,11 +254,15 @@ class PineconeStore(VectorStore):
     ) -> list[RetrievedChunk]:
         """Lexical search on the sparse index; degrades to no extra hits on failure."""
         try:
+            client = get_pinecone_client()
+            cfg = get_pinecone_config()
+            if not client.has_index(cfg.sparse_index_name):
+                return []  # never stored — don't create infra on the read path
             indices, values = embed_sparse([text], input_type="query")[0]
             if not indices:
                 return []
             t0 = time.perf_counter()
-            index = get_pinecone_client().Index(ensure_sparse_index())
+            index = client.Index(cfg.sparse_index_name)
             response = index.query(
                 sparse_vector={"indices": indices, "values": values},
                 top_k=top_k,
@@ -241,7 +292,8 @@ class PineconeStore(VectorStore):
         cfg = get_pinecone_config()
         deleted = self._delete_by_prefix(cfg.index_name, document_id, namespace)
         logger.info("deleted %d vector(s) for doc %s", deleted, document_id[:12])
-        if self.hybrid and client.has_index(cfg.sparse_index_name):
+        # sparse rows may exist from an earlier hybrid instance — always sweep
+        if client.has_index(cfg.sparse_index_name):
             n = self._delete_by_prefix(cfg.sparse_index_name, document_id, namespace)
             logger.info("deleted %d sparse vector(s) for doc %s", n, document_id[:12])
         return deleted

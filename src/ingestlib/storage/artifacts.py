@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 from typing import Any
 
+from botocore.exceptions import ClientError
 from pydantic import BaseModel, ConfigDict
 
 from ingestlib.foundations.ocr.models import BoundingBox, Region
@@ -75,6 +76,21 @@ def _get(key: str) -> bytes:
     return response["Body"].read()
 
 
+def _get_or_none(key: str) -> bytes | None:
+    """S3 GET returning None ONLY for a genuinely missing key.
+
+    Every other failure (throttle, network, auth) propagates — treating a
+    transient error as absence would silently rewrite metadata or serve
+    ghost registry entries.
+    """
+    try:
+        return _get(key)
+    except ClientError as err:
+        if err.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
+            return None
+        raise
+
+
 def _page_key(doc_id: str, page_num: int) -> str:
     return _key(doc_id, "parse", "pages", f"page_{page_num:04d}.png")
 
@@ -84,34 +100,42 @@ def _meta_key(doc_id: str) -> str:
 
 
 def _patch_meta(doc_id: str, **fields: Any) -> None:
-    """Merge fields into the document's meta.json (created if absent)."""
-    try:
-        current = json.loads(_get(_meta_key(doc_id)))
-    except Exception:
-        current = {"doc_id": doc_id}
+    """Merge fields into the document's meta.json (created if absent).
+
+    Read-modify-write without concurrency control — pipeline stages of ONE
+    document save sequentially, so the single-writer assumption holds.
+    """
+    body = _get_or_none(_meta_key(doc_id))
+    current = json.loads(body) if body is not None else {"doc_id": doc_id}
     current.update(fields)
     _put_json(_meta_key(doc_id), current)
 
 
 def _load_meta(doc_id: str) -> DocumentMeta:
     """Load meta.json; rebuild it from parse/result.json for pre-meta documents."""
-    try:
-        return DocumentMeta.model_validate(json.loads(_get(_meta_key(doc_id))))
-    except Exception:
-        pass
-    try:  # self-heal: derive from the parse result, then persist
-        payload = json.loads(_get(_key(doc_id, "parse", "result.json")))
-        meta = DocumentMeta(
-            doc_id=doc_id,
-            filename=Path(payload["source_path"]).name,
-            source_format=payload["source_format"],
-            page_count=len(payload["pages"]),
-            created_at=payload["created_at"],
-        )
-        _put_json(_meta_key(doc_id), meta.model_dump())
-        return meta
-    except Exception:
+    body = _get_or_none(_meta_key(doc_id))
+    if body is not None:
+        try:
+            return DocumentMeta.model_validate(json.loads(body))
+        except Exception:
+            logger.warning(
+                "meta.json for %s is corrupt — rebuilding from the parse artifact",
+                doc_id[:12],
+            )
+    parse_body = _get_or_none(_key(doc_id, "parse", "result.json"))
+    if parse_body is None:  # nothing to heal from — a bare/foreign prefix
         return DocumentMeta(doc_id=doc_id)
+    # self-heal: derive from the parse result, then persist
+    payload = json.loads(parse_body)
+    meta = DocumentMeta(
+        doc_id=doc_id,
+        filename=Path(payload["source_path"]).name,
+        source_format=payload["source_format"],
+        page_count=len(payload["pages"]),
+        created_at=payload["created_at"],
+    )
+    _put_json(_meta_key(doc_id), meta.model_dump())
+    return meta
 
 
 # ---------- parse ----------
@@ -213,13 +237,16 @@ def load_parse(doc_id: str, *, include_images: bool = False) -> ParseResult:
                 caption=f["caption"],
                 description=f["description"],
             )
-            if include_images:  # fetch via the model's canonical filename — single source of truth
-                fig = fig.model_copy(update={"image_bytes": _get(
+            if include_images:  # the model's canonical filename is the single source of truth
+                crop = _get_or_none(
                     _key(doc_id, "parse", "figures", fig.filename(p["page_num"]))
-                )})
+                )
+                if crop is not None:
+                    fig = fig.model_copy(update={"image_bytes": crop})
             figures.append(fig)
+        # pages saved without a render (image_bytes=None) have no PNG object
         image_bytes = (
-            _get(_page_key(doc_id, p["page_num"])) if include_images else None
+            _get_or_none(_page_key(doc_id, p["page_num"])) if include_images else None
         )
         pages.append(PageResult(
             page_num=p["page_num"],
@@ -298,6 +325,20 @@ def document_exists(doc_id: str) -> bool:
     return response.get("KeyCount", 0) > 0
 
 
+def ingest_complete(doc_id: str) -> bool:
+    """True when the FULL pipeline finished for this document.
+
+    Checks the ingest manifest — the last artifact the pipeline writes — so a
+    run that died after parse/classify/split gets retried instead of skipped.
+    """
+    response = get_s3_client().list_objects_v2(
+        Bucket=ensure_bucket(),
+        Prefix=_key(doc_id, "split", "ingest_manifest.json"),
+        MaxKeys=1,
+    )
+    return response.get("KeyCount", 0) > 0
+
+
 def get_document_meta(doc_id: str) -> DocumentMeta:
     """Registry entry for one document (self-healing, like list_documents)."""
     return _load_meta(doc_id)
@@ -330,8 +371,15 @@ def delete_document(doc_id: str) -> int:
     paginator = client.get_paginator("list_objects_v2")
     for page in paginator.paginate(Bucket=bucket, Prefix=_key(doc_id) + "/"):
         keys = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
-        if keys:
-            client.delete_objects(Bucket=bucket, Delete={"Objects": keys})
-            deleted += len(keys)
+        if not keys:
+            continue
+        response = client.delete_objects(Bucket=bucket, Delete={"Objects": keys})
+        errors = response.get("Errors", [])
+        if errors:  # partial failure must not be reported as success
+            raise RuntimeError(
+                f"delete_document {doc_id[:12]}: {len(errors)} object(s) failed, "
+                f"first: {errors[0].get('Key')} ({errors[0].get('Message')})"
+            )
+        deleted += len(keys)
     logger.info("deleted document %s (%d objects)", doc_id[:12], deleted)
     return deleted

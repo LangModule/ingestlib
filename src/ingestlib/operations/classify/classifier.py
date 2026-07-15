@@ -13,7 +13,12 @@ from pydantic import BaseModel, Field
 
 from ingestlib.foundations.llm import Image as NovaImage
 from ingestlib.foundations.llm import achat_structured
-from ingestlib.operations.classify.chunker import PageContent, cap_and_chunk, extract_pages
+from ingestlib.operations.classify.chunker import (
+    CHUNK_PAGES,
+    PageContent,
+    cap_and_chunk,
+    extract_pages,
+)
 from ingestlib.operations.classify.models import CategoryScore, ClassifyResult
 from ingestlib.operations.parse.models import ParseResult
 from ingestlib.utils.logger import get_logger
@@ -60,8 +65,9 @@ class _ConstrainedVerdict(BaseModel):
 
 
 def _format_pages(pages: list[PageContent], start_num: int = 1) -> str:
+    placeholder = "(no extractable text — see attached images if any)"
     blocks = [
-        f"--- page {i} ---\n{p.text.strip() or '(no extractable text — see attached images if any)'}"
+        f"--- page {i} ---\n{p.text.strip() or placeholder}"
         for i, p in enumerate(pages, start=start_num)
     ]
     return "\n\n".join(blocks)
@@ -72,13 +78,18 @@ def _page_images(pages: list[PageContent], limit: int) -> list[NovaImage]:
     return images[:limit]
 
 
-def _categories_block(categories: dict[str, str]) -> str:
+def _categories_block(categories: dict[str, str], *, alternatives: bool = True) -> str:
+    """Constraint text. alternatives=False for calls using the _Verdict schema,
+    which has no alternatives field — instructing the model to fill one would
+    be unsatisfiable and degrades structured-output compliance."""
     lines = [f"- {label}: {desc}" for label, desc in categories.items()]
-    return (
+    block = (
         "Allowed categories:\n" + "\n".join(lines) + "\n\n"
-        "Pick exactly one label from the list. If none fits, use 'uncategorized'. "
-        "Also rank the other plausible labels in 'alternatives' by score."
+        "Pick exactly one label from the list. If none fits, use 'uncategorized'."
     )
+    if alternatives:
+        block += " Also rank the other plausible labels in 'alternatives' by score."
+    return block
 
 
 def _validate_categories(categories: dict[str, str] | None) -> None:
@@ -110,7 +121,9 @@ async def _classify_chunk(
     semaphore: asyncio.Semaphore,
 ) -> _Verdict:
     """Map phase: text-only verdict for one 20-page chunk."""
-    constraint = f"\n\n{_categories_block(categories)}" if categories else ""
+    constraint = (
+        f"\n\n{_categories_block(categories, alternatives=False)}" if categories else ""
+    )
     prompt = (
         f"This is a consecutive excerpt (pages {start_page}+) of a larger document. "
         f"Classify the DOCUMENT it comes from.{constraint}\n\n{_format_pages(chunk, start_page)}"
@@ -163,7 +176,7 @@ def _to_result(
             logger.warning(
                 "model invented category %r — coercing to 'uncategorized'", verdict.category
             )
-            verdict.category = "uncategorized"  # type: ignore[misc]
+            verdict = verdict.model_copy(update={"category": "uncategorized"})
     return ClassifyResult(
         category=verdict.category,
         confidence=verdict.confidence,
@@ -185,7 +198,9 @@ async def aclassify(
     """
     _validate_categories(categories)
     start = time.perf_counter()
-    pages = extract_pages(source)
+    # loading is blocking work (pypdfium2, LibreOffice subprocess) — keep it
+    # off the event loop
+    pages = await asyncio.to_thread(extract_pages, source)
     chunks, pages_used = cap_and_chunk(pages)
     logger.info(
         "classify start: %d page(s) used, %d chunk(s), categories=%s",
@@ -196,11 +211,18 @@ async def aclassify(
         verdict = await _classify_single(chunks[0], categories)
     else:
         semaphore = asyncio.Semaphore(_NOVA_CONCURRENCY)
-        page_offsets = [1 + i * len(chunks[0]) for i in range(len(chunks))]
-        chunk_verdicts = list(await asyncio.gather(*[
-            _classify_chunk(c, i, page_offsets[i], categories, semaphore)
+        tasks = [
+            asyncio.ensure_future(
+                _classify_chunk(c, i, 1 + i * CHUNK_PAGES, categories, semaphore)
+            )
             for i, c in enumerate(chunks)
-        ]))
+        ]
+        try:
+            chunk_verdicts = list(await asyncio.gather(*tasks))
+        except BaseException:
+            for task in tasks:  # don't leave sibling chunk calls running
+                task.cancel()
+            raise
         verdict = await _combine(chunk_verdicts, chunks[0], categories)
 
     result = _to_result(verdict, categories, pages_used)

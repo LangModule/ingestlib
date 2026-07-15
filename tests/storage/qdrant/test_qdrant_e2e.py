@@ -110,6 +110,40 @@ def test_reupsert_overwrites_not_duplicates(store, upserted):
     assert len(ours) == 2, "deterministic point IDs must overwrite, never duplicate"
 
 
+def test_reupsert_with_fewer_chunks_leaves_no_orphans(store, upserted):
+    """A re-parsed document that now has fewer chunks must not leave its old
+    chunk_ids behind as stale points."""
+    from ingestlib.foundations.llm import embed_text
+
+    chunks = _chunks()
+    embeddings = [embed_text(c.embedding_text) for c in chunks]
+    store.upsert_chunks(_DOC_ID, chunks[:1], embeddings[:1], category="research_paper")
+    q = embed_text("participants recruited", purpose="GENERIC_RETRIEVAL")
+    ours = [h for h in store.query(q, top_k=10) if h.document_id == _DOC_ID]
+    assert len(ours) == 1, "stale chunk_ids must be pruned on re-ingestion"
+    store.upsert_chunks(_DOC_ID, chunks, embeddings, category="research_paper")
+
+
+def test_namespaces_are_isolated(store, upserted):
+    """The same document in two namespaces must not collide — point IDs are
+    namespace-scoped and queries filter on the namespace payload."""
+    from ingestlib.foundations.llm import embed_text
+
+    chunks = _chunks()
+    embeddings = [embed_text(c.embedding_text) for c in chunks]
+    store.upsert_chunks(_DOC_ID, chunks, embeddings,
+                        category="research_paper", namespace="prod")
+    q = embed_text("participants recruited", purpose="GENERIC_RETRIEVAL")
+    default_hits = [h for h in store.query(q, top_k=10) if h.document_id == _DOC_ID]
+    assert len(default_hits) == 2, "default namespace must still hold its copy"
+    prod_hits = [
+        h for h in store.query(q, top_k=10, namespace="prod")
+        if h.document_id == _DOC_ID
+    ]
+    assert len(prod_hits) == 2, "prod namespace must hold its own copy"
+    assert store.delete_document(_DOC_ID, namespace="prod") == 2
+
+
 def test_delete_document_removes_points(store, upserted):
     deleted = store.delete_document(_DOC_ID)
     assert deleted == 2

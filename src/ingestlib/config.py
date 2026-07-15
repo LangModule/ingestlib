@@ -74,14 +74,14 @@ class PineconeConfig:
 
 @dataclass(frozen=True)
 class QdrantConfig:
-    api_key: str                # from QDRANT_API_KEY env var ("" for a local/unsecured server)
-    url: str                    # from QDRANT_URL env var (e.g. http://localhost:6333 or a cloud URL)
+    api_key: str                # from QDRANT_API_KEY env var ("" for a local server)
+    url: str                    # from QDRANT_URL env var (local or cloud URL)
     collection_name: str
 
 
 @dataclass(frozen=True)
 class SqliteConfig:
-    path: Path                  # database file; relative paths resolve against config.yaml's directory
+    path: Path                  # database file; relative paths anchor to config.yaml's dir
 
 
 @dataclass(frozen=True)
@@ -99,14 +99,14 @@ class MongodbConfig:
 
 @dataclass(frozen=True)
 class MilvusConfig:
-    url: str                    # from MILVUS_URL env var (e.g. http://localhost:19530 or Zilliz Cloud)
+    url: str                    # from MILVUS_URL env var (local server or Zilliz Cloud)
     token: str                  # from MILVUS_TOKEN env var ("" for a local/unsecured server)
     collection_name: str
 
 
 @dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # services' default (pinecone | qdrant | sqlite | pgvector | mongodb | milvus)
+    vector_store: str           # services' default connector (one of the six below)
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig

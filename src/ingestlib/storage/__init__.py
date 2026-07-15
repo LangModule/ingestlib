@@ -7,7 +7,8 @@ Sub-packages / modules:
     base      — VectorStore contract + RetrievedChunk (works with any
                 vector database via connectors)
     pinecone  — Pinecone serverless connector, hybrid dense + sparse
-    qdrant    — Qdrant connector, dense (local docker or Qdrant Cloud)
+    qdrant    — Qdrant connector, hybrid dense + BM25 sparse fused with
+                server-side RRF (local docker or Qdrant Cloud)
     sqlite    — embedded zero-infrastructure connector (sqlite-vec + FTS5),
                 hybrid, no server or credentials — one local file
     pgvector  — Postgres connector (pgvector HNSW + built-in full-text),

@@ -102,6 +102,26 @@ def test_hybrid_query_merges_without_duplicates(store, upserted):
     assert any(h.heading == "Participant recruitment" for h in hits)
 
 
+def test_reupsert_with_fewer_chunks_leaves_no_orphans(store, upserted):
+    """A re-parsed document that now has fewer chunks must not leave its old
+    chunk_ids behind as stale vectors in either index."""
+    from ingestlib.foundations.llm import embed_text
+
+    chunks = _chunks()
+    embeddings = [embed_text(c.embedding_text) for c in chunks]
+    store.upsert_chunks(_DOC_ID, chunks[:1], embeddings[:1], category="research_paper")
+    time.sleep(8)  # eventual consistency
+    q = embed_text("participants recruited revenue growth", purpose="GENERIC_RETRIEVAL")
+    ours = [h for h in store.query(q, top_k=10) if h.document_id == _DOC_ID]
+    assert len(ours) == 1, "stale chunk_ids must be pruned on re-ingestion"
+    sparse = store._query_sparse("revenue grew year over year", 10, None, "")
+    assert [h for h in sparse if h.document_id == _DOC_ID and h.chunk_id == 1] == [], (
+        "the sparse index must be pruned too"
+    )
+    store.upsert_chunks(_DOC_ID, chunks, embeddings, category="research_paper")
+    time.sleep(8)
+
+
 def test_delete_document_removes_vectors_from_both_indexes(store, upserted):
     deleted = store.delete_document(_DOC_ID)
     assert deleted == 2

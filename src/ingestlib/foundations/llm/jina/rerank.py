@@ -14,6 +14,21 @@ logger = get_logger(__name__)
 # Attempts per call — 429s back off and retry before giving up.
 _MAX_ATTEMPTS = 3
 
+# Longest single back-off — an aggressive Retry-After must not stall retrieval.
+_MAX_RETRY_WAIT_SECONDS = 30.0
+
+
+def _retry_wait(header_value: str | None, attempt: int) -> float:
+    """Seconds to back off after a 429. Retry-After may be an HTTP-date
+    (RFC 9110) rather than seconds — fall back to exponential-ish then."""
+    fallback = 2.0 * attempt
+    try:
+        wait = float(header_value) if header_value is not None else fallback
+    except ValueError:
+        wait = fallback
+    # clamp both ends — a negative value would make time.sleep() raise
+    return min(max(wait, 0.0), _MAX_RETRY_WAIT_SECONDS)
+
 
 def rerank(
     query: str,
@@ -57,7 +72,7 @@ def rerank(
         )
         if response.status_code == 429 and attempt < _MAX_ATTEMPTS:
             # rate-limited — honor Retry-After when present, else back off
-            wait = float(response.headers.get("retry-after", 2.0 * attempt))
+            wait = _retry_wait(response.headers.get("retry-after"), attempt)
             logger.warning(
                 "Jina rerank rate-limited (429) — retrying in %.0fs (attempt %d/%d)",
                 wait, attempt, _MAX_ATTEMPTS,

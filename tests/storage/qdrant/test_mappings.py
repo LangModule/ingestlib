@@ -23,6 +23,16 @@ def test_point_id_is_deterministic_valid_uuid():
     assert _point_id("other", 7) != a
 
 
+def test_point_id_is_namespace_scoped():
+    default = _point_id("abc123", 7)
+    assert _point_id("abc123", 7, namespace="") == default, (
+        "empty namespace must keep pre-namespace IDs stable (no migration)"
+    )
+    prod = _point_id("abc123", 7, namespace="prod")
+    assert prod != default, "namespaces must never collide on the same chunk"
+    assert _point_id("abc123", 7, namespace="prod") == prod  # still deterministic
+
+
 def test_payload_round_trip_restores_types():
     payload = _to_payload("abc123", _chunk(), category="research_paper", namespace="")
     assert payload["region_ids"] == {"4": [3, 4], "5": [0]}  # JSON keys are strings

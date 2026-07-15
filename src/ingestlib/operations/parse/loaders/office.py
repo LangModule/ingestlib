@@ -48,21 +48,30 @@ def _convert_to_pdf_bytes(office_bytes: bytes, ext: OfficeExtension) -> bytes:
         # same TemporaryDirectory and is deleted with it.
         profile = tmp / "profile"
 
-        subprocess.run(
-            [
-                _LIBREOFFICE_BIN,
-                "--headless",
-                "--nologo",
-                "--nofirststartwizard",
-                f"-env:UserInstallation=file://{profile}",
-                "--convert-to", "pdf",
-                "--outdir", str(tmp),
-                str(source),
-            ],
-            check=True,
-            timeout=_CONVERSION_TIMEOUT_SECONDS,
-            capture_output=True,
-        )
+        try:
+            subprocess.run(
+                [
+                    _LIBREOFFICE_BIN,
+                    "--headless",
+                    "--nologo",
+                    "--nofirststartwizard",
+                    f"-env:UserInstallation=file://{profile}",
+                    "--convert-to", "pdf",
+                    "--outdir", str(tmp),
+                    str(source),
+                ],
+                check=True,
+                timeout=_CONVERSION_TIMEOUT_SECONDS,
+                capture_output=True,
+            )
+        except subprocess.CalledProcessError as exc:
+            # capture_output swallows stderr — surface it or failures
+            # (missing fonts, corrupt files) are undiagnosable
+            stderr = (exc.stderr or b"").decode(errors="replace").strip()
+            raise RuntimeError(
+                f"LibreOffice failed to convert the {ext} input"
+                + (f":\n{stderr[-2000:]}" if stderr else " (no stderr output)")
+            ) from exc
 
         pdf_files = list(tmp.glob("*.pdf"))
         if not pdf_files:

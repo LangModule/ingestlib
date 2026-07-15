@@ -171,9 +171,14 @@ def ensure_schema(conn: sqlite3.Connection, dimension: int) -> None:
             )
             conn.execute("BEGIN IMMEDIATE")
             try:
-                for statement in _SCHEMA.format(dimension=dimension).split(";\n\n"):
-                    conn.execute(statement)
-                conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
+                # re-check under the write lock — another PROCESS may have
+                # created the schema between the check above and BEGIN
+                if not schema_exists(conn):
+                    # statements are separated by blank lines — the split
+                    # depends on that formatting
+                    for statement in _SCHEMA.format(dimension=dimension).split(";\n\n"):
+                        conn.execute(statement)
+                    conn.execute(f"PRAGMA user_version = {_SCHEMA_VERSION}")
                 conn.execute("COMMIT")
             except Exception:
                 conn.execute("ROLLBACK")
