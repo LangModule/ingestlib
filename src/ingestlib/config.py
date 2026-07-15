@@ -8,9 +8,9 @@ first operation needs it. Discovery order for config.yaml:
 
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
-QDRANT_URL/_API_KEY, PGVECTOR_URL), and AWS credentials resolve via the
-profile field against ~/.aws/credentials — the standard boto3 chain. The
-sqlite connector needs no secrets at all — just a file path.
+QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL), and AWS credentials resolve
+via the profile field against ~/.aws/credentials — the standard boto3 chain.
+The sqlite connector needs no secrets at all — just a file path.
 """
 import os
 import threading
@@ -90,8 +90,15 @@ class PgvectorConfig:
 
 
 @dataclass(frozen=True)
+class MongodbConfig:
+    url: str                    # from MONGODB_URL env var (mongodb+srv://... or mongodb://...)
+    database: str
+    collection_name: str
+
+
+@dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # connector the services default to (pinecone | qdrant | sqlite | pgvector)
+    vector_store: str           # services' default connector (pinecone | qdrant | sqlite | pgvector | mongodb)
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
@@ -101,6 +108,7 @@ class IngestConfig:
     qdrant: QdrantConfig
     sqlite: SqliteConfig
     pgvector: PgvectorConfig
+    mongodb: MongodbConfig
 
 
 def _find_config_path() -> Path:
@@ -198,6 +206,13 @@ def _load_config() -> IngestConfig:
         table_name=pgvector_data.get("table_name", "ingestlib"),
     )
 
+    mongodb_data = data.get("mongodb", {})
+    mongodb_config = MongodbConfig(
+        url=os.environ.get("MONGODB_URL", ""),
+        database=mongodb_data.get("database", "ingestlib"),
+        collection_name=mongodb_data.get("collection_name", "ingestlib"),
+    )
+
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
         aws=aws_config,
@@ -209,6 +224,7 @@ def _load_config() -> IngestConfig:
         qdrant=qdrant_config,
         sqlite=sqlite_config,
         pgvector=pgvector_config,
+        mongodb=mongodb_config,
     )
 
 
@@ -268,3 +284,8 @@ def get_sqlite_config() -> SqliteConfig:
 def get_pgvector_config() -> PgvectorConfig:
     """Postgres/pgvector connection URL and table settings."""
     return get_config().pgvector
+
+
+def get_mongodb_config() -> MongodbConfig:
+    """MongoDB connection URL, database, and collection settings."""
+    return get_config().mongodb

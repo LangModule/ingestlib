@@ -12,12 +12,15 @@ Sub-packages / modules:
                 hybrid, no server or credentials — one local file
     pgvector  — Postgres connector (pgvector HNSW + built-in full-text),
                 hybrid — one connection URL to the Postgres you already run
+    mongodb   — MongoDB connector (Atlas Vector Search + Atlas Search BM25),
+                hybrid — Atlas any tier, atlas-local docker, or 8.2+ mongot
 
 Services pick their connector via default_store(), driven by config.yaml's
 `vector_store` key — every provider's keys can sit in .env; only the selected
 one ever builds a client.
 """
 from ingestlib.storage.base import RetrievedChunk, VectorStore
+from ingestlib.storage.mongodb import MongodbStore
 from ingestlib.storage.pgvector import PgvectorStore
 from ingestlib.storage.pinecone import PineconeStore
 from ingestlib.storage.qdrant import QdrantStore
@@ -29,6 +32,7 @@ _STORES: dict[str, type[VectorStore]] = {
     "qdrant": QdrantStore,
     "sqlite": SqliteStore,
     "pgvector": PgvectorStore,
+    "mongodb": MongodbStore,
 }
 
 
@@ -55,5 +59,6 @@ __all__ = [
     "QdrantStore",
     "SqliteStore",
     "PgvectorStore",
+    "MongodbStore",
     "default_store",
 ]

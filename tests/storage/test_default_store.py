@@ -3,6 +3,7 @@ import pytest
 
 import ingestlib.config as config_module
 from ingestlib.storage import (
+    MongodbStore,
     PgvectorStore,
     PineconeStore,
     QdrantStore,
@@ -19,7 +20,9 @@ def _with_store(monkeypatch, name: str) -> None:
 
 def test_current_config_selects_a_known_connector():
     store = default_store()
-    assert isinstance(store, (PineconeStore, QdrantStore, SqliteStore, PgvectorStore))
+    assert isinstance(
+        store, (PineconeStore, QdrantStore, SqliteStore, PgvectorStore, MongodbStore)
+    )
 
 
 @pytest.mark.parametrize(("name", "cls"), [
@@ -27,6 +30,7 @@ def test_current_config_selects_a_known_connector():
     ("qdrant", QdrantStore),
     ("sqlite", SqliteStore),
     ("pgvector", PgvectorStore),
+    ("mongodb", MongodbStore),
 ])
 def test_each_name_selects_its_connector(monkeypatch, name, cls):
     _with_store(monkeypatch, name)
@@ -35,5 +39,5 @@ def test_each_name_selects_its_connector(monkeypatch, name, cls):
 
 def test_unknown_name_raises_with_choices(monkeypatch):
     _with_store(monkeypatch, "chroma")
-    with pytest.raises(ValueError, match="pgvector.*pinecone.*qdrant.*sqlite"):
+    with pytest.raises(ValueError, match="mongodb.*pgvector.*pinecone.*qdrant.*sqlite"):
         default_store()

@@ -28,7 +28,8 @@ paddle_vl:
 s3:
   bucket: your-unique-bucket-name
 
-# Which vector database ingest/retrieve use: pinecone | qdrant | sqlite | pgvector
+# Which vector database ingest/retrieve use:
+# pinecone | qdrant | sqlite | pgvector | mongodb
 vector_store: pinecone
 
 # Indexes are created automatically on first use.
@@ -53,3 +54,10 @@ sqlite:
 # Connection URL comes from PGVECTOR_URL in .env.
 pgvector:
   table_name: ingestlib
+
+# Search indexes are created automatically on first use (Atlas any tier,
+# atlas-local docker, or self-managed 8.2+ with mongot).
+# Connection URL comes from MONGODB_URL in .env.
+mongodb:
+  database: ingestlib
+  collection_name: ingestlib

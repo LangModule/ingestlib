@@ -11,7 +11,7 @@ models, chunking, and data — a report tells you, a red CI run blocks you.
 Usage:
     uv run python evals/run_eval.py                # ensure corpus ingested, run all configs
     uv run python evals/run_eval.py --skip-ingest  # corpus already ingested
-    uv run python evals/run_eval.py --store qdrant   # or sqlite | pgvector
+    uv run python evals/run_eval.py --store qdrant   # or sqlite | pgvector | mongodb
     uv run python evals/run_eval.py --store sqlite --backfill   # fresh/wiped store:
                                    # re-embed S3 split artifacts into it (no VL server)
     uv run python evals/run_eval.py --top-k 5
@@ -29,6 +29,7 @@ from ingestlib.foundations.llm import aembed_text
 from ingestlib.services.ingest.ingestor import aingest
 from ingestlib.services.retrieve.retriever import aretrieve
 from ingestlib.storage import (
+    MongodbStore,
     PgvectorStore,
     PineconeStore,
     QdrantStore,
@@ -55,6 +56,7 @@ STORES: dict[str, type[VectorStore]] = {
     "qdrant": QdrantStore,
     "sqlite": SqliteStore,
     "pgvector": PgvectorStore,
+    "mongodb": MongodbStore,
 }
 
 
