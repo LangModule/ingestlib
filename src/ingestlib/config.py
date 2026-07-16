@@ -14,6 +14,7 @@ standard boto3 chain. The sqlite connector needs no secrets at all — just a
 file path.
 """
 import os
+import sys
 import threading
 from dataclasses import dataclass
 from pathlib import Path
@@ -26,6 +27,7 @@ _CONFIG_ENV_VAR = "INGESTLIB_CONFIG"
 _CONFIG_FILENAME = "config.yaml"
 
 _lock = threading.Lock()
+_dotenv_keys: set[str] = set()  # env keys injected from .env — un-set by reset_config()
 
 
 @dataclass(frozen=True)
@@ -107,6 +109,7 @@ class MilvusConfig:
 @dataclass(frozen=True)
 class IngestConfig:
     vector_store: str           # services' default connector (one of the six below)
+    reranker: str               # retrieve()'s reranker: jina | aws | none
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
@@ -144,8 +147,11 @@ def _find_config_path() -> Path:
 
 def _load_config() -> IngestConfig:
     config_path = _find_config_path()
-    # secrets conventionally sit next to the config file
+    # secrets conventionally sit next to the config file; remember which keys
+    # the .env injected (vs shell-exported) so reset_config() can un-set them
+    before = set(os.environ)
     load_dotenv(config_path.parent / ".env")
+    _dotenv_keys.update(set(os.environ) - before)
 
     with open(config_path, "r") as f:
         data = yaml.safe_load(f)
@@ -157,26 +163,28 @@ def _load_config() -> IngestConfig:
         account_id=str(aws_data["account_id"]),
     )
 
-    bedrock_data = data["bedrock"]
+    bedrock_data = data.get("bedrock", {})
     bedrock_config = BedrockConfig(
-        llm_model_id=bedrock_data["llm_model_id"],
-        embedding_model_id=bedrock_data["embedding_model_id"],
-        rerank_model_id=bedrock_data["rerank_model_id"],
-        rerank_region=bedrock_data["rerank_region"],
+        llm_model_id=bedrock_data.get("llm_model_id", "us.amazon.nova-2-lite-v1:0"),
+        embedding_model_id=bedrock_data.get(
+            "embedding_model_id", "amazon.nova-2-multimodal-embeddings-v1:0"
+        ),
+        rerank_model_id=bedrock_data.get("rerank_model_id", "amazon.rerank-v1:0"),
+        rerank_region=bedrock_data.get("rerank_region", "us-west-2"),
     )
 
-    jina_data = data["jina"]
+    jina_data = data.get("jina", {})
     jina_config = JinaConfig(
         api_key=os.environ.get("JINA_API_KEY", ""),
         base_url=jina_data.get("base_url", "https://api.jina.ai/v1"),
-        rerank_model_id=jina_data["rerank_model_id"],
+        rerank_model_id=jina_data.get("rerank_model_id", "jina-reranker-v3"),
     )
 
-    paddle_vl_data = data["paddle_vl"]
+    paddle_vl_data = data.get("paddle_vl", {})
     paddle_vl_config = PaddleVLConfig(
         backend=paddle_vl_data.get("backend", "mlx-vlm-server"),
         server_url=paddle_vl_data.get("server_url", "http://localhost:8111/"),
-        api_model_name=paddle_vl_data["api_model_name"],
+        api_model_name=paddle_vl_data.get("api_model_name", "PaddlePaddle/PaddleOCR-VL-1.6"),
     )
 
     s3_data = data.get("s3", {})
@@ -231,6 +239,7 @@ def _load_config() -> IngestConfig:
 
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
+        reranker=data.get("reranker", "jina"),
         aws=aws_config,
         bedrock=bedrock_config,
         jina=jina_config,
@@ -311,3 +320,43 @@ def get_mongodb_config() -> MongodbConfig:
 def get_milvus_config() -> MilvusConfig:
     """Milvus endpoint, token, and collection settings."""
     return get_config().milvus
+
+
+# Client singletons built from the cached config, as (module, reset function).
+# Looked up via sys.modules rather than imported: a module that was never
+# imported cannot hold a live client, and importing it here just to reset
+# nothing would pull in heavy dependencies and invert the layering.
+_CLIENT_RESETS = (
+    ("ingestlib.foundations.llm.bedrock.factory", "reset_clients"),
+    ("ingestlib.foundations.ocr.paddle_vl", "reset_pipeline"),
+    ("ingestlib.storage.s3.client", "reset_s3_client"),
+    ("ingestlib.storage.pinecone.client", "reset_pinecone_client"),
+    ("ingestlib.storage.qdrant.client", "reset_qdrant_client"),
+    ("ingestlib.storage.pgvector.client", "reset_pgvector"),
+    ("ingestlib.storage.mongodb.client", "reset_mongodb_client"),
+    ("ingestlib.storage.milvus.client", "reset_milvus_client"),
+)
+
+
+def reset_config() -> None:
+    """Forget the cached config and every client singleton built from it.
+
+    The next library call rediscovers config.yaml, reloads the .env beside it,
+    and rebuilds clients lazily. Call this after editing config files in a
+    long-lived process (a settings UI, a notebook); first-time setup never
+    needs it — the initial load is already lazy.
+
+    Secrets a previous load injected from .env are un-set, so both edits and
+    deletions apply on reload; variables exported by the shell are left alone
+    and keep winning over .env.
+    """
+    global _config
+    with _lock:
+        _config = None
+        for key in _dotenv_keys:
+            os.environ.pop(key, None)
+        _dotenv_keys.clear()
+    for module_name, reset_name in _CLIENT_RESETS:
+        module = sys.modules.get(module_name)
+        if module is not None:
+            getattr(module, reset_name)()

@@ -25,6 +25,7 @@ from pathlib import Path
 
 import yaml
 
+from ingestlib.config import get_config
 from ingestlib.foundations.llm import aembed_text
 from ingestlib.services.ingest.ingestor import aingest
 from ingestlib.services.retrieve.retriever import aretrieve
@@ -181,6 +182,13 @@ async def main() -> None:
                              "store the corpus was never upserted into (no VL server needed)")
     args = parser.parse_args()
 
+    reranker = get_config().reranker
+    if reranker == "none":
+        raise SystemExit(
+            "config.yaml has reranker: none — the +rerank half of the grid would "
+            "measure plain vector order; set reranker: jina or aws and rerun"
+        )
+
     dataset = load_dataset()
     pdfs = [PDF_DIR / entry["doc"] for entry in dataset]
     missing = [p.name for p in pdfs if not p.exists()]
@@ -212,6 +220,7 @@ async def main() -> None:
     out = RESULTS_DIR / f"eval-{args.store}-{stamp}.json"
     out.write_text(json.dumps({
         "store": args.store,
+        "reranker": reranker,
         "top_k": args.top_k,
         "questions": len(dataset),
         "duration_seconds": round(duration, 1),

@@ -1,11 +1,4 @@
-# Copy this file to config.yaml and fill in your values.
-# API keys go in .env (see .env.example), never here.
-#
-# Only three things typically need editing:
-#   1. aws — your profile, region, and account id
-#   2. s3.bucket — a globally unique bucket name
-#   3. vector_store — which database ingest/retrieve use
-# Everything else ships with working defaults.
+# ingestlib configuration — copy this file to config.yaml.
 
 # Your AWS profile from ~/.aws/credentials, with Bedrock access.
 aws:
@@ -13,7 +6,17 @@ aws:
   region: us-east-1
   account_id: "000000000000"
 
-# Model IDs — these defaults are what the library is tested against.
+# pinecone | qdrant | sqlite | pgvector | mongodb | milvus — secrets in .env
+vector_store: pinecone
+
+# jina (needs JINA_API_KEY) | aws (same AWS credentials) | none
+reranker: jina
+
+# Bucket names are global across AWS. Created on first use.
+# Default: ingestlib-{aws.account_id}
+s3:
+  bucket: your-unique-bucket-name
+
 bedrock:
   llm_model_id: us.amazon.nova-2-lite-v1:0
   embedding_model_id: amazon.nova-2-multimodal-embeddings-v1:0
@@ -24,28 +27,13 @@ jina:
   base_url: https://api.jina.ai/v1
   rerank_model_id: jina-reranker-v3
 
-# The OCR inference server (needed for parse/ingest, not for retrieval).
-# mlx-vlm-server for Apple Silicon, vllm-server for NVIDIA.
+# OCR server for parse/ingest: mlx-vlm-server (Apple Silicon) | vllm-server (NVIDIA)
 paddle_vl:
   backend: mlx-vlm-server
   server_url: http://localhost:8111/
   api_model_name: PaddlePaddle/PaddleOCR-VL-1.6
 
-# Bucket names are global across all of AWS — pick something unique.
-# Created automatically on first use.
-s3:
-  bucket: your-unique-bucket-name
-
-# ---------- vector store ----------
-# Which database ingest/retrieve use:
-#   pinecone | qdrant | sqlite | pgvector | mongodb | milvus
-# Secrets/URLs for the selected store go in .env (see .env.example).
-vector_store: pinecone
-
-# The per-store sections below are ALL optional — every value has the
-# default shown. Keep only the section you use, or delete them all.
-
-# Indexes are created automatically on first use.
+# Indexes, collections, and tables are created on first use.
 pinecone:
   index_name: ingestlib
   sparse_index_name: ingestlib-sparse
@@ -53,25 +41,18 @@ pinecone:
   cloud: aws
   region: us-east-1
 
-# Collection is created automatically on first use.
 qdrant:
   collection_name: ingestlib
 
-# Local file, no server, no keys — created automatically on first use.
-# A relative path resolves against this file's directory.
 sqlite:
-  path: ingestlib.db
+  path: ingestlib.db    # relative paths anchor to this file's dir
 
-# Table, indexes, and the vector extension bootstrap automatically on first use.
 pgvector:
   table_name: ingestlib
 
-# Search indexes are created automatically on first use (Atlas any tier,
-# atlas-local docker, or self-managed 8.2+ with mongot).
 mongodb:
   database: ingestlib
   collection_name: ingestlib
 
-# Collection is created automatically on first use (local docker or Zilliz Cloud).
 milvus:
   collection_name: ingestlib

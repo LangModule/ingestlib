@@ -2,8 +2,9 @@
 
 - LLM/embedding primitives come from Bedrock (Nova family).
 - Rerank is exposed twice with explicit provider suffixes — no ambiguous default:
-    aws_rerank / aws_arerank  → amazon.rerank-v1:0 (quota-limited, keep for later)
-    jina_rerank / jina_arerank → Jina Reranker API (primary)
+    aws_rerank / aws_arerank  → amazon.rerank-v1:0 (quota-limited)
+    jina_rerank / jina_arerank → Jina Reranker API
+  retrieve() picks between them via config.yaml's `reranker` key.
 """
 from ingestlib.foundations.llm.bedrock import (
     Image,

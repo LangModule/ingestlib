@@ -23,7 +23,7 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your categories, with confidence and alternatives. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, …) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
 | **Ingest** | The whole pipeline in one call, every stage persisted to S3, vectors upserted, deduplicated by content checksum |
-| **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **Jina rerank** → hits with scores and citations, plus a prompt-ready context block |
+| **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
 
 Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
@@ -44,7 +44,9 @@ dense + sparse), **S3** for artifacts. ~$0.002/page in LLM spend.
   (Atlas any tier or 8.2+ self-managed), a Milvus (local docker or Zilliz
   Cloud) — each just one connection URL — or none at all: the sqlite
   connector stores vectors in a local file
-- **Jina AI account** for reranking (free tier: 100 RPM)
+- **Jina AI account** for reranking (free tier: 100 RPM) — the default; or set
+  `reranker: aws` (Amazon Rerank, same AWS credentials) or `reranker: none`
+  in config.yaml and skip Jina entirely
 
 ### 2. Install
 
@@ -85,15 +87,16 @@ The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
 ### 4. Configure
 
 ```bash
-cp .env.example .env                 # API keys: Jina, plus Pinecone/Qdrant if used (sqlite needs none)
-cp config.example.yaml config.yaml   # your AWS profile, bucket name, vector store choice
+cp .env.example .env                 # API keys: Jina, plus your vector store's (sqlite needs none)
+cp config.example.yaml config.yaml   # AWS profile + vector store + reranker choice
 aws configure --profile your-aws-profile   # Bedrock-enabled credentials
 ```
 
-Edit `config.yaml`: your AWS profile/account, S3 bucket name (globally
-unique), vector store choice and index/collection names. **The S3 bucket and
-the vector indexes/collection are created automatically on first use** — no
-manual setup.
+Edit `config.yaml`: the `aws` section is the only required part — then pick
+your vector store and reranker. Everything else has working defaults. **The
+S3 bucket (default `ingestlib-{account_id}`) and the vector
+indexes/collections are created automatically on first use** — no manual
+setup.
 
 Config is discovered at call time, never at import: `INGESTLIB_CONFIG=/path/to/config.yaml`
 wins, otherwise the working directory and its parents are searched — so
@@ -182,7 +185,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~230 tests, ~90s; e2e groups skip)
+make test                  # fast suite (~260 tests, ~90s; e2e groups skip)
 make test-parse            # parse e2e            (needs VL server + Bedrock)
 make test-classify         # classify e2e         (needs Bedrock)
 make test-split            # split e2e            (needs Bedrock)

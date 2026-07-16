@@ -1,16 +1,19 @@
 """retrieve() / aretrieve() — question in, ranked cited chunks out.
 
 Cascading retrieval: dense vector search plus, on hybrid stores, lexical
-sparse search over the same chunks — then Jina reranking on the merged
-candidates (the reranker reads full text, so it both catches what embedding
-similarity misses AND produces one comparable order from the two incomparable
-score scales). Every hit carries provenance — document, pages, region_ids —
-so answers can cite their exact source location.
+sparse search over the same chunks — then reranking on the merged candidates
+(the reranker reads full text, so it both catches what embedding similarity
+misses AND produces one comparable order from the two incomparable score
+scales). The reranker is selected by config.yaml's `reranker` key: jina
+(default) | aws (Amazon Rerank via Bedrock) | none (vector order). Every hit
+carries provenance — document, pages, region_ids — so answers can cite their
+exact source location.
 """
 import asyncio
 from typing import Any
 
-from ingestlib.foundations.llm import aembed_text, jina_arerank
+from ingestlib.config import get_config
+from ingestlib.foundations.llm import aembed_text, aws_arerank, jina_arerank
 from ingestlib.services.retrieve.models import Hit, RetrievalResult
 from ingestlib.storage import VectorStore, default_store
 from ingestlib.utils.logger import get_logger
@@ -20,6 +23,9 @@ logger = get_logger(__name__)
 
 # With reranking on, fetch a wider candidate pool for the reranker to sort.
 _CANDIDATE_MULTIPLIER = 4
+
+# config.yaml `reranker` key → implementation ("none" short-circuits instead)
+_RERANKERS = {"jina": jina_arerank, "aws": aws_arerank}
 
 
 async def aretrieve(
@@ -36,7 +42,8 @@ async def aretrieve(
     question — natural-language query
     top_k    — hits to return
     filters  — payload constraints, e.g. {"category": "research_paper"}
-    rerank   — rerank candidates with Jina (recommended; needs JINA_API_KEY)
+    rerank   — rerank candidates with the reranker selected by config.yaml's
+               `reranker` key (recommended; jina needs JINA_API_KEY)
     store    — vector store connector; defaults to the one selected by
                config.yaml's `vector_store` key
     """
@@ -44,12 +51,20 @@ async def aretrieve(
         raise ValueError("question must be a non-empty string")
     store = store or default_store()
 
+    reranker = get_config().reranker
+    if reranker != "none" and reranker not in _RERANKERS:
+        raise ValueError(
+            f"unknown reranker {reranker!r} in config.yaml — "
+            f"choose one of {sorted(_RERANKERS) + ['none']}"
+        )
+    use_rerank = rerank and reranker != "none"
+
     vector = await aembed_text(question, purpose="GENERIC_RETRIEVAL")
     # store.query is a sync SDK network call — keep it off the event loop
     candidates = await asyncio.to_thread(
         store.query,
         vector,
-        top_k=top_k * _CANDIDATE_MULTIPLIER if rerank else top_k,
+        top_k=top_k * _CANDIDATE_MULTIPLIER if use_rerank else top_k,
         filters=filters,
         namespace=namespace,
         text=question,  # hybrid stores add lexical hits; dense-only stores ignore it
@@ -58,13 +73,13 @@ async def aretrieve(
         logger.info("retrieve: no hits for %r", question[:60])
         return RetrievalResult(question=question)
 
-    if not rerank or len(candidates) == 1:
+    if not use_rerank or len(candidates) == 1:
         hits = [Hit(chunk=c, vector_score=c.score) for c in candidates[:top_k]]
         return RetrievalResult(question=question, hits=hits)
 
     documents = [c.markdown or c.text for c in candidates]
     try:
-        ranking = await jina_arerank(question, documents, top_n=top_k)
+        ranking = await _RERANKERS[reranker](question, documents, top_n=top_k)
     except Exception as exc:
         # retrieval must not die because the reranker hiccuped — degrade to
         # vector order and say so loudly

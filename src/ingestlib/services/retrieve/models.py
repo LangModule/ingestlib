@@ -9,7 +9,7 @@ class Hit(BaseModel):
 
     vector_score — the store's retrieval score: cosine similarity on dense
                    queries, an RRF rank score on fused hybrid queries
-    rerank_score — Jina reranker relevance (None when reranking was off)
+    rerank_score — reranker relevance (None when reranking was off)
     """
 
     model_config = ConfigDict(frozen=True)

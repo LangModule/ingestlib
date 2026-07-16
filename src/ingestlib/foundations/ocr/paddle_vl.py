@@ -103,11 +103,15 @@ def _check_server(server_url: str, backend: str) -> None:
     try:
         httpx.get(f"{server_url.rstrip('/')}/v1/models", timeout=3.0).raise_for_status()
     except httpx.HTTPError as exc:
+        hint = (
+            "  vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111"
+            if backend == "vllm-server"
+            else "  uv run python -m mlx_vlm.server --port 8111 "
+                 "--model PaddlePaddle/PaddleOCR-VL-1.6"
+        )
         raise RuntimeError(
             f"PaddleOCR-VL inference server not reachable at {server_url} "
-            f"(backend={backend}). Start it with:\n"
-            f"  uv run python -m mlx_vlm.server --port 8111 "
-            f"--model PaddlePaddle/PaddleOCR-VL-1.6"
+            f"(backend={backend}). Start it with:\n{hint}"
         ) from exc
 
 
@@ -136,6 +140,13 @@ def _get_pipeline() -> PaddleOCRVL:
             )
             logger.info("PaddleOCR-VL pipeline ready in %.1fs", time.perf_counter() - t0)
     return _pipeline
+
+
+def reset_pipeline() -> None:
+    """Force pipeline recreation on the next parse (e.g. after config changes)."""
+    global _pipeline
+    with _lock:
+        _pipeline = None
 
 
 def _predict(image_bytes: bytes) -> list[Any]:
