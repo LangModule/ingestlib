@@ -1,4 +1,4 @@
-# ingestlib configuration — copy this file to config.yaml.
+# ingestlib configuration
 
 # Your AWS profile from ~/.aws/credentials, with Bedrock access.
 aws:
