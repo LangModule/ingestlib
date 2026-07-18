@@ -27,9 +27,10 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 
 Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
-chunk boundaries), **Nova multimodal embeddings**, **six vector stores**
-(Pinecone, Qdrant, SQLite, Postgres/pgvector, MongoDB, Milvus — all hybrid
-dense + sparse), **S3** for artifacts. ~$0.002/page in LLM spend.
+chunk boundaries), **Nova multimodal embeddings**, **eight vector stores**
+(Pinecone, Qdrant, SQLite, Postgres/pgvector, MongoDB, Milvus, OpenSearch,
+Weaviate — all hybrid dense + sparse), **S3** for artifacts. ~$0.002/page
+in LLM spend.
 
 ## Quickstart
 
@@ -147,15 +148,16 @@ artifacts.list_documents()              # registry: filename, pages, category, c
 src/ingestlib/
 ├── services/       ingest · retrieve          — the product
 ├── operations/     parse · classify · split   — the tools (each standalone)
-├── storage/        artifacts (S3) · base (VectorStore contract) · 6 connectors
-│                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus)
+├── storage/        artifacts (S3) · base (VectorStore contract) · 8 connectors
+│                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
+│                    · opensearch · weaviate)
 ├── foundations/    llm (Bedrock Nova, Jina) · ocr (PaddleOCR-VL)
 ├── utils/          logger · files
 └── config.py       config.yaml + .env → typed configs
 ```
 
 Strict downward dependencies. The `VectorStore` contract means backends drop
-in as connectors — all six ship **hybrid search**: **Pinecone** (dense +
+in as connectors — all eight ship **hybrid search**: **Pinecone** (dense +
 hosted sparse model, merged client-side), **Qdrant** (dense + BM25 with
 server-side IDF and RRF fusion; local docker or cloud), **SQLite**
 (sqlite-vec KNN + built-in FTS5 BM25 with porter stemming, RRF fusion — one
@@ -163,10 +165,14 @@ local file, no server, no keys), **Postgres/pgvector** (HNSW cosine +
 built-in full-text over a generated weighted tsvector, RRF fusion — the
 extension and table bootstrap automatically), **MongoDB** (Atlas Vector
 Search + Atlas Search true BM25, RRF fusion — Atlas any tier or self-managed
-8.2+; both search indexes bootstrap automatically), and **Milvus** (dense
+8.2+; both search indexes bootstrap automatically), **Milvus** (dense
 ANN + server-computed BM25 sparse, fused server-side with RRF — local docker
-or Zilliz Cloud). Pick one with `vector_store: pinecone | qdrant | sqlite |
-pgvector | mongodb | milvus` in config.yaml. Connection secrets sit in
+or Zilliz Cloud), **OpenSearch** (faiss HNSW k-NN + Lucene BM25, RRF fused
+client-side — an Amazon OpenSearch domain SigV4-signed with your aws
+profile, or local docker), and **Weaviate** (HNSW dense + native BM25 fused
+server-side in one hybrid call — local docker or Weaviate Cloud). Pick one
+with `vector_store: pinecone | qdrant | sqlite | pgvector | mongodb |
+milvus | opensearch | weaviate` in config.yaml. Connection secrets sit in
 `.env` together (sqlite needs none) — only the selected connector ever
 builds a client.
 
@@ -209,7 +215,8 @@ earnings decks, insurance forms, timetables, 10-Ks).
 Beyond pass/fail tests, `evals/` measures retrieval quality: 22 ground-truth
 questions over the fixture corpus, run through the real `retrieve()` flow
 under dense/hybrid × rerank on/off, scored by hit@k and MRR. Measured so far
-(consistent across all six connectors): **with reranking, every answer
+(consistent across every connector measured — the six original ones so
+far): **with reranking, every answer
 lands in the top 3 hits (hit@3 = 1.00)**; hit@1 ranges 0.86–1.00 across runs.
 Each run saves a timestamped snapshot to `evals/results/`, so quality changes
 are visible over time.
