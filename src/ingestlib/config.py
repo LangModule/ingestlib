@@ -9,9 +9,9 @@ first operation needs it. Discovery order for config.yaml:
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
 QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL, MILVUS_URL/_TOKEN,
-OPENSEARCH_URL), and AWS credentials resolve via the profile field against
-~/.aws/credentials — the standard boto3 chain. The sqlite connector needs no
-secrets at all — just a file path.
+OPENSEARCH_URL, WEAVIATE_URL/_API_KEY), and AWS credentials resolve via
+the profile field against ~/.aws/credentials — the standard boto3 chain.
+The sqlite connector needs no secrets at all — just a file path.
 """
 import os
 import sys
@@ -113,8 +113,15 @@ class OpensearchConfig:
 
 
 @dataclass(frozen=True)
+class WeaviateConfig:
+    url: str                    # from WEAVIATE_URL env var (local server or Weaviate Cloud)
+    api_key: str                # from WEAVIATE_API_KEY env var ("" for a local server)
+    collection_name: str
+
+
+@dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # services' default connector (one of the seven below)
+    vector_store: str           # services' default connector (one of the eight below)
     reranker: str               # retrieve()'s reranker: jina | aws | none
     aws: AWSConfig
     bedrock: BedrockConfig
@@ -128,6 +135,7 @@ class IngestConfig:
     mongodb: MongodbConfig
     milvus: MilvusConfig
     opensearch: OpensearchConfig
+    weaviate: WeaviateConfig
 
 
 def _find_config_path() -> Path:
@@ -250,6 +258,13 @@ def _load_config() -> IngestConfig:
         index_name=opensearch_data.get("index_name", "ingestlib"),
     )
 
+    weaviate_data = data.get("weaviate", {})
+    weaviate_config = WeaviateConfig(
+        url=os.environ.get("WEAVIATE_URL", "http://localhost:8080"),
+        api_key=os.environ.get("WEAVIATE_API_KEY", ""),
+        collection_name=weaviate_data.get("collection_name", "Ingestlib"),
+    )
+
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
         reranker=data.get("reranker", "jina"),
@@ -265,6 +280,7 @@ def _load_config() -> IngestConfig:
         mongodb=mongodb_config,
         milvus=milvus_config,
         opensearch=opensearch_config,
+        weaviate=weaviate_config,
     )
 
 
@@ -341,6 +357,11 @@ def get_opensearch_config() -> OpensearchConfig:
     return get_config().opensearch
 
 
+def get_weaviate_config() -> WeaviateConfig:
+    """Weaviate endpoint, API key, and collection settings."""
+    return get_config().weaviate
+
+
 # Client singletons built from the cached config, as (module, reset function).
 # Looked up via sys.modules rather than imported: a module that was never
 # imported cannot hold a live client, and importing it here just to reset
@@ -355,6 +376,7 @@ _CLIENT_RESETS = (
     ("ingestlib.storage.mongodb.client", "reset_mongodb_client"),
     ("ingestlib.storage.milvus.client", "reset_milvus_client"),
     ("ingestlib.storage.opensearch.client", "reset_opensearch_client"),
+    ("ingestlib.storage.weaviate.client", "reset_weaviate_client"),
 )
 
 

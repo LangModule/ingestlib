@@ -55,6 +55,7 @@ dependencies = [
     "pyyaml>=6.0.2",
     "qdrant-client>=1.18.0",
     "sqlite-vec>=0.1.6",
+    "weaviate-client>=4.9",
 ]
 
 [project.urls]

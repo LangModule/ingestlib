@@ -20,6 +20,8 @@ Sub-packages / modules:
     opensearch — OpenSearch connector (faiss k-NN + Lucene BM25, RRF fused
                 client-side), hybrid — an Amazon OpenSearch domain signed
                 with the aws profile, or a local docker server
+    weaviate  — Weaviate connector (HNSW dense + native BM25, fused
+                server-side), hybrid — local docker or Weaviate Cloud
 
 Services pick their connector via default_store(), driven by config.yaml's
 `vector_store` key — every provider's keys can sit in .env; only the selected
@@ -34,6 +36,7 @@ from ingestlib.storage.pinecone import PineconeStore
 from ingestlib.storage.qdrant import QdrantStore
 from ingestlib.storage.s3 import ensure_bucket, get_s3_client, reset_s3_client
 from ingestlib.storage.sqlite import SqliteStore
+from ingestlib.storage.weaviate import WeaviateStore
 
 _STORES: dict[str, type[VectorStore]] = {
     "pinecone": PineconeStore,
@@ -43,6 +46,7 @@ _STORES: dict[str, type[VectorStore]] = {
     "mongodb": MongodbStore,
     "milvus": MilvusStore,
     "opensearch": OpensearchStore,
+    "weaviate": WeaviateStore,
 }
 
 
@@ -72,5 +76,6 @@ __all__ = [
     "MongodbStore",
     "MilvusStore",
     "OpensearchStore",
+    "WeaviateStore",
     "default_store",
 ]

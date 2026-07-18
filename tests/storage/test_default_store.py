@@ -10,6 +10,7 @@ from ingestlib.storage import (
     PineconeStore,
     QdrantStore,
     SqliteStore,
+    WeaviateStore,
     default_store,
 )
 
@@ -25,7 +26,7 @@ def test_current_config_selects_a_known_connector():
     assert isinstance(
         store,
         (PineconeStore, QdrantStore, SqliteStore, PgvectorStore, MongodbStore,
-         MilvusStore, OpensearchStore),
+         MilvusStore, OpensearchStore, WeaviateStore),
     )
 
 
@@ -37,6 +38,7 @@ def test_current_config_selects_a_known_connector():
     ("mongodb", MongodbStore),
     ("milvus", MilvusStore),
     ("opensearch", OpensearchStore),
+    ("weaviate", WeaviateStore),
 ])
 def test_each_name_selects_its_connector(monkeypatch, name, cls):
     _with_store(monkeypatch, name)
@@ -47,6 +49,6 @@ def test_unknown_name_raises_with_choices(monkeypatch):
     _with_store(monkeypatch, "chroma")
     with pytest.raises(
         ValueError,
-        match="milvus.*mongodb.*opensearch.*pgvector.*pinecone.*qdrant.*sqlite",
+        match="milvus.*mongodb.*opensearch.*pgvector.*pinecone.*qdrant.*sqlite.*weaviate",
     ):
         default_store()
