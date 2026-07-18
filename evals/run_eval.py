@@ -32,11 +32,13 @@ from ingestlib.services.retrieve.retriever import aretrieve
 from ingestlib.storage import (
     MilvusStore,
     MongodbStore,
+    OpensearchStore,
     PgvectorStore,
     PineconeStore,
     QdrantStore,
     SqliteStore,
     VectorStore,
+    WeaviateStore,
     artifacts,
 )
 from ingestlib.utils.files import sha256_of_file
@@ -60,6 +62,8 @@ STORES: dict[str, type[VectorStore]] = {
     "pgvector": PgvectorStore,
     "mongodb": MongodbStore,
     "milvus": MilvusStore,
+    "opensearch": OpensearchStore,
+    "weaviate": WeaviateStore,
 }
 
 

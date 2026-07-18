@@ -215,8 +215,7 @@ earnings decks, insurance forms, timetables, 10-Ks).
 Beyond pass/fail tests, `evals/` measures retrieval quality: 22 ground-truth
 questions over the fixture corpus, run through the real `retrieve()` flow
 under dense/hybrid × rerank on/off, scored by hit@k and MRR. Measured so far
-(consistent across every connector measured — the six original ones so
-far): **with reranking, every answer
+(consistent across all eight connectors): **with reranking, every answer
 lands in the top 3 hits (hit@3 = 1.00)**; hit@1 ranges 0.86–1.00 across runs.
 Each run saves a timestamped snapshot to `evals/results/`, so quality changes
 are visible over time.
