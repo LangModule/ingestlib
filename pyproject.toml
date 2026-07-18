@@ -39,6 +39,7 @@ dependencies = [
     # runs the OCR inference server on Apple Silicon; never imported by the
     # library itself — NVIDIA users run vLLM instead (see README)
     "mlx-vlm>=0.6.4; sys_platform == 'darwin' and platform_machine == 'arm64'",
+    "opensearch-py>=2.8",
     "paddleocr>=3.7.0",
     "paddlepaddle>=3.3.1",
     "paddlex[genai-client,ocr]==3.7.1",

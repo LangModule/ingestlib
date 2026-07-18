@@ -1,0 +1,94 @@
+# Cheapest k-NN-capable OpenSearch domain for the ingestlib connector.
+# One r8g.medium.search data node, 1-AZ, no standby, no dedicated masters,
+# 10 GiB gp3, public endpoint with fine-grained access control mapped to one
+# IAM user.
+#
+# Create (~15 min to Active, ~$0.10/hour while it exists):
+#   aws cloudformation deploy \
+#     --template-file infra/opensearch.yaml \
+#     --stack-name ingestlib-opensearch \
+#     --profile my-name --region us-east-1
+#
+# Endpoint:
+#   aws cloudformation describe-stacks \
+#     --stack-name ingestlib-opensearch \
+#     --query "Stacks[0].Outputs[?OutputKey=='DomainEndpoint'].OutputValue" \
+#     --output text --profile my-name --region us-east-1
+#
+# Remove (billing ends; the vector index is rebuildable from S3 via backfill):
+#   aws cloudformation delete-stack \
+#     --stack-name ingestlib-opensearch \
+#     --profile my-name --region us-east-1
+
+AWSTemplateFormatVersion: "2010-09-09"
+Description: >-
+  Single-node OpenSearch domain for ingestlib. Delete the stack when idle;
+  recreate it with the same command when you resume.
+
+Parameters:
+  DomainName:
+    Type: String
+    Default: ingestlib
+  EngineVersion:
+    Type: String
+    Default: OpenSearch_3.5
+  InstanceType:
+    Type: String
+    Default: r8g.medium.search
+  MasterUserArn:
+    Type: String
+    Default: arn:aws:iam::656077800096:user/ram-bedrock
+    Description: IAM principal that fine-grained access control treats as master.
+
+Resources:
+  Domain:
+    Type: AWS::OpenSearchService::Domain
+    Properties:
+      DomainName: !Ref DomainName
+      EngineVersion: !Ref EngineVersion
+      IPAddressType: ipv4
+      ClusterConfig:
+        InstanceType: !Ref InstanceType
+        InstanceCount: 1
+        DedicatedMasterEnabled: false
+        ZoneAwarenessEnabled: false
+        MultiAZWithStandbyEnabled: false
+      EBSOptions:
+        EBSEnabled: true
+        VolumeType: gp3
+        VolumeSize: 10
+        Iops: 3000
+        Throughput: 125
+      # Public endpoint; authorization is entirely fine-grained access control,
+      # which rejects every request not signed by a mapped principal.
+      AccessPolicies:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: "*"
+            Action: "es:*"
+            Resource: !Sub "arn:aws:es:${AWS::Region}:${AWS::AccountId}:domain/${DomainName}/*"
+      AdvancedSecurityOptions:
+        Enabled: true
+        InternalUserDatabaseEnabled: false
+        MasterUserOptions:
+          MasterUserARN: !Ref MasterUserArn
+      DomainEndpointOptions:
+        EnforceHTTPS: true
+      NodeToNodeEncryptionOptions:
+        Enabled: true
+      EncryptionAtRestOptions:
+        Enabled: true
+      SoftwareUpdateOptions:
+        AutoSoftwareUpdateEnabled: false
+      Tags:
+        - Key: project
+          Value: ingestlib
+
+Outputs:
+  DomainEndpoint:
+    Description: HTTPS endpoint for the connector configuration.
+    Value: !Sub "https://${Domain.DomainEndpoint}"
+  DomainArn:
+    Value: !GetAtt Domain.Arn

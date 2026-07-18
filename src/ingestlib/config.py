@@ -8,10 +8,10 @@ first operation needs it. Discovery order for config.yaml:
 
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
-QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL, MILVUS_URL/_TOKEN), and AWS
-credentials resolve via the profile field against ~/.aws/credentials — the
-standard boto3 chain. The sqlite connector needs no secrets at all — just a
-file path.
+QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL, MILVUS_URL/_TOKEN,
+OPENSEARCH_URL), and AWS credentials resolve via the profile field against
+~/.aws/credentials — the standard boto3 chain. The sqlite connector needs no
+secrets at all — just a file path.
 """
 import os
 import sys
@@ -107,8 +107,14 @@ class MilvusConfig:
 
 
 @dataclass(frozen=True)
+class OpensearchConfig:
+    url: str                    # from OPENSEARCH_URL env var; AWS domains sign with aws.profile
+    index_name: str
+
+
+@dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # services' default connector (one of the six below)
+    vector_store: str           # services' default connector (one of the seven below)
     reranker: str               # retrieve()'s reranker: jina | aws | none
     aws: AWSConfig
     bedrock: BedrockConfig
@@ -121,6 +127,7 @@ class IngestConfig:
     pgvector: PgvectorConfig
     mongodb: MongodbConfig
     milvus: MilvusConfig
+    opensearch: OpensearchConfig
 
 
 def _find_config_path() -> Path:
@@ -237,6 +244,12 @@ def _load_config() -> IngestConfig:
         collection_name=milvus_data.get("collection_name", "ingestlib"),
     )
 
+    opensearch_data = data.get("opensearch", {})
+    opensearch_config = OpensearchConfig(
+        url=os.environ.get("OPENSEARCH_URL", ""),
+        index_name=opensearch_data.get("index_name", "ingestlib"),
+    )
+
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
         reranker=data.get("reranker", "jina"),
@@ -251,6 +264,7 @@ def _load_config() -> IngestConfig:
         pgvector=pgvector_config,
         mongodb=mongodb_config,
         milvus=milvus_config,
+        opensearch=opensearch_config,
     )
 
 
@@ -322,6 +336,11 @@ def get_milvus_config() -> MilvusConfig:
     return get_config().milvus
 
 
+def get_opensearch_config() -> OpensearchConfig:
+    """OpenSearch endpoint and index settings."""
+    return get_config().opensearch
+
+
 # Client singletons built from the cached config, as (module, reset function).
 # Looked up via sys.modules rather than imported: a module that was never
 # imported cannot hold a live client, and importing it here just to reset
@@ -335,6 +354,7 @@ _CLIENT_RESETS = (
     ("ingestlib.storage.pgvector.client", "reset_pgvector"),
     ("ingestlib.storage.mongodb.client", "reset_mongodb_client"),
     ("ingestlib.storage.milvus.client", "reset_milvus_client"),
+    ("ingestlib.storage.opensearch.client", "reset_opensearch_client"),
 )
 
 

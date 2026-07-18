@@ -6,7 +6,7 @@ aws:
   region: us-east-1
   account_id: "000000000000"
 
-# pinecone | qdrant | sqlite | pgvector | mongodb | milvus — secrets in .env
+# pinecone | qdrant | sqlite | pgvector | mongodb | milvus | opensearch — secrets in .env
 vector_store: pinecone
 
 # jina (needs JINA_API_KEY) | aws (same AWS credentials) | none
@@ -56,3 +56,6 @@ mongodb:
 
 milvus:
   collection_name: ingestlib
+
+opensearch:
+  index_name: ingestlib

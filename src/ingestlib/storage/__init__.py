@@ -17,6 +17,9 @@ Sub-packages / modules:
                 hybrid — Atlas any tier, atlas-local docker, or 8.2+ mongot
     milvus    — Milvus connector (dense ANN + server-side BM25, RRF fused
                 server-side), hybrid — local docker or Zilliz Cloud
+    opensearch — OpenSearch connector (faiss k-NN + Lucene BM25, RRF fused
+                client-side), hybrid — an Amazon OpenSearch domain signed
+                with the aws profile, or a local docker server
 
 Services pick their connector via default_store(), driven by config.yaml's
 `vector_store` key — every provider's keys can sit in .env; only the selected
@@ -25,6 +28,7 @@ one ever builds a client.
 from ingestlib.storage.base import RetrievedChunk, VectorStore
 from ingestlib.storage.milvus import MilvusStore
 from ingestlib.storage.mongodb import MongodbStore
+from ingestlib.storage.opensearch import OpensearchStore
 from ingestlib.storage.pgvector import PgvectorStore
 from ingestlib.storage.pinecone import PineconeStore
 from ingestlib.storage.qdrant import QdrantStore
@@ -38,6 +42,7 @@ _STORES: dict[str, type[VectorStore]] = {
     "pgvector": PgvectorStore,
     "mongodb": MongodbStore,
     "milvus": MilvusStore,
+    "opensearch": OpensearchStore,
 }
 
 
@@ -66,5 +71,6 @@ __all__ = [
     "PgvectorStore",
     "MongodbStore",
     "MilvusStore",
+    "OpensearchStore",
     "default_store",
 ]

@@ -1,0 +1,48 @@
+{
+  "Version": "2012-10-17",
+  "Statement": [
+    {
+      "Sid": "IngestlibBedrock",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": [
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0",
+        "arn:aws:bedrock:*::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0",
+        "arn:aws:bedrock:*:656077800096:inference-profile/us.amazon.nova-2-lite-v1:0"
+      ]
+    },
+    {
+      "Sid": "IngestlibBucket",
+      "Effect": "Allow",
+      "Action": [
+        "s3:CreateBucket",
+        "s3:ListBucket"
+      ],
+      "Resource": "arn:aws:s3:::ingestlib"
+    },
+    {
+      "Sid": "IngestlibObjects",
+      "Effect": "Allow",
+      "Action": [
+        "s3:PutObject",
+        "s3:GetObject",
+        "s3:DeleteObject"
+      ],
+      "Resource": "arn:aws:s3:::ingestlib/*"
+    },
+    {
+      "Sid": "IngestlibRerank",
+      "Effect": "Allow",
+      "Action": [
+        "bedrock:Rerank"
+      ],
+      "Resource": "*"
+    },
+    {
+      "Sid": "IngestlibRerankModel",
+      "Effect": "Allow",
+      "Action": "bedrock:InvokeModel",
+      "Resource": "arn:aws:bedrock:us-west-2::foundation-model/amazon.rerank-v1:0"
+    }
+  ]
+}
