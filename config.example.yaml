@@ -13,6 +13,11 @@ vector_store: pinecone
 # jina (needs JINA_API_KEY) | aws (same AWS credentials) | none
 reranker: jina
 
+# Who serves LLM and embedding calls: bedrock | openai (needs OPENAI_API_KEY).
+# Switching embedding_provider changes the vector space — re-ingest after.
+llm_provider: bedrock
+embedding_provider: bedrock
+
 # Where pipeline artifacts (parses, page images, chunks) live:
 # s3 (durable, shareable) | local (a plain folder — zero cloud)
 artifact_store: s3

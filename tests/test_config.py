@@ -67,6 +67,8 @@ def test_aws_only_config_loads_with_all_defaults(scratch_config):
     assert cfg.vector_store == "pinecone"
     assert cfg.reranker == "jina"
     assert cfg.artifact_store == "s3"
+    assert cfg.llm_provider == "bedrock"
+    assert cfg.embedding_provider == "bedrock"
 
 
 def test_artifacts_path_anchors_beside_config(scratch_config):
@@ -87,6 +89,16 @@ def test_reranker_and_vector_store_keys_are_read(scratch_config):
     cfg = get_config()
     assert cfg.vector_store == "sqlite"
     assert cfg.reranker == "aws"
+
+
+def test_provider_keys_are_read(scratch_config):
+    _write(
+        scratch_config,
+        _AWS_ONLY + "llm_provider: openai\nembedding_provider: openai\n",
+    )
+    cfg = get_config()
+    assert cfg.llm_provider == "openai"
+    assert cfg.embedding_provider == "openai"
 
 
 def test_secrets_load_from_dotenv_next_to_config(scratch_config):

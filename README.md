@@ -32,7 +32,8 @@ chunk boundaries), **Nova multimodal embeddings**, **eight vector stores**
 Weaviate — all hybrid dense + sparse), **S3 or a local folder** for
 artifacts (`artifact_store: s3 | local`). ~$0.002/page in LLM spend. An
 **OpenAI backend** (GPT-5 vision-capable chat + text-embedding-3) ships
-alongside Bedrock — see below.
+alongside Bedrock — flip `llm_provider: openai` / `embedding_provider:
+openai` to run the whole pipeline on it instead. See below.
 
 ## Quickstart
 
@@ -150,9 +151,25 @@ artifacts.list_documents()              # registry: filename, pages, category, c
 
 The same LLM surface Bedrock provides is also available on OpenAI — GPT-5
 chat with vision, thinking mode, schema-enforced structured output, and
-text-embedding-3 embeddings. Add `OPENAI_API_KEY` to `.env`, pick models in
-config.yaml's `openai:` section (defaults: `gpt-5-mini`,
-`text-embedding-3-small`), and import directly:
+text-embedding-3 embeddings. Add `OPENAI_API_KEY` to `.env` and pick models
+in config.yaml's `openai:` section (defaults: `gpt-5-mini`,
+`text-embedding-3-small`).
+
+To run the whole `ingest`/`retrieve` pipeline on it, switch the providers
+in config.yaml — every LLM and embedding call routes accordingly:
+
+```yaml
+llm_provider: openai          # chart reading, review, classify, chunking
+embedding_provider: openai    # chunk + query embeddings
+```
+
+Combined with `artifact_store: local`, `vector_store: sqlite`, and
+`reranker: jina` (or `none`), the pipeline needs no AWS at all. Two rules:
+switching `embedding_provider` changes the vector space, so re-ingest (or
+`--backfill`) afterward — vectors from different embedding models never mix
+in one index. And text embeddings only: OpenAI has no image-embedding model.
+
+The backend is also importable directly, ignoring the config switch:
 
 ```python
 from ingestlib.foundations.llm import Image
@@ -161,10 +178,6 @@ from ingestlib.foundations.llm.openai import chat, chat_structured, embed_text
 chat("Read this chart", images=[Image(png_bytes, "png")])   # vision works
 embed_text("a chunk of text")                               # 1024-dim default
 ```
-
-Text embeddings only — OpenAI has no image-embedding model — and vectors
-from different embedding models need separate indexes. The `ingest`/
-`retrieve` pipeline runs on Bedrock.
 
 ## Architecture
 

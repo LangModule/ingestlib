@@ -137,6 +137,8 @@ class IngestConfig:
     vector_store: str           # services' default connector (one of the eight below)
     reranker: str               # retrieve()'s reranker: jina | aws | none
     artifact_store: str         # where pipeline artifacts live: s3 | local
+    llm_provider: str           # who serves chat/structured calls: bedrock | openai
+    embedding_provider: str     # who embeds text: bedrock | openai — switching means re-ingest
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
@@ -299,6 +301,8 @@ def _load_config() -> IngestConfig:
         vector_store=data.get("vector_store", "pinecone"),
         reranker=data.get("reranker", "jina"),
         artifact_store=data.get("artifact_store", "s3"),
+        llm_provider=data.get("llm_provider", "bedrock"),
+        embedding_provider=data.get("embedding_provider", "bedrock"),
         aws=aws_config,
         bedrock=bedrock_config,
         jina=jina_config,
