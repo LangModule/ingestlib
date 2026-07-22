@@ -1,4 +1,4 @@
-.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-services eval
+.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-services eval
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -29,6 +29,10 @@ test-rerank-aws:
 
 test-rerank-jina:
 	uv run pytest tests/foundations/llm/jina/
+
+# skips without OPENAI_API_KEY in .env
+test-openai:
+	uv run pytest tests/foundations/llm/openai/
 
 # --- ocr layer (mirrors src/ingestlib/foundations/ocr/) — needs the VL inference server ---
 

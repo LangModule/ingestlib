@@ -60,6 +60,8 @@ def test_aws_only_config_loads_with_all_defaults(scratch_config):
     assert cfg.bedrock.rerank_model_id == "amazon.rerank-v1:0"
     assert cfg.bedrock.rerank_region == "us-west-2"
     assert cfg.jina.rerank_model_id == "jina-reranker-v3"
+    assert cfg.openai.llm_model_id == "gpt-5-mini"
+    assert cfg.openai.embedding_model_id == "text-embedding-3-small"
     assert cfg.paddle_vl.api_model_name == "PaddlePaddle/PaddleOCR-VL-1.6"
     assert cfg.s3.bucket == "ingestlib-123456789012"
     assert cfg.vector_store == "pinecone"
@@ -80,8 +82,10 @@ def test_reranker_and_vector_store_keys_are_read(scratch_config):
 
 
 def test_secrets_load_from_dotenv_next_to_config(scratch_config):
-    _write(scratch_config, _AWS_ONLY, "JINA_API_KEY=from-dotenv\n")
-    assert get_config().jina.api_key == "from-dotenv"
+    _write(scratch_config, _AWS_ONLY, "JINA_API_KEY=from-dotenv\nOPENAI_API_KEY=oa-dotenv\n")
+    cfg = get_config()
+    assert cfg.jina.api_key == "from-dotenv"
+    assert cfg.openai.api_key == "oa-dotenv"
 
 
 def test_config_is_cached_until_reset(scratch_config):
@@ -122,3 +126,16 @@ def test_reset_config_clears_imported_client_singletons(scratch_config, monkeypa
     monkeypatch.setattr(s3_client, "_s3_client", object())
     reset_config()
     assert s3_client._s3_client is None, "reset must clear live client singletons"
+
+
+def test_reset_config_clears_openai_model_caches(scratch_config, monkeypatch):
+    from ingestlib.foundations.llm.openai import embedding as oa_embedding
+    from ingestlib.foundations.llm.openai import mini as oa_mini
+
+    _write(scratch_config, _AWS_ONLY)
+    get_config()
+    monkeypatch.setitem(oa_mini._model_cache, "stale", object())
+    monkeypatch.setitem(oa_embedding._embedder_cache, 1024, object())
+    reset_config()
+    assert oa_mini._model_cache == {}, "reset must drop cached chat models"
+    assert oa_embedding._embedder_cache == {}, "reset must drop cached embedders"

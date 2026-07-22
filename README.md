@@ -30,7 +30,8 @@ Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognit
 chunk boundaries), **Nova multimodal embeddings**, **eight vector stores**
 (Pinecone, Qdrant, SQLite, Postgres/pgvector, MongoDB, Milvus, OpenSearch,
 Weaviate — all hybrid dense + sparse), **S3** for artifacts. ~$0.002/page
-in LLM spend.
+in LLM spend. An **OpenAI backend** (GPT-5 vision-capable chat +
+text-embedding-3) ships alongside Bedrock — see below.
 
 ## Quickstart
 
@@ -142,6 +143,26 @@ doc_id = artifacts.save_parse(result)   # S3: source, result.json, page PNGs, cr
 artifacts.list_documents()              # registry: filename, pages, category, chunks
 ```
 
+## OpenAI backend
+
+The same LLM surface Bedrock provides is also available on OpenAI — GPT-5
+chat with vision, thinking mode, schema-enforced structured output, and
+text-embedding-3 embeddings. Add `OPENAI_API_KEY` to `.env`, pick models in
+config.yaml's `openai:` section (defaults: `gpt-5-mini`,
+`text-embedding-3-small`), and import directly:
+
+```python
+from ingestlib.foundations.llm import Image
+from ingestlib.foundations.llm.openai import chat, chat_structured, embed_text
+
+chat("Read this chart", images=[Image(png_bytes, "png")])   # vision works
+embed_text("a chunk of text")                               # 1024-dim default
+```
+
+Text embeddings only — OpenAI has no image-embedding model — and vectors
+from different embedding models need separate indexes. The `ingest`/
+`retrieve` pipeline runs on Bedrock.
+
 ## Architecture
 
 ```
@@ -151,7 +172,7 @@ src/ingestlib/
 ├── storage/        artifacts (S3) · base (VectorStore contract) · 8 connectors
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
-├── foundations/    llm (Bedrock Nova, Jina) · ocr (PaddleOCR-VL)
+├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Jina) · ocr (PaddleOCR-VL)
 ├── utils/          logger · files
 └── config.py       config.yaml + .env → typed configs
 ```
@@ -191,7 +212,8 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~260 tests, ~90s; e2e groups skip)
+make test                  # fast suite (~290 tests, ~2min; e2e groups skip)
+make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-parse            # parse e2e            (needs VL server + Bedrock)
 make test-classify         # classify e2e         (needs Bedrock)
 make test-split            # split e2e            (needs Bedrock)

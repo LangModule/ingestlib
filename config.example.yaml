@@ -28,6 +28,12 @@ jina:
   base_url: https://api.jina.ai/v1
   rerank_model_id: jina-reranker-v3
 
+# OpenAI backend (needs OPENAI_API_KEY): GPT-5 vision-capable LLM +
+# text-embedding-3 (text-only embeddings; image embeddings stay on bedrock)
+openai:
+  llm_model_id: gpt-5-mini
+  embedding_model_id: text-embedding-3-small
+
 # OCR server for parse/ingest: mlx-vlm-server (Apple Silicon) | vllm-server (NVIDIA)
 paddle_vl:
   backend: mlx-vlm-server

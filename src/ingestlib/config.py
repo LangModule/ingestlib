@@ -7,11 +7,12 @@ first operation needs it. Discovery order for config.yaml:
     2. config.yaml in the current working directory, then each parent
 
 Secrets never live in config.yaml: a .env sitting next to the discovered
-config file is loaded automatically (JINA_API_KEY, PINECONE_API_KEY,
-QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL, MILVUS_URL/_TOKEN,
-OPENSEARCH_URL, WEAVIATE_URL/_API_KEY), and AWS credentials resolve via
-the profile field against ~/.aws/credentials — the standard boto3 chain.
-The sqlite connector needs no secrets at all — just a file path.
+config file is loaded automatically (JINA_API_KEY, OPENAI_API_KEY,
+PINECONE_API_KEY, QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL,
+MILVUS_URL/_TOKEN, OPENSEARCH_URL, WEAVIATE_URL/_API_KEY), and AWS
+credentials resolve via the profile field against ~/.aws/credentials — the
+standard boto3 chain. The sqlite connector needs no secrets at all — just a
+file path.
 """
 import os
 import sys
@@ -50,6 +51,13 @@ class JinaConfig:
     api_key: str                # from JINA_API_KEY env var
     base_url: str
     rerank_model_id: str
+
+
+@dataclass(frozen=True)
+class OpenAIConfig:
+    api_key: str                # from OPENAI_API_KEY env var
+    llm_model_id: str
+    embedding_model_id: str
 
 
 @dataclass(frozen=True)
@@ -126,6 +134,7 @@ class IngestConfig:
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
+    openai: OpenAIConfig
     paddle_vl: PaddleVLConfig
     s3: S3Config
     pinecone: PineconeConfig
@@ -193,6 +202,13 @@ def _load_config() -> IngestConfig:
         api_key=os.environ.get("JINA_API_KEY", ""),
         base_url=jina_data.get("base_url", "https://api.jina.ai/v1"),
         rerank_model_id=jina_data.get("rerank_model_id", "jina-reranker-v3"),
+    )
+
+    openai_data = data.get("openai", {})
+    openai_config = OpenAIConfig(
+        api_key=os.environ.get("OPENAI_API_KEY", ""),
+        llm_model_id=openai_data.get("llm_model_id", "gpt-5-mini"),
+        embedding_model_id=openai_data.get("embedding_model_id", "text-embedding-3-small"),
     )
 
     paddle_vl_data = data.get("paddle_vl", {})
@@ -271,6 +287,7 @@ def _load_config() -> IngestConfig:
         aws=aws_config,
         bedrock=bedrock_config,
         jina=jina_config,
+        openai=openai_config,
         paddle_vl=paddle_vl_config,
         s3=s3_config,
         pinecone=pinecone_config,
@@ -310,6 +327,11 @@ def get_bedrock_config() -> BedrockConfig:
 def get_jina_config() -> JinaConfig:
     """Jina reranker endpoint and API key."""
     return get_config().jina
+
+
+def get_openai_config() -> OpenAIConfig:
+    """OpenAI model IDs and API key."""
+    return get_config().openai
 
 
 def get_paddle_vl_config() -> PaddleVLConfig:
@@ -368,6 +390,8 @@ def get_weaviate_config() -> WeaviateConfig:
 # nothing would pull in heavy dependencies and invert the layering.
 _CLIENT_RESETS = (
     ("ingestlib.foundations.llm.bedrock.factory", "reset_clients"),
+    ("ingestlib.foundations.llm.openai.mini", "reset_models"),
+    ("ingestlib.foundations.llm.openai.embedding", "reset_embedders"),
     ("ingestlib.foundations.ocr.paddle_vl", "reset_pipeline"),
     ("ingestlib.storage.s3.client", "reset_s3_client"),
     ("ingestlib.storage.pinecone.client", "reset_pinecone_client"),
