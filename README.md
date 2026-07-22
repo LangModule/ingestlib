@@ -20,7 +20,7 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 | Stage | What you get |
 |---|---|
 | **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, **charts converted to data tables** (estimated values marked `~`, printed callouts and growth labels captured), figures extracted as PNG crops with captions and AI descriptions — every block traceable to a bounding box on the page |
-| **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your categories, with confidence and alternatives. Works standalone with **no OCR** |
+| **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended, or constrained to your rules (per call or preset in `rules.yaml`, with page targeting) — confidence and ranked alternatives included. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, …) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
 | **Ingest** | The whole pipeline in one call, every stage persisted to the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
 | **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
@@ -41,13 +41,15 @@ openai` to run the whole pipeline on it instead. See below.
 
 - Python 3.12+ and [uv](https://github.com/astral-sh/uv)
 - **AWS account** with Bedrock access (`us-east-1`): Nova 2 Lite + Nova 2
-  multimodal embeddings
+  multimodal embeddings — the default provider; the OpenAI backend can run
+  the whole pipeline instead (see below)
 - **Vector database** — Pinecone account (serverless, free tier works;
   the default), a Qdrant server (local docker or Qdrant Cloud), a Postgres
   with pgvector (RDS/Supabase/Neon or self-hosted), a MongoDB with search
   (Atlas any tier or 8.2+ self-managed), a Milvus (local docker or Zilliz
-  Cloud) — each just one connection URL — or none at all: the sqlite
-  connector stores vectors in a local file
+  Cloud), an OpenSearch (Amazon domain or local docker), a Weaviate (local
+  docker or Weaviate Cloud) — each just one connection URL — or none at
+  all: the sqlite connector stores vectors in a local file
 - **Jina AI account** for reranking (free tier: 100 RPM) — the default; or set
   `reranker: aws` (Amazon Rerank, same AWS credentials) or `reranker: none`
   in config.yaml and skip Jina entirely
@@ -93,6 +95,7 @@ The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
 ```bash
 cp .env.example .env                 # API keys: Jina, plus your vector store's (sqlite needs none)
 cp config.example.yaml config.yaml   # AWS profile + vector store + reranker choice
+cp rules.example.yaml rules.yaml     # optional: your classification rules (see below)
 aws configure --profile your-aws-profile   # Bedrock-enabled credentials
 ```
 
@@ -143,9 +146,38 @@ Persistence and vector access are explicit too:
 ```python
 from ingestlib.storage import artifacts, PineconeStore
 
-doc_id = artifacts.save_parse(result)   # S3: source, result.json, page PNGs, crops
+doc_id = artifacts.save_parse(result)   # artifact store: source, result.json, page PNGs, crops
 artifacts.list_documents()              # registry: filename, pages, category, chunks
 ```
+
+## Classification rules
+
+Classify is open-ended by default. To constrain it to your own document
+types, pass rules per call — or preset them once in `rules.yaml` beside
+your config.yaml, and every bare `classify()` **and the whole ingest
+pipeline** uses them automatically:
+
+```python
+classify("doc.pdf",
+         {"invoice": "Itemized charges, tax info, and payment terms",
+          "sec_filing": "10-K/10-Q style regulatory filings"},
+         target_pages="1,3,5-7", max_pages=5)   # read only these pages
+```
+
+```yaml
+# rules.yaml — copy rules.example.yaml; infra stays in config.yaml,
+# what your documents MEAN lives here
+classify:
+  max_pages: 5
+  rules:
+    invoice: "Itemized charges, tax info, and payment terms"
+    sec_filing: "10-K/10-Q style regulatory filings"
+```
+
+Up to 20 rules; the result is one of your labels or `"uncategorized"`,
+with confidence, reasoning, and ranked alternatives. Precedence: explicit
+arguments beat the preset, and `categories={}` forces open-ended even when
+a preset exists.
 
 ## OpenAI backend
 
@@ -185,7 +217,7 @@ embed_text("a chunk of text")                               # 1024-dim default
 src/ingestlib/
 ├── services/       ingest · retrieve          — the product
 ├── operations/     parse · classify · split   — the tools (each standalone)
-├── storage/        artifacts (S3) · base (VectorStore contract) · 8 connectors
+├── storage/        artifacts (S3 | local) · base (VectorStore contract) · 8 connectors
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
 ├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Jina) · ocr (PaddleOCR-VL)
@@ -228,18 +260,20 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~290 tests, ~2min; e2e groups skip)
+make test                  # fast suite (~340 tests, ~2min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
-make test-parse            # parse e2e            (needs VL server + Bedrock)
-make test-classify         # classify e2e         (needs Bedrock)
-make test-split            # split e2e            (needs Bedrock)
+make test-parse            # parse e2e            (needs VL server + LLM provider)
+make test-classify         # classify e2e         (needs the LLM provider)
+make test-split            # split e2e            (needs the LLM provider)
 make test-s3               # artifact store e2e   (needs AWS)
-make test-pinecone         # vector connector e2e (needs Pinecone + Bedrock)
-make test-qdrant           # vector connector e2e (needs a Qdrant server + Bedrock)
+make test-pinecone         # vector connector e2e (needs Pinecone + embeddings)
+make test-qdrant           # vector connector e2e (needs a Qdrant server + embeddings)
 make test-sqlite           # vector connector suite (no gate — nothing to need)
 make test-pgvector         # vector connector e2e (needs Postgres at PGVECTOR_URL)
 make test-mongodb          # vector connector e2e (needs MongoDB at MONGODB_URL)
 make test-milvus           # vector connector e2e (needs Milvus at MILVUS_URL)
+make test-opensearch       # vector connector e2e (needs OpenSearch at OPENSEARCH_URL)
+make test-weaviate         # vector connector e2e (needs Weaviate at WEAVIATE_URL)
 make test-services         # full product e2e     (needs the entire stack)
 make test-all              # everything
 make eval                  # retrieval quality eval (see below)

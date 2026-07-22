@@ -1,4 +1,4 @@
-.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-services eval
+.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services eval
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -6,7 +6,7 @@ test:
 
 # entire suite including every opt-in group (needs VL server running + Bedrock access)
 test-all:
-	RUN_AWS_RERANK=1 RUN_OCR_E2E=1 RUN_PARSE_E2E=1 RUN_CLASSIFY_E2E=1 RUN_SPLIT_E2E=1 RUN_S3_E2E=1 RUN_PINECONE_E2E=1 RUN_QDRANT_E2E=1 RUN_PGVECTOR_E2E=1 RUN_MONGODB_E2E=1 RUN_MILVUS_E2E=1 RUN_SERVICES_E2E=1 uv run pytest tests/
+	RUN_AWS_RERANK=1 RUN_OCR_E2E=1 RUN_PARSE_E2E=1 RUN_CLASSIFY_E2E=1 RUN_SPLIT_E2E=1 RUN_S3_E2E=1 RUN_PINECONE_E2E=1 RUN_QDRANT_E2E=1 RUN_PGVECTOR_E2E=1 RUN_MONGODB_E2E=1 RUN_MILVUS_E2E=1 RUN_OPENSEARCH_E2E=1 RUN_WEAVIATE_E2E=1 RUN_SERVICES_E2E=1 uv run pytest tests/
 
 # --- llm layer (mirrors src/ingestlib/foundations/llm/) ---
 
@@ -39,17 +39,17 @@ test-openai:
 test-ocr:
 	RUN_OCR_E2E=1 uv run pytest tests/foundations/ocr/
 
-# --- parse operation (mirrors src/ingestlib/operations/parse/) — needs VL server + Bedrock ---
+# --- parse operation (mirrors src/ingestlib/operations/parse/) — needs VL server + the LLM provider ---
 
 test-parse:
 	RUN_PARSE_E2E=1 uv run pytest tests/operations/parse/
 
-# --- classify operation (mirrors src/ingestlib/operations/classify/) — needs Bedrock ---
+# --- classify operation (mirrors src/ingestlib/operations/classify/) — needs the LLM provider ---
 
 test-classify:
 	RUN_CLASSIFY_E2E=1 uv run pytest tests/operations/classify/
 
-# --- split operation (mirrors src/ingestlib/operations/split/) — needs Bedrock ---
+# --- split operation (mirrors src/ingestlib/operations/split/) — needs the LLM provider ---
 
 test-split:
 	RUN_SPLIT_E2E=1 uv run pytest tests/operations/split/
@@ -59,12 +59,12 @@ test-split:
 test-s3:
 	RUN_S3_E2E=1 uv run pytest tests/storage/
 
-# --- pinecone connector — needs PINECONE_API_KEY + Bedrock (embeddings) ---
+# --- pinecone connector — needs PINECONE_API_KEY + the embedding provider ---
 
 test-pinecone:
 	RUN_PINECONE_E2E=1 uv run pytest tests/storage/pinecone/
 
-# --- qdrant connector — needs a Qdrant server at QDRANT_URL + Bedrock ---
+# --- qdrant connector — needs a Qdrant server at QDRANT_URL + the embedding provider ---
 
 test-qdrant:
 	RUN_QDRANT_E2E=1 uv run pytest tests/storage/qdrant/
@@ -74,20 +74,30 @@ test-qdrant:
 test-sqlite:
 	uv run pytest tests/storage/sqlite/
 
-# --- pgvector connector — needs a Postgres at PGVECTOR_URL (no Bedrock) ---
+# --- pgvector connector — needs a Postgres at PGVECTOR_URL (synthetic vectors, no embedding provider) ---
 
 test-pgvector:
 	RUN_PGVECTOR_E2E=1 uv run pytest tests/storage/pgvector/
 
-# --- mongodb connector — needs a MongoDB at MONGODB_URL with search (no Bedrock) ---
+# --- mongodb connector — needs a MongoDB at MONGODB_URL with search (synthetic vectors, no embedding provider) ---
 
 test-mongodb:
 	RUN_MONGODB_E2E=1 uv run pytest tests/storage/mongodb/
 
-# --- milvus connector — needs a Milvus at MILVUS_URL (no Bedrock) ---
+# --- milvus connector — needs a Milvus at MILVUS_URL (synthetic vectors, no embedding provider) ---
 
 test-milvus:
 	RUN_MILVUS_E2E=1 uv run pytest tests/storage/milvus/
+
+# --- opensearch connector — needs an OpenSearch domain/server at OPENSEARCH_URL ---
+
+test-opensearch:
+	RUN_OPENSEARCH_E2E=1 uv run pytest tests/storage/opensearch/
+
+# --- weaviate connector — needs a Weaviate server at WEAVIATE_URL ---
+
+test-weaviate:
+	RUN_WEAVIATE_E2E=1 uv run pytest tests/storage/weaviate/
 
 # --- services (ingest + retrieve) — needs the FULL stack ---
 
