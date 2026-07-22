@@ -66,6 +66,14 @@ def test_aws_only_config_loads_with_all_defaults(scratch_config):
     assert cfg.s3.bucket == "ingestlib-123456789012"
     assert cfg.vector_store == "pinecone"
     assert cfg.reranker == "jina"
+    assert cfg.artifact_store == "s3"
+
+
+def test_artifacts_path_anchors_beside_config(scratch_config):
+    _write(scratch_config, _AWS_ONLY + "artifact_store: local\n")
+    cfg = get_config()
+    assert cfg.artifact_store == "local"
+    assert cfg.artifacts.path == (scratch_config / "artifacts").resolve()
 
 
 def test_missing_aws_section_raises(scratch_config):

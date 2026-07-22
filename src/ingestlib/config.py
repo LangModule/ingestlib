@@ -73,6 +73,11 @@ class S3Config:
 
 
 @dataclass(frozen=True)
+class ArtifactsConfig:
+    path: Path                  # local artifact folder; relative paths anchor to config.yaml's dir
+
+
+@dataclass(frozen=True)
 class PineconeConfig:
     api_key: str                # from PINECONE_API_KEY env var
     index_name: str
@@ -131,12 +136,14 @@ class WeaviateConfig:
 class IngestConfig:
     vector_store: str           # services' default connector (one of the eight below)
     reranker: str               # retrieve()'s reranker: jina | aws | none
+    artifact_store: str         # where pipeline artifacts live: s3 | local
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
     openai: OpenAIConfig
     paddle_vl: PaddleVLConfig
     s3: S3Config
+    artifacts: ArtifactsConfig
     pinecone: PineconeConfig
     qdrant: QdrantConfig
     sqlite: SqliteConfig
@@ -223,6 +230,13 @@ def _load_config() -> IngestConfig:
         bucket=s3_data.get("bucket", f"ingestlib-{aws_config.account_id}"),
     )
 
+    artifacts_data = data.get("artifacts", {})
+    artifacts_path = Path(artifacts_data.get("path", "artifacts")).expanduser()
+    if not artifacts_path.is_absolute():
+        # anchor to the config file, not CWD — the same corpus regardless of launch dir
+        artifacts_path = (config_path.parent / artifacts_path).resolve()
+    artifacts_config = ArtifactsConfig(path=artifacts_path)
+
     pinecone_data = data.get("pinecone", {})
     index_name = pinecone_data.get("index_name", "ingestlib")
     pinecone_config = PineconeConfig(
@@ -284,12 +298,14 @@ def _load_config() -> IngestConfig:
     return IngestConfig(
         vector_store=data.get("vector_store", "pinecone"),
         reranker=data.get("reranker", "jina"),
+        artifact_store=data.get("artifact_store", "s3"),
         aws=aws_config,
         bedrock=bedrock_config,
         jina=jina_config,
         openai=openai_config,
         paddle_vl=paddle_vl_config,
         s3=s3_config,
+        artifacts=artifacts_config,
         pinecone=pinecone_config,
         qdrant=qdrant_config,
         sqlite=sqlite_config,
@@ -344,6 +360,11 @@ def get_s3_config() -> S3Config:
     return get_config().s3
 
 
+def get_artifacts_config() -> ArtifactsConfig:
+    """Local artifact folder settings."""
+    return get_config().artifacts
+
+
 def get_pinecone_config() -> PineconeConfig:
     """Pinecone index settings and API key."""
     return get_config().pinecone
@@ -393,6 +414,7 @@ _CLIENT_RESETS = (
     ("ingestlib.foundations.llm.openai.mini", "reset_models"),
     ("ingestlib.foundations.llm.openai.embedding", "reset_embedders"),
     ("ingestlib.foundations.ocr.paddle_vl", "reset_pipeline"),
+    ("ingestlib.storage.blobs", "reset_blob_store"),
     ("ingestlib.storage.s3.client", "reset_s3_client"),
     ("ingestlib.storage.pinecone.client", "reset_pinecone_client"),
     ("ingestlib.storage.qdrant.client", "reset_qdrant_client"),

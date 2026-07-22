@@ -1,7 +1,7 @@
 """ingest() / aingest() — one call from document to searchable, cited chunks.
 
 The full pipeline: parse → classify → split → embed → vector upsert, with
-every stage's output persisted to the S3 artifact store and the vector sync
+every stage's output persisted to the artifact store and the vector sync
 recorded in an ingest manifest. Documents are deduplicated by content
 checksum — re-ingesting the same file is a no-op unless forced.
 """
@@ -118,7 +118,7 @@ async def aingest(
     durations: dict[str, float] = {}
     logger.info("ingest start: %s", path.name)
 
-    # artifact saves and the vector upsert are sync boto3/SDK network calls —
+    # artifact saves and the vector upsert are sync network/disk calls —
     # keep them off the event loop
     with _stage("parse", durations, on_stage):
         parse_result = await aparse(path)

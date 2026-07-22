@@ -4,8 +4,8 @@ Works against an Amazon OpenSearch Service domain (OPENSEARCH_URL in .env)
 or a local server (docker run -p 9200:9200 -e discovery.type=single-node
 -e DISABLE_SECURITY_PLUGIN=true opensearchproject/opensearch). Requests to
 an amazonaws.com endpoint are SigV4-signed with the configured aws profile
-— the same credential chain as the S3 artifact store, no separate key; any
-other endpoint connects unsigned.
+— the same credential chain as the library's other AWS clients, no separate
+key; any other endpoint connects unsigned.
 
 One index holds both retrieval signals:
     embedding         — knn_vector (HNSW cosine, faiss engine; dimension
@@ -15,8 +15,8 @@ One index holds both retrieval signals:
                         keyword fields
     payload           — full chunk provenance, returned verbatim on hits
 
-The index is created with zero replicas: S3 is the source of truth and
-backfill rebuilds the index, so durability rides on the artifact store, not
+The index is created with zero replicas: the artifact store is the source of
+truth and backfill rebuilds the index, so durability rides on artifacts, not
 on replica copies — and a single-node domain stays green.
 """
 import re

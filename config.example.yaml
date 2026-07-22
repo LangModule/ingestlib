@@ -13,10 +13,19 @@ vector_store: pinecone
 # jina (needs JINA_API_KEY) | aws (same AWS credentials) | none
 reranker: jina
 
+# Where pipeline artifacts (parses, page images, chunks) live:
+# s3 (durable, shareable) | local (a plain folder — zero cloud)
+artifact_store: s3
+
 # Bucket names are global across AWS. Created on first use.
 # Default: ingestlib-{aws.account_id}
 s3:
   bucket: your-unique-bucket-name
+
+# local mode's folder; relative paths anchor to this file's dir
+# (wizard-managed machines get ~/.ingestlib/artifacts)
+artifacts:
+  path: artifacts
 
 bedrock:
   llm_model_id: us.amazon.nova-2-lite-v1:0

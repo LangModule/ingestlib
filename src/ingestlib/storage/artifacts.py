@@ -1,8 +1,10 @@
-"""S3 artifact store — persists every operation's output, keyed by document checksum.
+"""Artifact store — persists every operation's output, keyed by document checksum.
 
-Layout (everything under one prefix per document):
+Lives on the backend `artifact_store` selects in config.yaml: an S3 bucket
+(durable, shareable) or a plain local folder (zero cloud). Same layout on
+both, everything under one prefix per document:
 
-    s3://{bucket}/documents/{doc_id}/
+    documents/{doc_id}/
     ├── source/{filename}                     original file, exact bytes
     ├── parse/result.json                     ParseResult (image bytes stripped)
     ├── parse/document.md                     whole-document markdown
@@ -21,14 +23,13 @@ import json
 from pathlib import Path
 from typing import Any
 
-from botocore.exceptions import ClientError
 from pydantic import BaseModel, ConfigDict
 
 from ingestlib.foundations.ocr.models import BoundingBox, Region
 from ingestlib.operations.classify.models import ClassifyResult
 from ingestlib.operations.parse.models import FigureImage, PageResult, ParseResult
 from ingestlib.operations.split.models import SplitResult
-from ingestlib.storage.s3.client import ensure_bucket, get_s3_client
+from ingestlib.storage.blobs import get_blob_store
 from ingestlib.utils.logger import get_logger
 
 
@@ -62,33 +63,19 @@ def _key(doc_id: str, *parts: str) -> str:
 
 
 def _put(key: str, body: bytes, content_type: str) -> None:
-    get_s3_client().put_object(
-        Bucket=ensure_bucket(), Key=key, Body=body, ContentType=content_type
-    )
+    get_blob_store().put(key, body, content_type)
 
 
 def _put_json(key: str, payload: dict[str, Any]) -> None:
-    _put(key, json.dumps(payload, ensure_ascii=False).encode(), "application/json")
+    get_blob_store().put_json(key, payload)
 
 
 def _get(key: str) -> bytes:
-    response = get_s3_client().get_object(Bucket=ensure_bucket(), Key=key)
-    return response["Body"].read()
+    return get_blob_store().get(key)
 
 
 def _get_or_none(key: str) -> bytes | None:
-    """S3 GET returning None ONLY for a genuinely missing key.
-
-    Every other failure (throttle, network, auth) propagates — treating a
-    transient error as absence would silently rewrite metadata or serve
-    ghost registry entries.
-    """
-    try:
-        return _get(key)
-    except ClientError as err:
-        if err.response.get("Error", {}).get("Code") in ("NoSuchKey", "404"):
-            return None
-        raise
+    return get_blob_store().get_or_none(key)
 
 
 def _page_key(doc_id: str, page_num: int) -> str:
@@ -319,10 +306,7 @@ def load_ingest_manifest(doc_id: str) -> dict[str, Any]:
 
 def document_exists(doc_id: str) -> bool:
     """True when this document was parsed and saved before (dedup check)."""
-    response = get_s3_client().list_objects_v2(
-        Bucket=ensure_bucket(), Prefix=_key(doc_id, "parse", "result.json"), MaxKeys=1
-    )
-    return response.get("KeyCount", 0) > 0
+    return get_blob_store().exists(_key(doc_id, "parse", "result.json"))
 
 
 def ingest_complete(doc_id: str) -> bool:
@@ -331,12 +315,7 @@ def ingest_complete(doc_id: str) -> bool:
     Checks the ingest manifest — the last artifact the pipeline writes — so a
     run that died after parse/classify/split gets retried instead of skipped.
     """
-    response = get_s3_client().list_objects_v2(
-        Bucket=ensure_bucket(),
-        Prefix=_key(doc_id, "split", "ingest_manifest.json"),
-        MaxKeys=1,
-    )
-    return response.get("KeyCount", 0) > 0
+    return get_blob_store().exists(_key(doc_id, "split", "ingest_manifest.json"))
 
 
 def get_document_meta(doc_id: str) -> DocumentMeta:
@@ -346,40 +325,25 @@ def get_document_meta(doc_id: str) -> DocumentMeta:
 
 def list_documents() -> list[DocumentMeta]:
     """Registry of every persisted document — id, filename, pages, category, counts."""
-    client = get_s3_client()
-    bucket = ensure_bucket()
-    doc_ids: list[str] = []
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(
-        Bucket=bucket, Prefix=f"{_PREFIX}/", Delimiter="/"
-    ):
-        for cp in page.get("CommonPrefixes", []):
-            doc_ids.append(cp["Prefix"].split("/")[1])
+    doc_ids = get_blob_store().list_top_dirs(_PREFIX)
     return [_load_meta(d) for d in doc_ids]
 
 
 def page_image_key(doc_id: str, page_num: int) -> str:
-    """S3 key of a page render — for presigned URLs in a UI."""
+    """Artifact key of a page render — presign it (s3) or read_blob() it (local)."""
     return _page_key(doc_id, page_num)
+
+
+def read_blob(key: str) -> bytes:
+    """Raw bytes at an artifact key, whichever backend holds them.
+
+    The backend-agnostic way for a UI to serve page renders and figure crops
+    when a presigned URL is not available (artifact_store: local)."""
+    return get_blob_store().get(key)
 
 
 def delete_document(doc_id: str) -> int:
     """Remove every object under the document's prefix. Returns count deleted."""
-    client = get_s3_client()
-    bucket = ensure_bucket()
-    deleted = 0
-    paginator = client.get_paginator("list_objects_v2")
-    for page in paginator.paginate(Bucket=bucket, Prefix=_key(doc_id) + "/"):
-        keys = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
-        if not keys:
-            continue
-        response = client.delete_objects(Bucket=bucket, Delete={"Objects": keys})
-        errors = response.get("Errors", [])
-        if errors:  # partial failure must not be reported as success
-            raise RuntimeError(
-                f"delete_document {doc_id[:12]}: {len(errors)} object(s) failed, "
-                f"first: {errors[0].get('Key')} ({errors[0].get('Message')})"
-            )
-        deleted += len(keys)
+    deleted = get_blob_store().delete_prefix(_key(doc_id) + "/")
     logger.info("deleted document %s (%d objects)", doc_id[:12], deleted)
     return deleted

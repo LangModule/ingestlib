@@ -2,8 +2,10 @@
 
 Sub-packages / modules:
     s3        — Amazon S3 singleton client + bucket bootstrap
-    artifacts — persist/load parse, classify, and split outputs on S3,
-                keyed by document checksum
+    blobs     — artifact-store backends (S3 bucket or a local folder),
+                selected by config.yaml's `artifact_store` key
+    artifacts — persist/load parse, classify, and split outputs on the
+                selected backend, keyed by document checksum
     base      — VectorStore contract + RetrievedChunk (works with any
                 vector database via connectors)
     pinecone  — Pinecone serverless connector, hybrid dense + sparse

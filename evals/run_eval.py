@@ -13,7 +13,7 @@ Usage:
     uv run python evals/run_eval.py --skip-ingest  # corpus already ingested
     uv run python evals/run_eval.py --store qdrant   # or sqlite | pgvector | mongodb | milvus
     uv run python evals/run_eval.py --store sqlite --backfill   # fresh/wiped store:
-                                   # re-embed S3 split artifacts into it (no VL server)
+                                   # re-embed stored split artifacts (no VL server)
     uv run python evals/run_eval.py --top-k 5
 """
 import argparse
@@ -81,8 +81,8 @@ def load_dataset() -> list[dict]:
 async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
     """Ingest any fixture not yet in the artifact store (checksum-skipped otherwise).
 
-    Only checks S3 artifacts — it cannot see whether the *vector store* has
-    the corpus. Pointing at a store the corpus was never upserted into
+    Only checks the artifact store — it cannot see whether the *vector store*
+    has the corpus. Pointing at a store the corpus was never upserted into
     (fresh sqlite file, wiped index) needs --backfill.
     """
     for pdf in pdfs:
@@ -95,9 +95,9 @@ async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
 
 
 async def backfill_store(store: VectorStore) -> None:
-    """Re-embed every document's S3 split artifact into the store.
+    """Re-embed every document's stored split artifact into the store.
 
-    Parse/classify/split are reused from S3 — only embedding (Bedrock) and
+    Parse/classify/split are reused from the artifact store — only embedding and
     upsert run, so no VL server is needed. Upserts are idempotent, so
     re-backfilling an already-populated store is safe.
     """

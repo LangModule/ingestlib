@@ -22,16 +22,17 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 | **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, **charts converted to data tables** (estimated values marked `~`, printed callouts and growth labels captured), figures extracted as PNG crops with captions and AI descriptions — every block traceable to a bounding box on the page |
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your categories, with confidence and alternatives. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, …) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
-| **Ingest** | The whole pipeline in one call, every stage persisted to S3, vectors upserted, deduplicated by content checksum |
+| **Ingest** | The whole pipeline in one call, every stage persisted to the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
 | **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
 
 Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
 chunk boundaries), **Nova multimodal embeddings**, **eight vector stores**
 (Pinecone, Qdrant, SQLite, Postgres/pgvector, MongoDB, Milvus, OpenSearch,
-Weaviate — all hybrid dense + sparse), **S3** for artifacts. ~$0.002/page
-in LLM spend. An **OpenAI backend** (GPT-5 vision-capable chat +
-text-embedding-3) ships alongside Bedrock — see below.
+Weaviate — all hybrid dense + sparse), **S3 or a local folder** for
+artifacts (`artifact_store: s3 | local`). ~$0.002/page in LLM spend. An
+**OpenAI backend** (GPT-5 vision-capable chat + text-embedding-3) ships
+alongside Bedrock — see below.
 
 ## Quickstart
 
@@ -95,10 +96,12 @@ aws configure --profile your-aws-profile   # Bedrock-enabled credentials
 ```
 
 Edit `config.yaml`: the `aws` section is the only required part — then pick
-your vector store and reranker. Everything else has working defaults. **The
-S3 bucket (default `ingestlib-{account_id}`) and the vector
+your vector store, reranker, and artifact store. Everything else has working
+defaults. **The S3 bucket (default `ingestlib-{account_id}`) and the vector
 indexes/collections are created automatically on first use** — no manual
-setup.
+setup. Prefer no cloud storage at all? `artifact_store: local` keeps every
+parse, page image, and chunk in a plain folder beside your config.yaml —
+browsable in a file manager, and moving a corpus between backends is a copy.
 
 Config is discovered at call time, never at import: `INGESTLIB_CONFIG=/path/to/config.yaml`
 wins, otherwise the working directory and its parents are searched — so
