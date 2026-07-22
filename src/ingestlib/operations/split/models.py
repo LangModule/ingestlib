@@ -37,7 +37,7 @@ class Chunk(BaseModel):
 
 
 class VocabEntry(BaseModel):
-    """One discovered section category."""
+    """One section category — Pass 1's discovery or the caller's own."""
 
     model_config = ConfigDict(frozen=True)
 
@@ -61,8 +61,9 @@ class Section(BaseModel):
 class SplitResult(BaseModel):
     """Full split output — sections in document order, each with its chunks.
 
-    vocabulary — the section categories Pass 1 discovered for this document
-    pages_used — pages actually processed (caps at 500)
+    vocabulary — the section categories used: Pass 1's discoveries, or the
+                 caller's own (plus `other` when unmatched pages produced one)
+    pages_used — pages actually read (caps at 500; skip mode may keep fewer)
     """
 
     model_config = ConfigDict(frozen=True)

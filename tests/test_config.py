@@ -124,6 +124,30 @@ def test_classify_section_in_config_yaml_is_not_read(scratch_config):
     assert get_config().classify.rules == {}
 
 
+def test_split_preset_defaults_without_rules_yaml(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    cfg = get_config()
+    assert cfg.split.categories == {}
+    assert cfg.split.unmatched == "other"
+
+
+def test_split_preset_is_read_from_rules_yaml(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    (scratch_config / "rules.yaml").write_text(
+        "split:\n"
+        "  unmatched: skip\n"
+        "  categories:\n"
+        "    financial_statements: Balance sheets and income statements\n"
+        "    notes:\n"                # a category with no description stays usable
+    )
+    cfg = get_config()
+    assert cfg.split.unmatched == "skip"
+    assert cfg.split.categories == {
+        "financial_statements": "Balance sheets and income statements",
+        "notes": "",
+    }
+
+
 def test_reset_config_picks_up_rules_yaml_edits(scratch_config):
     _write(scratch_config, _AWS_ONLY)
     assert get_config().classify.rules == {}

@@ -21,7 +21,7 @@ print(result.context)                # ranked chunks, each citing doc · page ·
 |---|---|
 | **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, **charts converted to data tables** (estimated values marked `~`, printed callouts and growth labels captured), figures extracted as PNG crops with captions and AI descriptions — every block traceable to a bounding box on the page |
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended, or constrained to your rules (per call or preset in `rules.yaml`, with page targeting) — confidence and ranked alternatives included. Works standalone with **no OCR** |
-| **Split** | Sections (pages grouped by role: `methods`, `results`, …) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
+| **Split** | Sections (pages grouped by role: `methods`, `results`, … — LLM-discovered, or **your own categories** via rules) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
 | **Ingest** | The whole pipeline in one call, every stage persisted to the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
 | **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
 
@@ -95,7 +95,7 @@ The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
 ```bash
 cp .env.example .env                 # API keys: Jina, plus your vector store's (sqlite needs none)
 cp config.example.yaml config.yaml   # AWS profile + vector store + reranker choice
-cp rules.example.yaml rules.yaml     # optional: your classification rules (see below)
+cp rules.example.yaml rules.yaml     # optional: your classify & split rules (see below)
 aws configure --profile your-aws-profile   # Bedrock-enabled credentials
 ```
 
@@ -150,12 +150,13 @@ doc_id = artifacts.save_parse(result)   # artifact store: source, result.json, p
 artifacts.list_documents()              # registry: filename, pages, category, chunks
 ```
 
-## Classification rules
+## Classification & split rules
 
-Classify is open-ended by default. To constrain it to your own document
-types, pass rules per call — or preset them once in `rules.yaml` beside
-your config.yaml, and every bare `classify()` **and the whole ingest
-pipeline** uses them automatically:
+Classify and split are open-ended by default — the LLM decides the document
+type and discovers the section vocabulary. Both can instead follow **your**
+rules: pass them per call, or preset them once in `rules.yaml` beside your
+config.yaml, and every bare call **and the whole ingest pipeline** uses
+them automatically:
 
 ```python
 classify("doc.pdf",
@@ -164,20 +165,34 @@ classify("doc.pdf",
          target_pages="1,3,5-7", max_pages=5)   # read only these pages
 ```
 
+```python
+split("report.pdf",
+      vocabulary={"financial_statements": "Balance sheets, income statements",
+                  "notes": "Footnotes and disclosures"},
+      unmatched="other")   # pages fitting nothing: other (default) | require | skip
+```
+
 ```yaml
 # rules.yaml — copy rules.example.yaml; infra stays in config.yaml,
 # what your documents MEAN lives here
 classify:
   max_pages: 5
-  rules:
+  rules:                       # up to 20 — result is one of these or "uncategorized"
     invoice: "Itemized charges, tax info, and payment terms"
     sec_filing: "10-K/10-Q style regulatory filings"
+split:
+  unmatched: other             # require | other | skip
+  categories:                  # up to 50 — YOUR sections; Pass 1 is skipped
+    financial_statements: "Balance sheets, income statements, cash flows"
+    notes: "Footnotes and disclosures"
 ```
 
-Up to 20 rules; the result is one of your labels or `"uncategorized"`,
-with confidence, reasoning, and ranked alternatives. Precedence: explicit
-arguments beat the preset, and `categories={}` forces open-ended even when
-a preset exists.
+Classify returns one of your labels or `"uncategorized"`, with confidence,
+reasoning, and ranked alternatives. Split labels every page against your
+sections — unmatched pages become an honest `other` section (default), get
+forced into the nearest category (`require`), or are dropped entirely
+(`skip`). Precedence everywhere: explicit arguments beat the preset, and
+`{}` forces the open-ended default even when a preset exists.
 
 ## OpenAI backend
 

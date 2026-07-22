@@ -51,6 +51,25 @@ def test_chunks_respect_max_tokens_or_are_single_block(result):
         assert c.token_estimate <= DEFAULT_MAX_CHUNK_TOKENS or c.kind in ("table", "figure")
 
 
+def test_user_vocabulary_constrains_sections():
+    """Live closed-set split: sections come from MY names (or `other`),
+    never from Pass 1 — which does not run at all."""
+    from ingestlib.operations.split import split
+
+    vocab = {
+        "study_design": "Objectives, methods, participants, and procedures",
+        "findings": "Results, outcomes, statistics, and discussion",
+    }
+    result = split(
+        _TESTS_DIR / "data" / "pdf" / "clinical-study.pdf",
+        vocabulary=vocab, category="research_paper",
+    )
+    assert set(result.section_names) <= set(vocab) | {"other"}
+    assert result.chunks, "user-vocabulary sections still chunk"
+    for c in result.chunks:
+        assert c.embedding_text.startswith("[research_paper › ")
+
+
 def test_semantic_subsplit_respects_budget_and_covers_everything():
     """Live sub-split: an oversized multi-topic group must come back as
     budget-fitting, fully-covering sub-chunks with their own headings."""

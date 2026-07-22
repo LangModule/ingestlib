@@ -1,9 +1,11 @@
 """Section discovery — Pass 1 (vocabulary) + Pass 2 (per-page labels) + grouping.
 
 Pass 1 reads the whole document once and proposes a FIXED vocabulary of section
-categories. Pass 2 classifies every page against that vocabulary in parallel.
-Because the vocabulary is fixed, grouping consecutive same-label pages into
-sections is pure Python — no synonym merging, no third LLM pass.
+categories — skipped entirely when the caller supplies one. Pass 2 classifies
+every page against that vocabulary in parallel; with a user vocabulary the
+`unmatched` mode decides what happens to pages that fit nothing (see
+splitter.py). Because the vocabulary is fixed, grouping consecutive same-label
+pages into sections is pure Python — no synonym merging, no third LLM pass.
 """
 import asyncio
 
@@ -45,6 +47,15 @@ class _PageLabel(BaseModel):
     category: str = Field(description="exactly one label from the allowed list")
 
 
+# The label unmatched pages get when the user's `unmatched` mode allows it.
+OTHER_LABEL = "other"
+
+
+def make_vocabulary(categories: dict[str, str]) -> list[_VocabSection]:
+    """User categories → the vocabulary shape Pass 2 consumes (dict order kept)."""
+    return [_VocabSection(name=n, description=d) for n, d in categories.items()]
+
+
 async def propose_vocabulary(pages: list[SplitPage]) -> list[_VocabSection]:
     """Pass 1 — one LLM call over the whole (capped) document."""
     body = "\n\n".join(
@@ -67,12 +78,22 @@ async def label_page(
     page: SplitPage,
     vocabulary: list[_VocabSection],
     semaphore: asyncio.Semaphore,
+    allow_other: bool = False,
 ) -> str:
-    """Pass 2 — assign one vocabulary label to a page."""
+    """Pass 2 — assign one vocabulary label to a page.
+
+    allow_other adds the escape hatch for user vocabularies whose `unmatched`
+    mode is other/skip; without it the choice is forced (require mode, and
+    discovered vocabularies — which cover every page by construction)."""
     vocab_block = "\n".join(f"- {s.name}: {s.description}" for s in vocabulary)
+    escape = (
+        f" If no label truly fits this page, answer exactly '{OTHER_LABEL}'."
+        if allow_other
+        else ""
+    )
     prompt = (
         f"Allowed section labels:\n{vocab_block}\n\n"
-        f"Assign page {page.page_num} to exactly one label.\n\n"
+        f"Assign page {page.page_num} to exactly one label.{escape}\n\n"
         f"--- page {page.page_num} ---\n{page.text.strip()[:_LABEL_PAGE_LIMIT]}"
     )
     async with semaphore:
@@ -84,14 +105,19 @@ async def label_pages(
     pages: list[SplitPage],
     vocabulary: list[_VocabSection],
     semaphore: asyncio.Semaphore,
+    unmatched: str = "require",
 ) -> list[str]:
     """Pass 2 across all pages in parallel, then repair labels outside the vocabulary.
 
-    An invalid label inherits its left neighbor's label (section continuity) —
-    deterministic, and logged so drift is visible.
+    "require" forces every page into the vocabulary: an invalid label (or an
+    unwanted "other") inherits its left neighbor (section continuity) —
+    deterministic, and logged so drift is visible. "other"/"skip" keep the
+    OTHER_LABEL answer for the caller to group or drop; only true junk repairs.
     """
+    allow_other = unmatched != "require"
     tasks = [
-        asyncio.ensure_future(label_page(p, vocabulary, semaphore)) for p in pages
+        asyncio.ensure_future(label_page(p, vocabulary, semaphore, allow_other))
+        for p in pages
     ]
     try:
         labels = list(await asyncio.gather(*tasks))
@@ -100,6 +126,8 @@ async def label_pages(
             task.cancel()
         raise
     allowed = {s.name for s in vocabulary}
+    if allow_other:
+        allowed = allowed | {OTHER_LABEL}
     for i, label in enumerate(labels):
         if label not in allowed:
             # labels[i-1] is already repaired (left-to-right), so it's always allowed

@@ -7,7 +7,7 @@ first operation needs it. Discovery order for config.yaml:
     2. config.yaml in the current working directory, then each parent
 
 Two optional files sit next to the discovered config.yaml and load with it:
-rules.yaml (content rules — the classification preset) and .env (secrets).
+rules.yaml (content rules — the classify and split presets) and .env (secrets).
 
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, OPENAI_API_KEY,
@@ -148,6 +148,15 @@ class ClassifyConfig:
 
 
 @dataclass(frozen=True)
+class SplitConfig:
+    """Split preset from rules.yaml (beside config.yaml). Per-call arguments
+    to split() always override these; no categories means the section
+    vocabulary is LLM-discovered (Pass 1)."""
+    categories: dict[str, str]  # {section: description} user vocabulary; {} = discovered
+    unmatched: str              # pages matching no category: require | other | skip
+
+
+@dataclass(frozen=True)
 class IngestConfig:
     vector_store: str           # services' default connector (one of the eight below)
     reranker: str               # retrieve()'s reranker: jina | aws | none
@@ -159,6 +168,7 @@ class IngestConfig:
     jina: JinaConfig
     openai: OpenAIConfig
     classify: ClassifyConfig
+    split: SplitConfig
     paddle_vl: PaddleVLConfig
     s3: S3Config
     artifacts: ArtifactsConfig
@@ -236,7 +246,7 @@ def _load_config() -> IngestConfig:
         embedding_model_id=openai_data.get("embedding_model_id", "text-embedding-3-small"),
     )
 
-    # Domain rules (classification today, split categories later) live in
+    # Domain rules (classification rules + split categories) live in
     # rules.yaml beside config.yaml — infra and content stay separate files.
     rules_path = config_path.parent / _RULES_FILENAME
     rules_data: dict = {}
@@ -248,6 +258,13 @@ def _load_config() -> IngestConfig:
         rules={str(k): str(v or "") for k, v in (classify_data.get("rules") or {}).items()},
         target_pages=str(classify_data.get("target_pages") or ""),
         max_pages=int(classify_data.get("max_pages") or 0),
+    )
+    split_data = rules_data.get("split") or {}
+    split_config = SplitConfig(
+        categories={
+            str(k): str(v or "") for k, v in (split_data.get("categories") or {}).items()
+        },
+        unmatched=str(split_data.get("unmatched") or "other"),
     )
 
     paddle_vl_data = data.get("paddle_vl", {})
@@ -338,6 +355,7 @@ def _load_config() -> IngestConfig:
         jina=jina_config,
         openai=openai_config,
         classify=classify_config,
+        split=split_config,
         paddle_vl=paddle_vl_config,
         s3=s3_config,
         artifacts=artifacts_config,

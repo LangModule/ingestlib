@@ -81,8 +81,9 @@ async def aingest(
 ) -> IngestResult:
     """Run a document through the full pipeline (async).
 
-    The classify stage honors rules.yaml's `classify:` preset (closed-set
-    rules + page settings) when one exists — see rules.example.yaml.
+    The classify and split stages honor rules.yaml's presets when they
+    exist (`classify:` closed-set rules + page settings; `split:` user
+    section vocabulary + unmatched mode) — see rules.example.yaml.
 
     path             — PDF/DOCX/PPTX to ingest
     store            — vector store connector; defaults to the one selected

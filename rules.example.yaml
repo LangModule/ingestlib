@@ -1,8 +1,8 @@
 # ingestlib content rules — copy to rules.yaml beside your config.yaml.
 #
 # Infra lives in config.yaml; what your documents MEAN lives here. The file
-# is optional: without it, classification is open-ended over all pages.
-# Per-call arguments always override this preset.
+# is optional: without it, classification is open-ended and split discovers
+# its own section vocabulary. Per-call arguments always override this preset.
 
 # Classification preset — used by classify() and the ingest pipeline
 # whenever no explicit arguments are given.
@@ -12,3 +12,14 @@ classify:
   rules:                       # up to 20 — result is one of these or "uncategorized"
     invoice: "Itemized charges, tax info, and payment terms"
     sec_filing: "10-K/10-Q style regulatory filings"
+
+# Split preset — YOUR section vocabulary instead of the LLM-discovered one.
+# Pages fitting no category follow `unmatched`:
+#   other (default) — grouped into an honest `other` section
+#   require         — every page forced into a category (left-neighbor repair)
+#   skip            — dropped entirely (no sections, no chunks, no vectors)
+split:
+  unmatched: other
+  categories:                  # up to 50 — {section_name: description}
+    financial_statements: "Balance sheets, income statements, cash flow statements"
+    notes: "Footnotes and accounting-policy disclosures"

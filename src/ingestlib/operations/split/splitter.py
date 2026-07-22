@@ -1,17 +1,29 @@
 """split() / asplit() — sections + natural chunks for RAG ingestion.
 
-Three passes: vocabulary discovery (1 call) → per-page labels (parallel) →
-within-section chunk boundaries (parallel, skipped for small sections).
-Independent of parse: accepts a ParseResult or a raw file path.
+Three passes: vocabulary discovery (1 call — skipped when the caller
+supplies a vocabulary) → per-page labels (parallel) → within-section chunk
+boundaries (parallel, skipped for small sections). With a user vocabulary,
+`unmatched` decides what happens to pages that fit no category:
+"other" (default — an honest `other` section), "require" (every page lands
+in a category via left-neighbor repair), or "skip" (dropped entirely).
+Unset arguments resolve from rules.yaml's `split:` preset. Independent of
+parse: accepts a ParseResult or a raw file path.
 """
 import asyncio
 import time
 from pathlib import Path
 
+from ingestlib.config import get_config
 from ingestlib.operations.parse.models import ParseResult
 from ingestlib.operations.split.models import Chunk, Section, SplitResult, VocabEntry
 from ingestlib.operations.split.pages import Block, SplitPage, extract_split_pages
-from ingestlib.operations.split.sections import group_pages, label_pages, propose_vocabulary
+from ingestlib.operations.split.sections import (
+    OTHER_LABEL,
+    group_pages,
+    label_pages,
+    make_vocabulary,
+    propose_vocabulary,
+)
 from ingestlib.operations.split.segmenter import segment_section
 from ingestlib.utils.logger import get_logger
 
@@ -21,6 +33,44 @@ logger = get_logger(__name__)
 _LLM_CONCURRENCY = 8
 
 DEFAULT_MAX_CHUNK_TOKENS = 768
+
+# The split-categories ceiling — past this, per-label discrimination degrades.
+MAX_CATEGORIES = 50
+
+_UNMATCHED_MODES = ("require", "other", "skip")
+
+_OTHER_DESCRIPTION = "pages matching no user category"
+
+
+def _resolve_settings(
+    vocabulary: dict[str, str] | None,
+    unmatched: str | None,
+) -> tuple[dict[str, str] | None, str]:
+    """Fill unset arguments from rules.yaml's `split:` preset.
+
+    None means "use the preset"; an explicit {} forces LLM discovery even
+    when a preset exists. Explicit arguments always win over the preset."""
+    preset = get_config().split
+    if vocabulary is None:
+        vocabulary = dict(preset.categories) or None
+    elif not vocabulary:
+        vocabulary = None
+    if vocabulary is not None and len(vocabulary) > MAX_CATEGORIES:
+        raise ValueError(
+            f"{len(vocabulary)} split categories — the limit is {MAX_CATEGORIES}"
+        )
+    if unmatched is None:
+        unmatched = preset.unmatched or "other"
+    if unmatched not in _UNMATCHED_MODES:
+        raise ValueError(
+            f"unmatched must be one of {list(_UNMATCHED_MODES)}, got {unmatched!r}"
+        )
+    if vocabulary is None and unmatched != "other":
+        raise ValueError(
+            f"unmatched={unmatched!r} applies only with a user vocabulary — a "
+            f"discovered vocabulary covers every page by construction"
+        )
+    return vocabulary, unmatched
 
 
 def _dominant_kind(blocks: list[Block]) -> str:
@@ -109,6 +159,8 @@ async def asplit(
     *,
     category: str | None = None,
     max_chunk_tokens: int = DEFAULT_MAX_CHUNK_TOKENS,
+    vocabulary: dict[str, str] | None = None,
+    unmatched: str | None = None,
 ) -> SplitResult:
     """Split a document into sections and natural chunks (async).
 
@@ -116,7 +168,14 @@ async def asplit(
     category         — optional document-type label (e.g. from classify()) used in
                        each chunk's embedding_text breadcrumb
     max_chunk_tokens — ceiling on chunk size; natural boundaries rule below it
+    vocabulary       — optional {section: description}, max 50; when given, Pass 1
+                       is skipped and pages label against YOUR sections. None uses
+                       rules.yaml's `split:` preset; {} forces LLM discovery.
+    unmatched        — pages fitting no user category: "other" (default — an
+                       honest `other` section) | "require" (left-neighbor repair)
+                       | "skip" (dropped). None uses the preset.
     """
+    user_vocabulary, unmatched = _resolve_settings(vocabulary, unmatched)
     start = time.perf_counter()
     pages = extract_split_pages(source)
     if not pages:
@@ -124,15 +183,41 @@ async def asplit(
 
     semaphore = asyncio.Semaphore(_LLM_CONCURRENCY)
 
-    vocabulary = await propose_vocabulary(pages)
-    labels = await label_pages(pages, vocabulary, semaphore)
+    if user_vocabulary is not None:
+        vocab = make_vocabulary(user_vocabulary)
+        logger.info(
+            "split: user vocabulary (%d categories, unmatched=%s) — Pass 1 skipped",
+            len(vocab), unmatched,
+        )
+        labels = await label_pages(pages, vocab, semaphore, unmatched=unmatched)
+    else:
+        vocab = await propose_vocabulary(pages)
+        labels = await label_pages(pages, vocab, semaphore)
+
+    pages_read = len(pages)
+    if user_vocabulary is not None and unmatched == "skip":
+        kept = [(p, label) for p, label in zip(pages, labels) if label != OTHER_LABEL]
+        if len(kept) < len(pages):
+            logger.info(
+                "split: skipped %d unmatched page(s) of %d", len(pages) - len(kept), len(pages),
+            )
+        pages = [p for p, _ in kept]
+        labels = [label for _, label in kept]
+        if not pages:
+            return SplitResult(
+                sections=[],
+                vocabulary=[VocabEntry(name=s.name, description=s.description) for s in vocab],
+                pages_used=pages_read,
+            )
+
     grouped = group_pages(pages, labels)
     logger.info(
         "split: %d page(s) → %d section(s): %s",
         len(pages), len(grouped), [name for name, _ in grouped],
     )
 
-    descriptions = {s.name: s.description for s in vocabulary}
+    descriptions = {s.name: s.description for s in vocab}
+    descriptions.setdefault(OTHER_LABEL, _OTHER_DESCRIPTION)
     tasks = [
         asyncio.ensure_future(_build_section(
             name, descriptions.get(name, ""), section_pages,
@@ -148,10 +233,16 @@ async def asplit(
         raise
     sections = _renumber_chunks(built)
 
+    result_vocab = [VocabEntry(name=s.name, description=s.description) for s in vocab]
+    if any(s.name == OTHER_LABEL for s in sections) and all(
+        v.name != OTHER_LABEL for v in result_vocab
+    ):
+        result_vocab.append(VocabEntry(name=OTHER_LABEL, description=_OTHER_DESCRIPTION))
+
     result = SplitResult(
         sections=sections,
-        vocabulary=[VocabEntry(name=s.name, description=s.description) for s in vocabulary],
-        pages_used=len(pages),
+        vocabulary=result_vocab,
+        pages_used=pages_read,
     )
     logger.info(
         "split done: %d section(s), %d chunk(s) in %.1fs",
@@ -165,11 +256,14 @@ def split(
     *,
     category: str | None = None,
     max_chunk_tokens: int = DEFAULT_MAX_CHUNK_TOKENS,
+    vocabulary: dict[str, str] | None = None,
+    unmatched: str | None = None,
 ) -> SplitResult:
     """Split a document into sections and natural chunks.
 
     Sync wrapper — use asplit() inside an event loop.
     """
-    return asyncio.run(
-        asplit(source, category=category, max_chunk_tokens=max_chunk_tokens)
-    )
+    return asyncio.run(asplit(
+        source, category=category, max_chunk_tokens=max_chunk_tokens,
+        vocabulary=vocabulary, unmatched=unmatched,
+    ))
