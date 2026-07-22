@@ -6,6 +6,9 @@ first operation needs it. Discovery order for config.yaml:
     1. INGESTLIB_CONFIG environment variable (explicit path)
     2. config.yaml in the current working directory, then each parent
 
+Two optional files sit next to the discovered config.yaml and load with it:
+rules.yaml (content rules — the classification preset) and .env (secrets).
+
 Secrets never live in config.yaml: a .env sitting next to the discovered
 config file is loaded automatically (JINA_API_KEY, OPENAI_API_KEY,
 PINECONE_API_KEY, QDRANT_URL/_API_KEY, PGVECTOR_URL, MONGODB_URL,
@@ -26,6 +29,7 @@ from dotenv import load_dotenv
 
 _CONFIG_ENV_VAR = "INGESTLIB_CONFIG"
 _CONFIG_FILENAME = "config.yaml"
+_RULES_FILENAME = "rules.yaml"
 
 _lock = threading.Lock()
 _dotenv_keys: set[str] = set()  # env keys injected from .env — un-set by reset_config()
@@ -133,6 +137,17 @@ class WeaviateConfig:
 
 
 @dataclass(frozen=True)
+class ClassifyConfig:
+    """Classification preset from rules.yaml (beside config.yaml) — the
+    library's "saved config". Domain rules live in their own file so infra
+    config and content rules stay separate. Per-call arguments to classify()
+    always override these; no rules.yaml means open-ended over all pages."""
+    rules: dict[str, str]       # {label: description} closed set; {} = open-ended
+    target_pages: str           # "1,3,5-7" page selection (1-based); "" = all pages
+    max_pages: int              # extra cap after selection; 0 = none (100-page hard cap stays)
+
+
+@dataclass(frozen=True)
 class IngestConfig:
     vector_store: str           # services' default connector (one of the eight below)
     reranker: str               # retrieve()'s reranker: jina | aws | none
@@ -143,6 +158,7 @@ class IngestConfig:
     bedrock: BedrockConfig
     jina: JinaConfig
     openai: OpenAIConfig
+    classify: ClassifyConfig
     paddle_vl: PaddleVLConfig
     s3: S3Config
     artifacts: ArtifactsConfig
@@ -218,6 +234,20 @@ def _load_config() -> IngestConfig:
         api_key=os.environ.get("OPENAI_API_KEY", ""),
         llm_model_id=openai_data.get("llm_model_id", "gpt-5-mini"),
         embedding_model_id=openai_data.get("embedding_model_id", "text-embedding-3-small"),
+    )
+
+    # Domain rules (classification today, split categories later) live in
+    # rules.yaml beside config.yaml — infra and content stay separate files.
+    rules_path = config_path.parent / _RULES_FILENAME
+    rules_data: dict = {}
+    if rules_path.is_file():
+        with open(rules_path, "r") as f:
+            rules_data = yaml.safe_load(f) or {}
+    classify_data = rules_data.get("classify") or {}
+    classify_config = ClassifyConfig(
+        rules={str(k): str(v or "") for k, v in (classify_data.get("rules") or {}).items()},
+        target_pages=str(classify_data.get("target_pages") or ""),
+        max_pages=int(classify_data.get("max_pages") or 0),
     )
 
     paddle_vl_data = data.get("paddle_vl", {})
@@ -307,6 +337,7 @@ def _load_config() -> IngestConfig:
         bedrock=bedrock_config,
         jina=jina_config,
         openai=openai_config,
+        classify=classify_config,
         paddle_vl=paddle_vl_config,
         s3=s3_config,
         artifacts=artifacts_config,
@@ -420,6 +451,7 @@ _CLIENT_RESETS = (
     ("ingestlib.foundations.ocr.paddle_vl", "reset_pipeline"),
     ("ingestlib.storage.blobs", "reset_blob_store"),
     ("ingestlib.storage.s3.client", "reset_s3_client"),
+    ("ingestlib.storage.sqlite.client", "reset_sqlite"),
     ("ingestlib.storage.pinecone.client", "reset_pinecone_client"),
     ("ingestlib.storage.qdrant.client", "reset_qdrant_client"),
     ("ingestlib.storage.pgvector.client", "reset_pgvector"),

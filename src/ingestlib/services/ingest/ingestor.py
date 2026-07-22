@@ -81,6 +81,9 @@ async def aingest(
 ) -> IngestResult:
     """Run a document through the full pipeline (async).
 
+    The classify stage honors rules.yaml's `classify:` preset (closed-set
+    rules + page settings) when one exists — see rules.example.yaml.
+
     path             — PDF/DOCX/PPTX to ingest
     store            — vector store connector; defaults to the one selected
                        by config.yaml's `vector_store` key

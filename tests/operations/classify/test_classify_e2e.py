@@ -1,4 +1,4 @@
-"""Real classify against Bedrock Nova. Opt-in via RUN_CLASSIFY_E2E=1."""
+"""Real classify against the configured LLM provider. Opt-in via RUN_CLASSIFY_E2E=1."""
 import os
 import re
 from pathlib import Path
@@ -12,7 +12,7 @@ _PDF = _TESTS_DIR / "data" / "pdf"
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_CLASSIFY_E2E") != "1",
-    reason="classify e2e is opt-in: set RUN_CLASSIFY_E2E=1 (needs Bedrock access)",
+    reason="classify e2e is opt-in: set RUN_CLASSIFY_E2E=1 (needs LLM-provider access)",
 )
 
 
@@ -64,8 +64,9 @@ def test_parse_result_input_needs_no_servers():
     assert r.pages_used == 1
 
 
-def test_empty_categories_dict_raises():
+def test_empty_categories_dict_forces_open_ended():
+    """{} bypasses any rules.yaml preset — the result is open-ended."""
     from ingestlib.operations.classify import classify
 
-    with pytest.raises(ValueError, match="non-empty"):
-        classify(f"{_PDF}/insurance-acord.pdf", categories={})
+    r = classify(f"{_PDF}/insurance-acord.pdf", categories={})
+    assert r.alternatives == [], "open-ended mode never has alternatives"

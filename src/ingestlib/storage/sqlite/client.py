@@ -90,6 +90,12 @@ END;
 """
 
 
+def reset_sqlite() -> None:
+    """Forget verified-schema state so the next call re-verifies (e.g. path change)."""
+    with _lock:
+        _ready.clear()
+
+
 def _connect(path: Path) -> sqlite3.Connection:
     # isolation_level=None → autocommit; the store issues BEGIN/COMMIT itself
     conn = sqlite3.connect(path, isolation_level=None)

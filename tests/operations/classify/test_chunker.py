@@ -1,5 +1,7 @@
-"""Chunking and page-extraction logic — pure, always run."""
+"""Chunking, page-selection, and page-extraction logic — pure, always run."""
 from pathlib import Path
+
+import pytest
 
 from ingestlib.operations.classify.chunker import (
     CHUNK_PAGES,
@@ -8,6 +10,8 @@ from ingestlib.operations.classify.chunker import (
     PageContent,
     cap_and_chunk,
     extract_pages,
+    parse_page_spec,
+    select_pages,
 )
 from ingestlib.operations.parse.models import PageResult, ParseResult
 
@@ -37,6 +41,49 @@ def test_hard_cap_at_100_pages():
     assert used == MAX_PAGES
     assert sum(len(c) for c in chunks) == MAX_PAGES
     assert len(chunks) == 5
+
+
+def test_parse_page_spec_mixed_ranges_and_singles():
+    assert parse_page_spec("1, 3, 5-7") == [1, 3, 5, 6, 7]
+
+
+def test_parse_page_spec_dedupes_and_sorts_overlaps():
+    assert parse_page_spec("5-7, 1, 6, 2-3") == [1, 2, 3, 5, 6, 7]
+
+
+@pytest.mark.parametrize("bad", ["abc", "0", "-2", "7-5", "1..3", ""])
+def test_parse_page_spec_rejects_malformed_specs(bad):
+    with pytest.raises(ValueError):
+        parse_page_spec(bad)
+
+
+def test_select_pages_picks_targets_in_document_order():
+    selected = select_pages(_pages(10), "8, 2, 4-5", None)
+    assert [p.text for p in selected] == ["page 1", "page 3", "page 4", "page 7"]
+
+
+def test_select_pages_drops_targets_past_the_end():
+    selected = select_pages(_pages(3), "1, 5-7", None)
+    assert [p.text for p in selected] == ["page 0"]
+
+
+def test_select_pages_raises_when_nothing_matches():
+    with pytest.raises(ValueError, match="selects no pages"):
+        select_pages(_pages(3), "5-7", None)
+
+
+def test_select_pages_max_pages_caps_after_selection():
+    selected = select_pages(_pages(10), "2, 4, 6, 8", 2)
+    assert [p.text for p in selected] == ["page 1", "page 3"]
+
+
+def test_select_pages_max_pages_alone():
+    assert len(select_pages(_pages(10), None, 5)) == 5
+
+
+def test_select_pages_no_settings_is_identity():
+    pages = _pages(4)
+    assert select_pages(pages, None, None) is pages
 
 
 def test_extract_pages_from_parse_result_prefers_markdown():

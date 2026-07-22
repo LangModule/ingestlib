@@ -1,8 +1,8 @@
-"""classify() / aclassify() — document-type classification via Nova structured output.
+"""classify() / aclassify() — document-type classification via LLM structured output.
 
 Independent of parse: accepts a ParseResult (enriched markdown + figure crops)
 or a raw file path (native text + embedded images, no OCR, no rendering).
-≤20 pages classify in one Nova call; larger documents map-reduce over 20-page
+≤20 pages classify in one LLM call; larger documents map-reduce over 20-page
 chunks (100-page cap).
 """
 import asyncio
@@ -11,13 +11,14 @@ from pathlib import Path
 
 from pydantic import BaseModel, Field
 
-from ingestlib.foundations.llm import Image as NovaImage
+from ingestlib.config import get_config
+from ingestlib.foundations.llm import Image as LLMImage
 from ingestlib.foundations.llm import achat_structured
 from ingestlib.operations.classify.chunker import (
-    CHUNK_PAGES,
     PageContent,
     cap_and_chunk,
     extract_pages,
+    select_pages,
 )
 from ingestlib.operations.classify.models import CategoryScore, ClassifyResult
 from ingestlib.operations.parse.models import ParseResult
@@ -31,7 +32,10 @@ logger = get_logger(__name__)
 _SINGLE_CALL_IMAGES = 4
 _COMBINE_CALL_IMAGES = 2
 
-_NOVA_CONCURRENCY = 8
+_LLM_CONCURRENCY = 8
+
+# The classification-rules ceiling — past this, per-rule discrimination degrades.
+MAX_RULES = 20
 
 _SYSTEM_PROMPT = (
     "You are a document classification engine. The category names the document "
@@ -64,17 +68,16 @@ class _ConstrainedVerdict(BaseModel):
     )
 
 
-def _format_pages(pages: list[PageContent], start_num: int = 1) -> str:
+def _format_pages(pages: list[PageContent]) -> str:
     placeholder = "(no extractable text — see attached images if any)"
     blocks = [
-        f"--- page {i} ---\n{p.text.strip() or placeholder}"
-        for i, p in enumerate(pages, start=start_num)
+        f"--- page {p.page_num} ---\n{p.text.strip() or placeholder}" for p in pages
     ]
     return "\n\n".join(blocks)
 
 
-def _page_images(pages: list[PageContent], limit: int) -> list[NovaImage]:
-    images = [NovaImage(data, "png") for p in pages for data in p.images]
+def _page_images(pages: list[PageContent], limit: int) -> list[LLMImage]:
+    images = [LLMImage(data, "png") for p in pages for data in p.images]
     return images[:limit]
 
 
@@ -92,16 +95,34 @@ def _categories_block(categories: dict[str, str], *, alternatives: bool = True) 
     return block
 
 
-def _validate_categories(categories: dict[str, str] | None) -> None:
-    if categories is not None and not categories:
-        raise ValueError("categories must be a non-empty dict or None")
+def _resolve_settings(
+    categories: dict[str, str] | None,
+    target_pages: str | None,
+    max_pages: int | None,
+) -> tuple[dict[str, str] | None, str | None, int | None]:
+    """Fill unset arguments from rules.yaml's `classify:` preset.
+
+    None means "use the preset"; an explicit {} forces open-ended even when a
+    preset exists. Explicit arguments always win over the preset."""
+    preset = get_config().classify
+    if categories is None:
+        categories = dict(preset.rules) or None
+    elif not categories:
+        categories = None
+    if categories is not None and len(categories) > MAX_RULES:
+        raise ValueError(f"{len(categories)} classification rules — the limit is {MAX_RULES}")
+    if target_pages is None:
+        target_pages = preset.target_pages or None
+    if max_pages is None:
+        max_pages = preset.max_pages or None
+    return categories, target_pages, max_pages
 
 
 async def _classify_single(
     pages: list[PageContent],
     categories: dict[str, str] | None,
 ) -> _Verdict | _ConstrainedVerdict:
-    """One Nova call over the whole (capped) document."""
+    """One LLM call over the whole (capped) document."""
     body = _format_pages(pages)
     images = _page_images(pages, _SINGLE_CALL_IMAGES)
     if categories is None:
@@ -116,7 +137,6 @@ async def _classify_single(
 async def _classify_chunk(
     chunk: list[PageContent],
     chunk_idx: int,
-    start_page: int,
     categories: dict[str, str] | None,
     semaphore: asyncio.Semaphore,
 ) -> _Verdict:
@@ -125,8 +145,8 @@ async def _classify_chunk(
         f"\n\n{_categories_block(categories, alternatives=False)}" if categories else ""
     )
     prompt = (
-        f"This is a consecutive excerpt (pages {start_page}+) of a larger document. "
-        f"Classify the DOCUMENT it comes from.{constraint}\n\n{_format_pages(chunk, start_page)}"
+        f"This is an excerpt (from page {chunk[0].page_num}) of a larger document. "
+        f"Classify the DOCUMENT it comes from.{constraint}\n\n{_format_pages(chunk)}"
     )
     async with semaphore:
         verdict = await achat_structured(prompt, _Verdict, system=_SYSTEM_PROMPT)
@@ -189,32 +209,41 @@ def _to_result(
 async def aclassify(
     source: ParseResult | Path | str,
     categories: dict[str, str] | None = None,
+    *,
+    target_pages: str | None = None,
+    max_pages: int | None = None,
 ) -> ClassifyResult:
     """Classify a document's type (async).
 
-    source     — a ParseResult from parse(), or a PDF/DOCX/PPTX path (no OCR run)
-    categories — optional {snake_case_label: description}; when given, the result
-                 is one of these labels or "uncategorized"
+    source       — a ParseResult from parse(), or a PDF/DOCX/PPTX path (no OCR run)
+    categories   — optional {snake_case_label: description}, max 20; when given,
+                   the result is one of these labels or "uncategorized". None
+                   uses rules.yaml's `classify:` preset; {} forces open-ended.
+    target_pages — optional 1-based page selection like "1,3,5-7"
+    max_pages    — optional cap applied after selection (the 100-page hard cap
+                   always applies)
     """
-    _validate_categories(categories)
+    categories, target_pages, max_pages = _resolve_settings(
+        categories, target_pages, max_pages
+    )
     start = time.perf_counter()
     # loading is blocking work (pypdfium2, LibreOffice subprocess) — keep it
     # off the event loop
     pages = await asyncio.to_thread(extract_pages, source)
+    pages = select_pages(pages, target_pages, max_pages)
     chunks, pages_used = cap_and_chunk(pages)
     logger.info(
-        "classify start: %d page(s) used, %d chunk(s), categories=%s",
-        pages_used, len(chunks), sorted(categories) if categories else "open-ended",
+        "classify start: %d page(s) used (target=%s max=%s), %d chunk(s), categories=%s",
+        pages_used, target_pages or "all", max_pages or "-", len(chunks),
+        sorted(categories) if categories else "open-ended",
     )
 
     if len(chunks) == 1:
         verdict = await _classify_single(chunks[0], categories)
     else:
-        semaphore = asyncio.Semaphore(_NOVA_CONCURRENCY)
+        semaphore = asyncio.Semaphore(_LLM_CONCURRENCY)
         tasks = [
-            asyncio.ensure_future(
-                _classify_chunk(c, i, 1 + i * CHUNK_PAGES, categories, semaphore)
-            )
+            asyncio.ensure_future(_classify_chunk(c, i, categories, semaphore))
             for i, c in enumerate(chunks)
         ]
         try:
@@ -236,6 +265,11 @@ async def aclassify(
 def classify(
     source: ParseResult | Path | str,
     categories: dict[str, str] | None = None,
+    *,
+    target_pages: str | None = None,
+    max_pages: int | None = None,
 ) -> ClassifyResult:
     """Classify a document's type. Sync wrapper — use aclassify() inside an event loop."""
-    return asyncio.run(aclassify(source, categories))
+    return asyncio.run(aclassify(
+        source, categories, target_pages=target_pages, max_pages=max_pages
+    ))

@@ -1,0 +1,14 @@
+# ingestlib content rules — copy to rules.yaml beside your config.yaml.
+#
+# Infra lives in config.yaml; what your documents MEAN lives here. The file
+# is optional: without it, classification is open-ended over all pages.
+# Per-call arguments always override this preset.
+
+# Classification preset — used by classify() and the ingest pipeline
+# whenever no explicit arguments are given.
+classify:
+  max_pages: 5                 # cap on pages read (after target_pages); omit for no cap
+  target_pages: "1,3,5-7"      # 1-based pages/ranges to read; omit for all pages
+  rules:                       # up to 20 — result is one of these or "uncategorized"
+    invoice: "Itemized charges, tax info, and payment terms"
+    sec_filing: "10-K/10-Q style regulatory filings"

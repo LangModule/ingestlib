@@ -91,6 +91,47 @@ def test_reranker_and_vector_store_keys_are_read(scratch_config):
     assert cfg.reranker == "aws"
 
 
+def test_classify_preset_defaults_to_open_ended_without_rules_yaml(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    cfg = get_config()
+    assert cfg.classify.rules == {}
+    assert cfg.classify.target_pages == ""
+    assert cfg.classify.max_pages == 0
+
+
+def test_classify_preset_is_read_from_rules_yaml(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    (scratch_config / "rules.yaml").write_text(
+        "classify:\n"
+        "  max_pages: 5\n"
+        '  target_pages: "1,3,5-7"\n'
+        "  rules:\n"
+        "    invoice: Itemized charges and payment terms\n"
+        "    sec_filing:\n"           # a rule with no description stays usable
+    )
+    cfg = get_config()
+    assert cfg.classify.max_pages == 5
+    assert cfg.classify.target_pages == "1,3,5-7"
+    assert cfg.classify.rules == {
+        "invoice": "Itemized charges and payment terms",
+        "sec_filing": "",
+    }
+
+
+def test_classify_section_in_config_yaml_is_not_read(scratch_config):
+    """Rules have exactly one home — a classify block in config.yaml is inert."""
+    _write(scratch_config, _AWS_ONLY + "classify:\n  rules:\n    invoice: x\n")
+    assert get_config().classify.rules == {}
+
+
+def test_reset_config_picks_up_rules_yaml_edits(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    assert get_config().classify.rules == {}
+    (scratch_config / "rules.yaml").write_text("classify:\n  rules:\n    invoice: x\n")
+    reset_config()
+    assert get_config().classify.rules == {"invoice": "x"}
+
+
 def test_provider_keys_are_read(scratch_config):
     _write(
         scratch_config,
@@ -146,6 +187,16 @@ def test_reset_config_clears_imported_client_singletons(scratch_config, monkeypa
     monkeypatch.setattr(s3_client, "_s3_client", object())
     reset_config()
     assert s3_client._s3_client is None, "reset must clear live client singletons"
+
+
+def test_reset_config_clears_sqlite_schema_state(scratch_config, monkeypatch):
+    from ingestlib.storage.sqlite import client as sqlite_client
+
+    _write(scratch_config, _AWS_ONLY)
+    get_config()
+    monkeypatch.setitem(sqlite_client._ready, Path("/tmp/x.db"), 1024)
+    reset_config()
+    assert sqlite_client._ready == {}, "reset must drop verified-schema state"
 
 
 def test_reset_config_clears_openai_model_caches(scratch_config, monkeypatch):
