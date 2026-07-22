@@ -20,8 +20,8 @@ class ClassifyResult(BaseModel):
 
     category      — snake_case label; one of the caller's categories (or
                     "uncategorized") when categories were supplied, otherwise
-                    an open-ended label Nova generated from the content
-    confidence    — Nova's 0-1 confidence in the verdict
+                    an open-ended label the model generated from the content
+    confidence    — the model's 0-1 confidence in the verdict
     reasoning     — one-to-two sentence justification
     alternatives  — ranked runner-up categories; empty in open-ended mode
     pages_used    — how many pages were actually read (caps at 100)

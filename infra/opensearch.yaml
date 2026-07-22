@@ -15,7 +15,8 @@
 #     --query "Stacks[0].Outputs[?OutputKey=='DomainEndpoint'].OutputValue" \
 #     --output text --profile my-name --region us-east-1
 #
-# Remove (billing ends; the vector index is rebuildable from S3 via backfill):
+# Remove (billing ends; the vector index is rebuildable from stored artifacts
+# via backfill):
 #   aws cloudformation delete-stack \
 #     --stack-name ingestlib-opensearch \
 #     --profile my-name --region us-east-1

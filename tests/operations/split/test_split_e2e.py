@@ -1,4 +1,4 @@
-"""Real split against Bedrock Nova. Opt-in via RUN_SPLIT_E2E=1."""
+"""Real split against the configured LLM provider. Opt-in via RUN_SPLIT_E2E=1."""
 import os
 from pathlib import Path
 
@@ -10,7 +10,7 @@ while _TESTS_DIR.name != "tests":
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_SPLIT_E2E") != "1",
-    reason="split e2e is opt-in: set RUN_SPLIT_E2E=1 (needs Bedrock access)",
+    reason="split e2e is opt-in: set RUN_SPLIT_E2E=1 (needs LLM-provider access)",
 )
 
 

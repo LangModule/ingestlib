@@ -76,7 +76,7 @@ class BoundingBox:
     def crop(self, image_bytes: bytes) -> bytes:
         """Return a PNG-encoded crop of image_bytes bounded by this box.
 
-        Used to extract figure/chart images and to hand region patches to Nova.
+        Used to extract figure/chart images and to hand region patches to the LLM.
         """
         img = Image.open(BytesIO(image_bytes))
         cropped = img.crop((int(self.x), int(self.y), int(self.x2), int(self.y2)))
@@ -113,7 +113,7 @@ class LayoutResult:
     """Full-page OCR output — regions in reading order plus assembled text/markdown.
 
     Consumed by parse/pipeline.py to build a PageResult (which adds page_num,
-    Nova enrichment, and final markdown assembly).
+    LLM enrichment, and final markdown assembly).
 
     page_width/page_height give bboxes a coordinate system — needed downstream when
     the source image_bytes has been discarded but bboxes are retained in ParseResult.

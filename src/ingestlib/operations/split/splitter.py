@@ -18,7 +18,7 @@ from ingestlib.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-_NOVA_CONCURRENCY = 8
+_LLM_CONCURRENCY = 8
 
 DEFAULT_MAX_CHUNK_TOKENS = 768
 
@@ -122,7 +122,7 @@ async def asplit(
     if not pages:
         return SplitResult(sections=[], vocabulary=[], pages_used=0)
 
-    semaphore = asyncio.Semaphore(_NOVA_CONCURRENCY)
+    semaphore = asyncio.Semaphore(_LLM_CONCURRENCY)
 
     vocabulary = await propose_vocabulary(pages)
     labels = await label_pages(pages, vocabulary, semaphore)

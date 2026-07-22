@@ -1,7 +1,7 @@
 """PineconeStore — the VectorStore contract implemented on Pinecone serverless.
 
-Hybrid by default: every chunk lands in the dense index (Nova embedding,
-passed in by the caller) AND the sparse index (hosted lexical embedding,
+Hybrid by default: every chunk lands in the dense index (the configured text
+embedding, passed in by the caller) AND the sparse index (hosted lexical embedding,
 computed here from chunk text). Queries that carry the original question text
 search both and merge — dense hits first, sparse-only hits appended — with
 final ordering left to the caller's reranker, which sidesteps the fact that

@@ -1,4 +1,5 @@
-"""Full connector round-trip against a real OpenSearch server + real Nova embeddings.
+"""Full connector round-trip against a real OpenSearch server + real
+embeddings from the configured provider.
 
 Opt-in via RUN_OPENSEARCH_E2E=1 — needs a reachable server at OPENSEARCH_URL
 (an Amazon OpenSearch domain signed with the aws profile, or a local docker
@@ -13,7 +14,7 @@ import pytest
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_OPENSEARCH_E2E") != "1",
     reason="opensearch e2e is opt-in: set RUN_OPENSEARCH_E2E=1 "
-           "(needs an OpenSearch server + Bedrock)",
+           "(needs an OpenSearch server + embedding-provider access)",
 )
 
 _DOC_ID = "e2e-test-opensearch-doc"

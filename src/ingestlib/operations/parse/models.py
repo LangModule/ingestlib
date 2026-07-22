@@ -22,7 +22,7 @@ class FigureImage(BaseModel):
     region_type  — "figure" | "chart"
     image_bytes  — PNG crop of exactly this region from the rendered page
     caption      — nearest caption region's text, "" when none was found
-    description  — Nova's interpretation: a data table for charts, a structured
+    description  — the LLM's interpretation: a data table for charts, a structured
                    description for figures/diagrams
     """
 
@@ -46,7 +46,7 @@ class PageResult(BaseModel):
     markdown     — final markdown (tables as HTML, formulas as LaTeX, charts as
                    data tables, figures as image references + descriptions)
     regions      — layout regions in reading order, with bboxes and region_ids;
-                   chart/figure content is Nova-enriched
+                   chart/figure content is LLM-enriched
     figures      — extracted visual regions (chart/figure) as PNG crops with
                    captions and descriptions
     native_text  — original text-layer content from the source document

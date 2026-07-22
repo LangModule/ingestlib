@@ -29,6 +29,7 @@ from ingestlib.foundations.llm.bedrock.embedding import (
     ImageDetailLevel,
     ImageFormat,
 )
+# Resets only the bedrock clients; config.reset_config() clears every provider.
 from ingestlib.foundations.llm.bedrock.factory import reset_clients
 from ingestlib.foundations.llm.bedrock.nova import (
     DEFAULT_MAX_TOKENS,

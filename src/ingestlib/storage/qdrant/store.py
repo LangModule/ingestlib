@@ -1,7 +1,8 @@
 """QdrantStore — the VectorStore contract implemented on a Qdrant collection.
 
-Hybrid by default: every point carries a named "dense" vector (Nova embedding,
-passed in by the caller) and a named "sparse" vector (BM25 term frequencies
+Hybrid by default: every point carries a named "dense" vector (the configured
+text embedding, passed in by the caller) and a named "sparse" vector (BM25
+term frequencies
 computed locally; the server's IDF modifier supplies document frequencies, so
 there is no corpus state to manage). Queries that carry the original question
 text run both signals in ONE call — the server fuses them with Reciprocal Rank

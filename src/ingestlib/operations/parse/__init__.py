@@ -3,8 +3,8 @@
     from ingestlib.operations.parse import parse
     result = parse("report.pdf")
 
-Pipeline per page: PaddleOCR-VL (layout + text + tables + formulas) → Nova
-enrichment (charts → data tables, figures → descriptions + PNG crops) → Nova
+Pipeline per page: PaddleOCR-VL (layout + text + tables + formulas) → LLM
+enrichment (charts → data tables, figures → descriptions + PNG crops) → LLM
 review (per-region corrections) → markdown assembly.
 """
 from ingestlib.operations.parse.detector import (

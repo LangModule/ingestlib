@@ -2,8 +2,8 @@
 
 No RUN_*_E2E gate: SQLite has no server, so in-process IS the real thing
 (unlike Qdrant's in-memory mode, which is a reimplementation). Embeddings are
-synthetic 8-dim vectors — the store contract takes vectors, so no Bedrock is
-needed and the whole suite runs in `make test`.
+synthetic 8-dim vectors — the store contract takes vectors, so no embedding
+provider is needed and the whole suite runs in `make test`.
 """
 import dataclasses
 

@@ -2,8 +2,8 @@
 
 Opt-in via RUN_MONGODB_E2E=1 — needs a reachable deployment at MONGODB_URL
 (Atlas any tier, docker run mongodb/mongodb-atlas-local, or self-managed
-8.2+ with mongot). Embeddings are synthetic 8-dim vectors — no Bedrock
-needed; the only requirement is the server. Uses a dedicated test collection
+8.2+ with mongot). Embeddings are synthetic 8-dim vectors — no embedding
+provider needed; the only requirement is the server. Uses a dedicated test collection
 (dropped afterwards) so the user's real collection keeps its production
 dimension. Search indexes are eventually consistent, so writes settle behind
 a short wait before querying.

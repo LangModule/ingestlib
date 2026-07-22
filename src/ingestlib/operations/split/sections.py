@@ -46,7 +46,7 @@ class _PageLabel(BaseModel):
 
 
 async def propose_vocabulary(pages: list[SplitPage]) -> list[_VocabSection]:
-    """Pass 1 — one Nova call over the whole (capped) document."""
+    """Pass 1 — one LLM call over the whole (capped) document."""
     body = "\n\n".join(
         f"--- page {p.page_num} ---\n{p.text.strip()[:_VOCAB_PAGE_LIMIT]}" for p in pages
     )

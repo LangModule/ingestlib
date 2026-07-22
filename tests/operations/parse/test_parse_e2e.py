@@ -1,7 +1,8 @@
-"""End-to-end parse smoke tests against the real stack (VL server + Bedrock Nova).
+"""End-to-end parse smoke tests against the real stack (VL server + the
+configured LLM provider).
 
 Opt-in via RUN_PARSE_E2E=1 — a full document parse costs ~30-60s and a few
-tenths of a cent in Nova calls.
+tenths of a cent in LLM calls.
 """
 import os
 from pathlib import Path
@@ -15,7 +16,7 @@ _DATA_DIR = _TESTS_DIR / "data"
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_PARSE_E2E") != "1",
-    reason="parse e2e is opt-in: set RUN_PARSE_E2E=1 (needs VL server + Bedrock access)",
+    reason="parse e2e is opt-in: set RUN_PARSE_E2E=1 (needs VL server + LLM-provider access)",
 )
 
 
@@ -48,7 +49,7 @@ def test_charts_became_data_tables(result):
         r for p in result.pages for r in p.regions if r.region_type == "chart"
     ]
     assert chart_regions, "the earnings deck contains charts"
-    # Nova-enriched chart content is a markdown table (or a description for diagrams)
+    # LLM-enriched chart content is a markdown table (or a description for diagrams)
     assert any("|" in r.content for r in chart_regions)
 
 

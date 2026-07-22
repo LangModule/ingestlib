@@ -1,7 +1,8 @@
 """Full product round-trip: ingest a real document, retrieve with citations.
 
-Opt-in via RUN_SERVICES_E2E=1 — needs the ENTIRE stack: VL server, Bedrock,
-S3, the configured vector store, and Jina.
+Opt-in via RUN_SERVICES_E2E=1 — needs the ENTIRE configured stack: the VL
+server, the LLM/embedding provider, the artifact store, the vector store,
+and the reranker.
 """
 import os
 import time

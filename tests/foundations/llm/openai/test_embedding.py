@@ -36,20 +36,23 @@ def test_semantic_related_closer_than_unrelated(oai, cos_sim):
 
 
 def test_purpose_is_a_documented_noop():
-    """Symmetric embeddings: INDEX and RETRIEVAL of the same text are identical."""
+    """Symmetric embeddings: INDEX and RETRIEVAL of the same text are the same
+    vector. Separate API calls carry ~1e-4 float jitter, so the tolerance
+    tests "same embedding", not bit-identity."""
     from ingestlib.foundations.llm.openai import embed_text
 
     v_index = embed_text(_SHORT, purpose="GENERIC_INDEX")
     v_retrieval = embed_text(_SHORT, purpose="GENERIC_RETRIEVAL")
-    assert np.allclose(np.asarray(v_index), np.asarray(v_retrieval), atol=1e-6)
+    assert np.allclose(np.asarray(v_index), np.asarray(v_retrieval), atol=1e-3)
 
 
 async def test_aembed_text_matches_sync(oai):
+    # separate API calls — allow the same ~1e-4 float jitter as above
     from ingestlib.foundations.llm.openai import aembed_text
 
     sync_vec = oai.embed(_SHORT)
     async_vec = np.asarray(await aembed_text(_SHORT), dtype=float)
-    assert np.allclose(sync_vec, async_vec, atol=1e-6)
+    assert np.allclose(sync_vec, async_vec, atol=1e-3)
 
 
 def test_embedder_cache_and_reset():

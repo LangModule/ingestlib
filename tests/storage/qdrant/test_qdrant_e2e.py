@@ -1,4 +1,5 @@
-"""Full connector round-trip against a real Qdrant server + real Nova embeddings.
+"""Full connector round-trip against a real Qdrant server + real embeddings
+from the configured provider.
 
 Opt-in via RUN_QDRANT_E2E=1 — needs a reachable server at QDRANT_URL
 (e.g. docker run -p 6333:6333 qdrant/qdrant, or Qdrant Cloud with an API key).
@@ -11,7 +12,8 @@ import pytest
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_QDRANT_E2E") != "1",
-    reason="qdrant e2e is opt-in: set RUN_QDRANT_E2E=1 (needs a Qdrant server + Bedrock)",
+    reason="qdrant e2e is opt-in: set RUN_QDRANT_E2E=1 "
+           "(needs a Qdrant server + embedding-provider access)",
 )
 
 _DOC_ID = "e2e-test-qdrant-doc"

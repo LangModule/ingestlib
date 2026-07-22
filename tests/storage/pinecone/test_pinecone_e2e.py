@@ -1,4 +1,5 @@
-"""Full connector round-trip against real Pinecone + real Nova embeddings.
+"""Full connector round-trip against real Pinecone + real embeddings from
+the configured provider.
 
 Opt-in via RUN_PINECONE_E2E=1 — creates the real indexes (dense + sparse) on
 first ever run, upserts a sentinel document into both, queries dense, sparse,
@@ -11,7 +12,8 @@ import pytest
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_PINECONE_E2E") != "1",
-    reason="pinecone e2e is opt-in: set RUN_PINECONE_E2E=1 (needs PINECONE_API_KEY + Bedrock)",
+    reason="pinecone e2e is opt-in: set RUN_PINECONE_E2E=1 "
+           "(needs PINECONE_API_KEY + embedding-provider access)",
 )
 
 _DOC_ID = "e2e-test-pinecone-doc"

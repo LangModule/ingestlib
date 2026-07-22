@@ -1,6 +1,6 @@
-"""Nova page review — surgical per-region corrections, not a page rewrite.
+"""LLM page review — surgical per-region corrections, not a page rewrite.
 
-Nova sees the page image, the native text layer, and every region's current
+The model sees the page image, the native text layer, and every region's current
 content, and returns corrections keyed by region_id. Corrections apply to
 individual regions so the markdown ↔ bbox mapping survives review untouched.
 """
@@ -10,7 +10,7 @@ import json
 import re
 import time
 
-from ingestlib.foundations.llm import Image as NovaImage
+from ingestlib.foundations.llm import Image as LLMImage
 from ingestlib.foundations.llm import achat
 from ingestlib.foundations.ocr.models import Region
 from ingestlib.utils.logger import get_logger
@@ -18,7 +18,7 @@ from ingestlib.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Regions Nova is asked to check. Visual regions are excluded — the enricher
+# Regions the reviewer is asked to check. Visual regions are excluded — the enricher
 # already produced their content from the same page with the same model.
 _REVIEWABLE_TYPES = (
     "title", "text", "table", "formula", "reference",
@@ -57,7 +57,7 @@ def _strip_fence(text: str) -> str:
 def _format_blocks(regions: list[Region]) -> tuple[str, set[int]]:
     """Prompt listing of reviewable blocks + the region_ids that were truncated.
 
-    Truncated regions must not accept corrections — Nova only saw a prefix, so
+    Truncated regions must not accept corrections — the model only saw a prefix, so
     applying its "corrected" block would silently cut the stored content.
     """
     lines: list[str] = []
@@ -97,10 +97,10 @@ async def review_page(
     native_text: str,
     semaphore: asyncio.Semaphore,
 ) -> list[Region]:
-    """Ask Nova to verify the page's extracted content against the page image.
+    """Ask the LLM to verify the page's extracted content against the page image.
 
     Returns the regions list with corrections applied. Pages with nothing
-    reviewable come back unchanged without a Nova call.
+    reviewable come back unchanged without an LLM call.
     """
     reviewable = [r for r in regions if r.region_type in _REVIEWABLE_TYPES]
     blocks, truncated = _format_blocks(reviewable)
@@ -119,14 +119,14 @@ async def review_page(
         t0 = time.perf_counter()
         response = await achat(
             user_prompt,
-            images=[NovaImage(data=page_image, format="png")],
+            images=[LLMImage(data=page_image, format="png")],
             system=_SYSTEM_PROMPT,
         )
     corrections = _parse_corrections(response)
     dropped = truncated & corrections.keys()
     if dropped:
         logger.warning(
-            "dropping correction(s) for truncated region(s) %s — Nova only saw "
+            "dropping correction(s) for truncated region(s) %s — the model only saw "
             "a %d-char prefix, applying would cut the stored content",
             sorted(dropped), _REGION_CONTENT_LIMIT,
         )

@@ -1,15 +1,15 @@
-"""Nova vision enrichment of visual regions — charts become data tables,
+"""Vision-LLM enrichment of visual regions — charts become data tables,
 figures/diagrams become structured descriptions, and every visual region is
 extracted as a PNG crop with its nearest caption attached.
 
-The 0.9B OCR model detects charts perfectly but misreads their values; Nova
+The 0.9B OCR model detects charts perfectly but misreads their values; the vision LLM
 re-reads each crop and its output replaces the region content.
 """
 import asyncio
 import dataclasses
 import time
 
-from ingestlib.foundations.llm import Image as NovaImage
+from ingestlib.foundations.llm import Image as LLMImage
 from ingestlib.foundations.llm import achat
 from ingestlib.foundations.ocr.models import Region
 from ingestlib.operations.parse.models import FigureImage
@@ -18,7 +18,7 @@ from ingestlib.utils.logger import get_logger
 
 logger = get_logger(__name__)
 
-# Region types that get cropped and sent to Nova.
+# Region types that get cropped and sent to the vision LLM.
 _VISUAL_TYPES = ("chart", "figure")
 
 _CAPTION_TYPES = ("figure_caption", "table_caption")
@@ -78,11 +78,11 @@ async def _enrich_one(
     caption: str,
     semaphore: asyncio.Semaphore,
 ) -> tuple[Region, FigureImage]:
-    """Crop the region, send it to Nova, return (updated region, FigureImage)."""
+    """Crop the region, send it to the LLM, return (updated region, FigureImage)."""
     crop = region.bbox.crop(page_image)
     async with semaphore:
         t0 = time.perf_counter()
-        description = (await achat(_PROMPT, images=[NovaImage(data=crop, format="png")])).strip()
+        description = (await achat(_PROMPT, images=[LLMImage(data=crop, format="png")])).strip()
         logger.info(
             "enriched region %d [%s]: %.1fs, %d chars",
             region.region_id, region.region_type, time.perf_counter() - t0, len(description),
@@ -104,10 +104,10 @@ async def enrich_page(
     page_height: int,
     semaphore: asyncio.Semaphore,
 ) -> tuple[list[Region], list[FigureImage]]:
-    """Enrich every chart/figure region on a page via Nova, in parallel.
+    """Enrich every chart/figure region on a page via the vision LLM, in parallel.
 
     Returns (regions with enriched content, extracted FigureImages). Pages with
-    no visual regions return unchanged regions and an empty list — no Nova calls.
+    no visual regions return unchanged regions and an empty list — no LLM calls.
     """
     visuals = [r for r in regions if r.region_type in _VISUAL_TYPES]
     if not visuals:

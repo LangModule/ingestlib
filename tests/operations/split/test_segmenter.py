@@ -100,8 +100,8 @@ def _run_enforce_budget(groups, blocks, max_tokens):
 
 
 def test_budget_within_limit_makes_no_llm_call():
-    # Under-budget groups pass through untouched — if this tried to call Nova
-    # it would blow up on missing config, which is exactly the point.
+    # Under-budget groups pass through untouched — an LLM call here would be
+    # a real network call, which is exactly what must not happen.
     blocks = [_block(chars=800), _block(chars=800)]  # 200 tok each
     out = _run_enforce_budget([([0, 1], "fine")], blocks, max_tokens=768)
     assert out == [([0, 1], "fine")]

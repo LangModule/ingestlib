@@ -182,7 +182,7 @@ async def main() -> None:
     parser.add_argument("--skip-ingest", action="store_true",
                         help="skip the corpus-completeness check (no VL server needed)")
     parser.add_argument("--backfill", action="store_true",
-                        help="re-embed S3 split artifacts into the selected store — for a "
+                        help="re-embed stored split artifacts into the selected store — for a "
                              "store the corpus was never upserted into (no VL server needed)")
     args = parser.parse_args()
 
@@ -205,7 +205,7 @@ async def main() -> None:
         print(f"ensuring corpus is ingested into {args.store} ...")
         await ensure_ingested(sorted(set(pdfs)), store_cls())
     if args.backfill:
-        print(f"backfilling {args.store} from S3 split artifacts ...")
+        print(f"backfilling {args.store} from stored split artifacts ...")
         await backfill_store(store_cls())
 
     results = []

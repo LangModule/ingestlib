@@ -2,8 +2,8 @@
 
 Opt-in via RUN_MILVUS_E2E=1 — needs a reachable server at MILVUS_URL
 (e.g. the standalone docker container, or Zilliz Cloud with MILVUS_TOKEN).
-Embeddings are synthetic 8-dim vectors — no Bedrock needed; the only
-requirement is the server. Uses a dedicated test collection (dropped
+Embeddings are synthetic 8-dim vectors — no embedding provider needed; the
+only requirement is the server. Uses a dedicated test collection (dropped
 afterwards) so the user's real collection keeps its production dimension.
 Strong consistency on the collection means no sync sleeps.
 """

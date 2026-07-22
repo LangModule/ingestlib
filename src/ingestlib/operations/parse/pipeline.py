@@ -1,9 +1,9 @@
 """parse() / aparse() orchestrator — one mode, the best output we can produce.
 
-Per page: PaddleOCR-VL (layout + recognition) → Nova enrichment of charts/figures
-→ Nova review (per-region corrections) → markdown assembly.
+Per page: PaddleOCR-VL (layout + recognition) → LLM enrichment of charts/figures
+→ LLM review (per-region corrections) → markdown assembly.
 
-The OCR stage is GPU-bound and runs one page at a time; Nova stages run
+The OCR stage is GPU-bound and runs one page at a time; LLM stages run
 concurrently behind it, so cloud latency adds almost nothing to wall-clock.
 """
 import asyncio
@@ -32,8 +32,8 @@ logger = get_logger(__name__)
 # saturated without stacking blocked threads.
 _OCR_CONCURRENCY = 1
 
-# Concurrent Nova calls across all pages (enrichment + review share the pool).
-_NOVA_CONCURRENCY = 8
+# Concurrent LLM calls across all pages (enrichment + review share the pool).
+_LLM_CONCURRENCY = 8
 
 
 def _load(
@@ -55,7 +55,7 @@ async def _process_page(
     page_num: int,
     dpi: int,
     ocr_semaphore: asyncio.Semaphore,
-    nova_semaphore: asyncio.Semaphore,
+    llm_semaphore: asyncio.Semaphore,
 ) -> PageResult:
     """One page through the full pipeline: OCR → enrich → review → assemble."""
     if lp.image_bytes is None:
@@ -80,9 +80,9 @@ async def _process_page(
         )
 
     regions, figures = await enrich_page(
-        layout.regions, lp.image_bytes, layout.page_height, nova_semaphore
+        layout.regions, lp.image_bytes, layout.page_height, llm_semaphore
     )
-    regions = await review_page(regions, lp.image_bytes, lp.native_text, nova_semaphore)
+    regions = await review_page(regions, lp.image_bytes, lp.native_text, llm_semaphore)
 
     return PageResult(
         page_num=page_num,
@@ -118,11 +118,11 @@ async def aparse(path: Path | str, *, dpi: int = 200) -> ParseResult:
     )
 
     ocr_semaphore = asyncio.Semaphore(_OCR_CONCURRENCY)
-    nova_semaphore = asyncio.Semaphore(_NOVA_CONCURRENCY)
+    llm_semaphore = asyncio.Semaphore(_LLM_CONCURRENCY)
     tasks = [
         asyncio.ensure_future(_process_page(
             lp, page_num=i, dpi=dpi,
-            ocr_semaphore=ocr_semaphore, nova_semaphore=nova_semaphore,
+            ocr_semaphore=ocr_semaphore, llm_semaphore=llm_semaphore,
         ))
         for i, lp in enumerate(loaded_pages, start=1)
     ]
@@ -130,7 +130,7 @@ async def aparse(path: Path | str, *, dpi: int = 200) -> ParseResult:
         pages = list(await asyncio.gather(*tasks))
     except BaseException:
         # one failed page must not leave siblings running as orphans, holding
-        # the OCR semaphore and spending Nova calls
+        # the OCR semaphore and spending LLM calls
         for task in tasks:
             task.cancel()
         raise

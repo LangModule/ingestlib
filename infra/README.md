@@ -32,12 +32,12 @@ itself never needs these; attach them only to run the stack commands.
 ## opensearch.yaml
 
 CloudFormation template for the cheapest k-NN-capable OpenSearch domain,
-used to run the planned OpenSearch connector against a real managed domain.
+used to run the OpenSearch connector against a real managed domain.
 One r8g.medium.search data node, 1-AZ, no standby, 10 GiB gp3, public
 endpoint with fine-grained access control mapped to one IAM user. Roughly
 $0.10 per hour while it exists.
 
 There is no stop/start for OpenSearch domains, so delete the stack whenever
-work pauses; S3 is the source of truth, and backfill rebuilds the index in
-the fresh domain. Deploy, endpoint, and delete commands are in the template
+work pauses; the artifact store is the source of truth, and backfill rebuilds
+the index in the fresh domain. Deploy, endpoint, and delete commands are in the template
 header.

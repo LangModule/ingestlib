@@ -1,4 +1,5 @@
-"""Full connector round-trip against a real Weaviate server + real Nova embeddings.
+"""Full connector round-trip against a real Weaviate server + real
+embeddings from the configured provider.
 
 Opt-in via RUN_WEAVIATE_E2E=1 — needs a reachable server at WEAVIATE_URL
 (e.g. docker with ports 8080 and 50051 published, or Weaviate Cloud).
@@ -11,7 +12,8 @@ import pytest
 
 pytestmark = pytest.mark.skipif(
     os.environ.get("RUN_WEAVIATE_E2E") != "1",
-    reason="weaviate e2e is opt-in: set RUN_WEAVIATE_E2E=1 (needs a Weaviate server + Bedrock)",
+    reason="weaviate e2e is opt-in: set RUN_WEAVIATE_E2E=1 "
+           "(needs a Weaviate server + embedding-provider access)",
 )
 
 _DOC_ID = "e2e-test-weaviate-doc"

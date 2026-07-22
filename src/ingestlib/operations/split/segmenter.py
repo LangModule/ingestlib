@@ -1,21 +1,21 @@
 """Pass 3 — natural chunk boundaries within each section.
 
-Nova proposes topical groupings over a section's blocks; deterministic code
+The LLM proposes topical groupings over a section's blocks; deterministic code
 enforces the guarantees the LLM can't be trusted with:
 
   - chunks are built from whole blocks → tables/figures never split (atomic
     by construction; captions were already folded into their visual)
   - a heading never ends a chunk — it binds to the content below it (the
     ceiling walk preserves this too, budget permitting)
-  - chunks over max_tokens get ONE more Nova call proposing budget-aware
+  - chunks over max_tokens get ONE more LLM call proposing budget-aware
     sub-boundaries (so the cut lands where the topic pauses, and each
     sub-chunk gets its own heading); the greedy block-boundary walk still
-    runs last, so the ceiling stays a hard guarantee even if Nova ignores
+    runs last, so the ceiling stays a hard guarantee even if the model ignores
     the budget. A single oversized block, e.g. a giant table, stays whole.
   - micro-chunks merge into their neighbor (before the ceiling pass — a hard
     budget cut can still leave a small tail chunk)
 
-Small sections skip the Nova call entirely — they are one natural chunk.
+Small sections skip the LLM call entirely — they are one natural chunk.
 """
 import asyncio
 
@@ -76,7 +76,7 @@ def _preview(block: Block) -> str:
 def _spans_to_groups(
     spans: list[_ChunkSpan], n_blocks: int
 ) -> list[tuple[list[int], str]]:
-    """Validate/repair Nova's spans into a full partition of [0, n_blocks).
+    """Validate/repair the model's spans into a full partition of [0, n_blocks).
 
     Overlaps and gaps are repaired by walking spans in order; anything left
     uncovered lands in a final unnamed group. Always returns a valid partition.
@@ -90,7 +90,7 @@ def _spans_to_groups(
             continue
         groups.append((list(range(start, end + 1)), span.heading.strip()))
         cursor = end + 1
-    if cursor < n_blocks:  # tail Nova didn't cover
+    if cursor < n_blocks:  # tail the model didn't cover
         groups.append((list(range(cursor, n_blocks)), ""))
     return groups
 
@@ -172,7 +172,7 @@ async def _subsplit_group(
     max_tokens: int,
     semaphore: asyncio.Semaphore,
 ) -> list[tuple[list[int], str]]:
-    """One Nova call proposing budget-aware sub-boundaries for an oversized group.
+    """One LLM call proposing budget-aware sub-boundaries for an oversized group.
 
     The prompt carries each block's token count so the model can plan cuts that
     fit the budget; the answer goes through the same repair machinery as the
@@ -206,7 +206,7 @@ async def _subsplit_group(
         "sub-split: section %r group of ~%d tokens → %d sub-chunk(s)",
         section_name, total, len(groups),
     )
-    # local → document indexes; a sub-chunk Nova left unnamed keeps the parent heading
+    # local → document indexes; a sub-chunk the model left unnamed keeps the parent heading
     return [([indexes[j] for j in g], h or heading) for g, h in groups]
 
 
@@ -217,7 +217,7 @@ async def _enforce_budget(
     max_tokens: int,
     semaphore: asyncio.Semaphore,
 ) -> list[tuple[list[int], str]]:
-    """Two-tier ceiling: Nova places the cuts, the greedy walk guarantees them.
+    """Two-tier ceiling: the LLM places the cuts, the greedy walk guarantees them.
 
     Groups within budget pass through untouched (no LLM call). Oversized
     groups with enough blocks to give the model a real choice get one

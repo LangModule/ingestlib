@@ -3,8 +3,8 @@
 Opt-in via RUN_PGVECTOR_E2E=1 — needs a reachable server at PGVECTOR_URL
 (e.g. docker run -p 5433:5432 pgvector/pgvector:pg18, or any managed
 Postgres that ships the extension). Embeddings are synthetic 8-dim vectors —
-the store contract takes vectors, so no Bedrock is needed; the only
-requirement is the server. Uses a dedicated test table (dropped afterwards)
+the store contract takes vectors, so no embedding provider is needed; the
+only requirement is the server. Uses a dedicated test table (dropped afterwards)
 so the user's real table keeps its production dimension.
 """
 import dataclasses
