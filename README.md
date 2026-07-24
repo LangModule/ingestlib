@@ -15,6 +15,9 @@ result = retrieve("what were the total revenues?")
 print(result.context)                # ranked chunks, each citing doc · page · section
 ```
 
+**Documentation: [langmodule.github.io/ingestlib](https://langmodule.github.io/ingestlib/)** —
+guides for every stage, the full configuration reference, and the API docs.
+
 ## What it does
 
 | Stage | What you get |
@@ -292,6 +295,7 @@ make test-weaviate         # vector connector e2e (needs Weaviate at WEAVIATE_UR
 make test-services         # full product e2e     (needs the entire stack)
 make test-all              # everything
 make eval                  # retrieval quality eval (see below)
+make docs                  # live-preview the documentation site
 ```
 
 Fixture PDFs live in `tests/data/pdf/` — 14 real documents (research papers,
@@ -322,10 +326,18 @@ English documents; PDF / DOCX / PPTX input. Images, charts, and tables
 **inside** documents are fully extracted and interpreted; direct image files
 and handwriting are out of scope by design.
 
+## The studio
+
+[ingestlib-studio](https://github.com/LangModule/ingestlib-studio) is the
+visual companion: a local web UI with a setup wizard, try-before-you-commit
+pipeline runs, page-by-page review with hover-to-highlight bounding boxes,
+committed ingestion with live progress, a content-rules editor, and a
+retrieval playground where every answer points to its source on the page.
+
 ## Roadmap
 
-- Hover-highlight review UI (bbox provenance already shipped for it)
 - Extract: schema-driven field extraction with source provenance
+- Per-run content rules on `ingest()` (classify/split already accept them)
 
 ## License
 

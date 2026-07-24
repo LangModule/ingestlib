@@ -1,0 +1,85 @@
+site_name: ingestlib
+site_description: >-
+  Self-hosted document intelligence for RAG — parse, classify, and split
+  PDF/DOCX/PPTX into searchable, cited, retrieval-ready chunks.
+site_url: https://langmodule.github.io/ingestlib/
+repo_url: https://github.com/LangModule/ingestlib
+repo_name: LangModule/ingestlib
+edit_uri: edit/main/docs/
+
+theme:
+  name: material
+  palette:
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: teal
+      accent: teal
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+  features:
+    - navigation.sections
+    - navigation.top
+    - content.code.copy
+    - search.suggest
+    - toc.follow
+
+plugins:
+  - search
+  - mkdocstrings:
+      handlers:
+        python:
+          options:
+            docstring_style: null   # plain prose docstrings, rendered as-is
+            show_source: false
+            show_root_heading: true
+            members_order: source
+            filters: ["!^_"]
+            separate_signature: true
+            show_signature_annotations: true
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.highlight
+  - pymdownx.superfences
+  - pymdownx.details
+  - pymdownx.tabbed:
+      alternate_style: true
+
+nav:
+  - Home: index.md
+  - Getting started:
+      - Installation: getting-started/installation.md
+      - Configuration: getting-started/configuration.md
+      - Quickstart: getting-started/quickstart.md
+  - Guides:
+      - Parse: guides/parse.md
+      - Classify: guides/classify.md
+      - Split: guides/split.md
+      - Content rules: guides/content-rules.md
+      - Ingest: guides/ingest.md
+      - Retrieve: guides/retrieve.md
+      - Vector stores: guides/vector-stores.md
+      - AI providers: guides/providers.md
+      - Artifact store: guides/artifact-store.md
+      - The studio: guides/studio.md
+  - API reference:
+      - Operations: reference/operations.md
+      - Services: reference/services.md
+      - Result models: reference/models.md
+      - Storage: reference/storage.md
+      - Configuration: reference/config.md
+  - About:
+      - Architecture: about/architecture.md
+      - Benchmarks: about/benchmarks.md
+      - Limits & scope: about/limits.md

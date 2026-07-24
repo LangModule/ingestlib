@@ -1,4 +1,4 @@
-.PHONY: test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services eval
+.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services eval
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -109,3 +109,11 @@ test-services:
 
 eval:
 	uv run python evals/run_eval.py
+
+# --- documentation — live preview and the strict build CI runs ---
+
+docs:
+	uv run --group docs mkdocs serve
+
+docs-build:
+	uv run --group docs mkdocs build --strict
