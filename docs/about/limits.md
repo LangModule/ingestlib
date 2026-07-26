@@ -50,7 +50,7 @@ write — marks completion.
 
 ## Roadmap
 
-The near-term list, in order: dependency extras for a slim install,
-document lifecycle (replace + folder sync), scanned-fixture verification,
-schema-driven **Extract** as the fourth operation, XLSX. Watch
+The near-term list, in order: document lifecycle (replace + folder sync),
+scanned-fixture verification, schema-driven **Extract** as the fourth
+operation, XLSX. Watch
 [GitHub](https://github.com/LangModule/ingestlib) for progress.

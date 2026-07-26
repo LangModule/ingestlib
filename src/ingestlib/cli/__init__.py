@@ -8,9 +8,14 @@ import argparse
 
 
 def main(argv: list[str] | None = None) -> int:
+    from ingestlib import __version__
+
     parser = argparse.ArgumentParser(
         prog="ingestlib",
         description="Setup and health checks for ingestlib.",
+    )
+    parser.add_argument(
+        "--version", action="version", version=f"ingestlib {__version__}"
     )
     sub = parser.add_subparsers(dest="command", required=True)
 

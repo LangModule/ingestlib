@@ -26,30 +26,65 @@ Sub-packages / modules:
                 server-side), hybrid — local docker or Weaviate Cloud
 
 Services pick their connector via default_store(), driven by config.yaml's
-`vector_store` key — every provider's keys can sit in .env; only the selected
-one ever builds a client.
+`vector_store` key. Connectors load LAZILY: sqlite ships with the core
+install, the server-backed SDKs are pip extras — nothing here imports one
+until it's actually selected, and a missing SDK raises the exact
+`pip install "ingestlib[...]"` to run.
 """
-from ingestlib.storage.base import RetrievedChunk, VectorStore
-from ingestlib.storage.milvus import MilvusStore
-from ingestlib.storage.mongodb import MongodbStore
-from ingestlib.storage.opensearch import OpensearchStore
-from ingestlib.storage.pgvector import PgvectorStore
-from ingestlib.storage.pinecone import PineconeStore
-from ingestlib.storage.qdrant import QdrantStore
-from ingestlib.storage.s3 import ensure_bucket, get_s3_client, reset_s3_client
-from ingestlib.storage.sqlite import SqliteStore
-from ingestlib.storage.weaviate import WeaviateStore
+import importlib
 
-_STORES: dict[str, type[VectorStore]] = {
-    "pinecone": PineconeStore,
-    "qdrant": QdrantStore,
-    "sqlite": SqliteStore,
-    "pgvector": PgvectorStore,
-    "mongodb": MongodbStore,
-    "milvus": MilvusStore,
-    "opensearch": OpensearchStore,
-    "weaviate": WeaviateStore,
+from ingestlib.storage.base import RetrievedChunk, VectorStore
+
+# store class name → (subpackage, pip extra; None = ships with core)
+_STORE_CLASSES: dict[str, tuple[str, str | None]] = {
+    "PineconeStore": ("pinecone", "pinecone"),
+    "QdrantStore": ("qdrant", "qdrant"),
+    "SqliteStore": ("sqlite", None),
+    "PgvectorStore": ("pgvector", "pgvector"),
+    "MongodbStore": ("mongodb", "mongodb"),
+    "MilvusStore": ("milvus", "milvus"),
+    "OpensearchStore": ("opensearch", "opensearch"),
+    "WeaviateStore": ("weaviate", "weaviate"),
 }
+
+# config.yaml `vector_store` value → store class name
+_BY_CONFIG_NAME = {
+    "pinecone": "PineconeStore",
+    "qdrant": "QdrantStore",
+    "sqlite": "SqliteStore",
+    "pgvector": "PgvectorStore",
+    "mongodb": "MongodbStore",
+    "milvus": "MilvusStore",
+    "opensearch": "OpensearchStore",
+    "weaviate": "WeaviateStore",
+}
+
+_S3_EXPORTS = ("get_s3_client", "reset_s3_client", "ensure_bucket")
+
+
+def _load_store_class(class_name: str) -> type[VectorStore]:
+    subpackage, extra = _STORE_CLASSES[class_name]
+    try:
+        module = importlib.import_module(f"ingestlib.storage.{subpackage}")
+    except ModuleNotFoundError as exc:
+        # A missing piece of ingestlib itself is a bug, not a missing extra.
+        if extra is None or (exc.name or "").startswith("ingestlib"):
+            raise
+        raise ImportError(
+            f"the {subpackage} connector needs its SDK (module {exc.name!r} is "
+            f'not installed) — install it with: pip install "ingestlib[{extra}]"'
+        ) from exc
+    return getattr(module, class_name)
+
+
+def __getattr__(name: str):
+    if name in _STORE_CLASSES:
+        return _load_store_class(name)
+    if name in _S3_EXPORTS:
+        from ingestlib.storage import s3
+
+        return getattr(s3, name)
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def default_store() -> VectorStore:
@@ -57,12 +92,12 @@ def default_store() -> VectorStore:
     from ingestlib.config import get_config
 
     name = get_config().vector_store
-    if name not in _STORES:
+    if name not in _BY_CONFIG_NAME:
         raise ValueError(
             f"unknown vector_store {name!r} in config.yaml — "
-            f"choose one of {sorted(_STORES)}"
+            f"choose one of {sorted(_BY_CONFIG_NAME)}"
         )
-    return _STORES[name]()
+    return _load_store_class(_BY_CONFIG_NAME[name])()
 
 
 __all__ = [

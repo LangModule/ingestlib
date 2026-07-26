@@ -19,6 +19,7 @@ searching.
 | `config.yaml has no 'aws' section, but these choices use AWS: llm_provider: bedrock (the default)…` | Either add `aws: {profile, region, account_id}` or pick the non-AWS options it lists (openai/ollama providers, local artifacts). |
 | `config.yaml's 'aws' section is missing profile…` | Complete the section — or delete it entirely if nothing uses AWS. |
 | `unknown vector_store 'x' — choose one of […]` | Typo'd choice; the message lists every valid option. |
+| `the qdrant connector needs its SDK … pip install "ingestlib[qdrant]"` | Server-backed stores are [pip extras](../get-started/installation.md#1-install-the-package) — run exactly the command the error prints. |
 
 ## AWS & Bedrock
 

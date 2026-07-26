@@ -1,14 +1,18 @@
 # Connect a vector store
 
-Pick one key in `config.yaml`, put its connection secret in `.env`, done —
-indexes, collections, tables, and search schemas are all created
-automatically on first ingest. All eight connectors deliver
-[hybrid search](../concepts/storage.md#hybrid-search); switching stores
-never changes your code.
+Three steps for any backend: install its extra (sqlite needs none — it
+ships with the core install), pick one key in `config.yaml`, put its
+connection secret in `.env`. Indexes, collections, tables, and search
+schemas are all created automatically on first ingest. All eight
+connectors deliver [hybrid search](../concepts/storage.md#hybrid-search);
+switching stores never changes your code.
 
 ```yaml
 vector_store: sqlite   # or any tab below
 ```
+
+If you select a store whose SDK isn't installed, the error names the exact
+extra: `pip install "ingestlib[qdrant]"`.
 
 === "sqlite"
 
@@ -28,6 +32,10 @@ vector_store: sqlite   # or any tab below
     Serverless, fully managed. Two indexes (dense + hosted sparse model)
     are created on first use.
 
+    ```bash
+    uv add "ingestlib[pinecone]"
+    ```
+
     ```yaml
     vector_store: pinecone
     ```
@@ -41,6 +49,10 @@ vector_store: sqlite   # or any tab below
 
     Local docker or Qdrant Cloud. Dense + BM25 sparse on one collection,
     fused server-side.
+
+    ```bash
+    uv add "ingestlib[qdrant]"
+    ```
 
     ```yaml
     vector_store: qdrant
@@ -62,6 +74,10 @@ vector_store: sqlite   # or any tab below
     generated tsvector. The extension is enabled and the table created
     automatically.
 
+    ```bash
+    uv add "ingestlib[pgvector]"
+    ```
+
     ```yaml
     vector_store: pgvector
     ```
@@ -81,6 +97,10 @@ vector_store: sqlite   # or any tab below
 
     Atlas Vector Search + Atlas Search (true BM25). Atlas any tier, the
     atlas-local docker image, or self-managed 8.2+ with mongot.
+
+    ```bash
+    uv add "ingestlib[mongodb]"
+    ```
 
     ```yaml
     vector_store: mongodb
@@ -103,6 +123,10 @@ vector_store: sqlite   # or any tab below
     Dense ANN + server-computed BM25, fused server-side. Local standalone
     docker or Zilliz Cloud.
 
+    ```bash
+    uv add "ingestlib[milvus]"
+    ```
+
     ```yaml
     vector_store: milvus
     ```
@@ -118,6 +142,10 @@ vector_store: sqlite   # or any tab below
     faiss k-NN + Lucene BM25. An Amazon OpenSearch domain — requests are
     SigV4-signed with your configured `aws.profile`, no separate key — or
     a local server.
+
+    ```bash
+    uv add "ingestlib[opensearch]"
+    ```
 
     ```yaml
     vector_store: opensearch
@@ -138,6 +166,10 @@ vector_store: sqlite   # or any tab below
     HNSW dense + native BM25, fused server-side in one hybrid call. Local
     docker (publish **both** ports — the client speaks gRPC too) or
     Weaviate Cloud.
+
+    ```bash
+    uv add "ingestlib[weaviate]"
+    ```
 
     ```yaml
     vector_store: weaviate

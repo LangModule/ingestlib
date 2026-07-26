@@ -81,6 +81,13 @@ def test_next_steps_name_doctor(tmp_cwd, capsys):
     assert "ollama pull" in out
 
 
+def test_version_flag_prints_and_exits_zero(capsys):
+    with pytest.raises(SystemExit) as excinfo:
+        main(["--version"])
+    assert excinfo.value.code == 0
+    assert "ingestlib" in capsys.readouterr().out
+
+
 def test_console_script_is_registered():
     import tomllib
 

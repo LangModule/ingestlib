@@ -71,8 +71,9 @@ The reranker then produces the final order across both signals' candidates.
 
 Connection details per backend are in
 [Connect a vector store](../how-to/vector-stores.md). Only the selected
-connector ever builds a client — the others' SDKs are never touched at
-runtime.
+connector ever builds a client — the others' SDKs are never imported, and
+(except sqlite, which ships with the core install) not even installed
+unless you add their [pip extra](../get-started/installation.md#1-install-the-package).
 
 ---
 

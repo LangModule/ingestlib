@@ -137,6 +137,13 @@ def check_vector_store() -> Check:
 
 def _ping_store(name: str) -> None:
     """Cheapest real liveness proof per connector — never creates indexes."""
+    import ingestlib.storage as storage
+
+    # Resolve through the lazy loader first: a missing SDK raises the
+    # pip-extra instruction instead of a bare ModuleNotFoundError.
+    if name in storage._BY_CONFIG_NAME:
+        storage._load_store_class(storage._BY_CONFIG_NAME[name])
+
     if name == "sqlite":
         # Open + load the sqlite-vec extension (the real failure mode) WITHOUT
         # querying — a query would create the schema at the probe vector's

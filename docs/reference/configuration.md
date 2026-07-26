@@ -67,6 +67,9 @@ when the section exists.
 ## Vector stores
 
 Names are created on first use; only the selected backend's keys are read.
+Server-backed stores also need their
+[pip extra](../get-started/installation.md#1-install-the-package) —
+sqlite ships with the core install.
 
 | Key | Default |
 |---|---|

@@ -2,6 +2,7 @@
 
 Installed with the package as the `ingestlib` command
 (`uv run ingestlib …`; `python -m ingestlib.cli` is equivalent).
+`ingestlib --version` prints the installed version.
 
 ## `ingestlib init`
 

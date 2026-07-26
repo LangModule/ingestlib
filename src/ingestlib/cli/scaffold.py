@@ -53,7 +53,8 @@ JINA_API_KEY=
 # llm_provider / embedding_provider: openai
 OPENAI_API_KEY=
 
-# Server-backed vector stores each need one URL/key here when selected —
+# Server-backed vector stores each need their pip extra (e.g.
+# pip install "ingestlib[qdrant]") plus one URL/key here when selected —
 # e.g. PINECONE_API_KEY, QDRANT_URL, PGVECTOR_URL, MONGODB_URL, MILVUS_URL,
 # OPENSEARCH_URL, WEAVIATE_URL. sqlite (the default) needs none.
 """

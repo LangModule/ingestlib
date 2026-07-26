@@ -28,6 +28,14 @@ an OCR inference server for parsing. This page gets all three in place.
 This installs the `ingestlib` command alongside the library — you'll use it
 in the [Quickstart](quickstart.md) to scaffold and verify your setup.
 
+The core install covers the full default stack, including sqlite vectors.
+Server-backed vector stores are **extras** — add the one you'll use:
+
+```bash
+uv add "ingestlib[qdrant]"     # or pinecone · pgvector · mongodb · milvus
+                               #    · opensearch · weaviate · all
+```
+
 ## 2. LibreOffice (DOCX/PPTX only)
 
 Office documents are converted to PDF before parsing, which needs
@@ -85,7 +93,7 @@ automatically on your first parse.
 
 | Component | Size | Location |
 |---|---|---|
-| Python dependencies | ~1.6 GB | your environment |
+| Python dependencies | ~1.4 GB core (+ your vector-store extra) | your environment |
 | PaddleOCR-VL-1.6 weights | ~1.8 GB | `~/.cache/huggingface/hub/` |
 | PP-DocLayoutV3 | ~126 MB | `~/.paddlex/official_models/` |
 | LibreOffice | ~600 MB | system |

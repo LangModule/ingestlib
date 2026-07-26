@@ -64,6 +64,14 @@ every LLM call on your own machine. See below.
 uv add ingestlib               # or: pip install ingestlib
 ```
 
+The core install covers the full default stack (including sqlite vectors).
+Server-backed vector stores are extras — add the one you'll use:
+
+```bash
+uv add "ingestlib[qdrant]"     # pinecone · qdrant · pgvector · mongodb
+                               # · milvus · opensearch · weaviate · all
+```
+
 Or work from source:
 
 ```bash
@@ -373,7 +381,7 @@ are visible over time.
 
 | Component | Size | Location |
 |---|---|---|
-| Python deps | ~3 GB | `.venv/` |
+| Python deps | ~1.4 GB core (+ your vector-store extra) | `.venv/` |
 | PaddleOCR-VL-1.6 weights | ~1.8 GB | `~/.cache/huggingface/hub/` |
 | PP-DocLayoutV3 | ~126 MB | `~/.paddlex/official_models/` |
 | LibreOffice | ~600 MB | system |
@@ -396,8 +404,7 @@ retrieval playground where every answer points to its source on the page.
 ## Roadmap
 
 - Extract: schema-driven field extraction with source provenance
-- Dependency extras (`ingestlib[qdrant]`, …) — slim core install instead
-  of all eight vector SDKs
+- Document lifecycle: `ingest(path, replaces=…)` and folder sync
 
 ## License
 

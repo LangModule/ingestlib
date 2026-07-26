@@ -1173,31 +1173,69 @@ source = { editable = "." }
 dependencies = [
     { name = "boto3" },
     { name = "botocore", extra = ["crt"] },
-    { name = "fastembed" },
     { name = "httpx" },
     { name = "langchain-aws" },
     { name = "langchain-openai" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'" },
-    { name = "opensearch-py" },
     { name = "paddleocr" },
     { name = "paddlepaddle" },
     { name = "paddlex", extra = ["genai-client", "ocr"] },
-    { name = "pgvector" },
     { name = "pillow" },
-    { name = "pinecone" },
-    { name = "psycopg", extra = ["binary"] },
     { name = "pydantic" },
-    { name = "pymilvus" },
-    { name = "pymongo" },
     { name = "pypdfium2" },
     { name = "python-dotenv" },
     { name = "pyyaml" },
-    { name = "qdrant-client" },
     { name = "sqlite-vec" },
+]
+
+[package.optional-dependencies]
+all = [
+    { name = "fastembed" },
+    { name = "opensearch-py" },
+    { name = "pgvector" },
+    { name = "pinecone" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pymilvus" },
+    { name = "pymongo" },
+    { name = "qdrant-client" },
+    { name = "weaviate-client" },
+]
+milvus = [
+    { name = "pymilvus" },
+]
+mongodb = [
+    { name = "pymongo" },
+]
+opensearch = [
+    { name = "opensearch-py" },
+]
+pgvector = [
+    { name = "pgvector" },
+    { name = "psycopg", extra = ["binary"] },
+]
+pinecone = [
+    { name = "pinecone" },
+]
+qdrant = [
+    { name = "fastembed" },
+    { name = "qdrant-client" },
+]
+weaviate = [
     { name = "weaviate-client" },
 ]
 
 [package.dev-dependencies]
+connectors = [
+    { name = "fastembed" },
+    { name = "opensearch-py" },
+    { name = "pgvector" },
+    { name = "pinecone" },
+    { name = "psycopg", extra = ["binary"] },
+    { name = "pymilvus" },
+    { name = "pymongo" },
+    { name = "qdrant-client" },
+    { name = "weaviate-client" },
+]
 dev = [
     { name = "pytest" },
     { name = "pytest-asyncio" },
@@ -1212,31 +1250,44 @@ docs = [
 requires-dist = [
     { name = "boto3", specifier = ">=1.43.29" },
     { name = "botocore", extras = ["crt"], specifier = ">=1.43" },
-    { name = "fastembed", specifier = ">=0.8.0" },
+    { name = "fastembed", marker = "extra == 'qdrant'", specifier = ">=0.8.0" },
     { name = "httpx", specifier = ">=0.27" },
+    { name = "ingestlib", extras = ["pinecone", "qdrant", "pgvector", "mongodb", "milvus", "opensearch", "weaviate"], marker = "extra == 'all'" },
     { name = "langchain-aws", specifier = ">=1.5.1" },
     { name = "langchain-openai", specifier = ">=1.0" },
     { name = "mlx-vlm", marker = "platform_machine == 'arm64' and sys_platform == 'darwin'", specifier = ">=0.6.4" },
-    { name = "opensearch-py", specifier = ">=2.8" },
+    { name = "opensearch-py", marker = "extra == 'opensearch'", specifier = ">=2.8" },
     { name = "paddleocr", specifier = ">=3.7.0" },
     { name = "paddlepaddle", specifier = ">=3.3.1" },
     { name = "paddlex", extras = ["genai-client", "ocr"], specifier = "==3.7.1" },
-    { name = "pgvector", specifier = ">=0.4" },
+    { name = "pgvector", marker = "extra == 'pgvector'", specifier = ">=0.4" },
     { name = "pillow", specifier = ">=10.0" },
-    { name = "pinecone", specifier = ">=9.1.0" },
-    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pinecone", marker = "extra == 'pinecone'", specifier = ">=9.1.0" },
+    { name = "psycopg", extras = ["binary"], marker = "extra == 'pgvector'", specifier = ">=3.2" },
     { name = "pydantic", specifier = ">=2.0" },
-    { name = "pymilvus", specifier = ">=2.6" },
-    { name = "pymongo", specifier = ">=4.10" },
+    { name = "pymilvus", marker = "extra == 'milvus'", specifier = ">=2.6" },
+    { name = "pymongo", marker = "extra == 'mongodb'", specifier = ">=4.10" },
     { name = "pypdfium2", specifier = ">=4.0" },
     { name = "python-dotenv", specifier = ">=1.0" },
     { name = "pyyaml", specifier = ">=6.0.2" },
-    { name = "qdrant-client", specifier = ">=1.18.0" },
+    { name = "qdrant-client", marker = "extra == 'qdrant'", specifier = ">=1.18.0" },
     { name = "sqlite-vec", specifier = ">=0.1.6" },
-    { name = "weaviate-client", specifier = ">=4.9" },
+    { name = "weaviate-client", marker = "extra == 'weaviate'", specifier = ">=4.9" },
 ]
+provides-extras = ["pinecone", "qdrant", "pgvector", "mongodb", "milvus", "opensearch", "weaviate", "all"]
 
 [package.metadata.requires-dev]
+connectors = [
+    { name = "fastembed", specifier = ">=0.8.0" },
+    { name = "opensearch-py", specifier = ">=2.8" },
+    { name = "pgvector", specifier = ">=0.4" },
+    { name = "pinecone", specifier = ">=9.1.0" },
+    { name = "psycopg", extras = ["binary"], specifier = ">=3.2" },
+    { name = "pymilvus", specifier = ">=2.6" },
+    { name = "pymongo", specifier = ">=4.10" },
+    { name = "qdrant-client", specifier = ">=1.18.0" },
+    { name = "weaviate-client", specifier = ">=4.9" },
+]
 dev = [
     { name = "pytest", specifier = ">=8.0" },
     { name = "pytest-asyncio", specifier = ">=0.24" },

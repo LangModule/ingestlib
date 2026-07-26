@@ -4,7 +4,8 @@
 # ── Your choices ────────────────────────────────────────────────────────
 
 # sqlite (default: one local file, no server, no keys) | pinecone | qdrant
-# | pgvector | mongodb | milvus | opensearch | weaviate — secrets in .env
+# | pgvector | mongodb | milvus | opensearch | weaviate — secrets in .env;
+# server-backed stores need their pip extra: pip install "ingestlib[qdrant]"
 vector_store: sqlite
 
 # jina (needs JINA_API_KEY) | aws (same AWS credentials) | none
