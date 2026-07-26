@@ -35,10 +35,14 @@ def main(argv: list[str] | None = None) -> int:
     )
 
     args = parser.parse_args(argv)
-    if args.command == "init":
-        from ingestlib.cli.scaffold import run_init
+    try:
+        if args.command == "init":
+            from ingestlib.cli.scaffold import run_init
 
-        return run_init(local=args.local, force=args.force)
-    from ingestlib.cli.doctor import run_doctor
+            return run_init(local=args.local, force=args.force)
+        from ingestlib.cli.doctor import run_doctor
 
-    return run_doctor()
+        return run_doctor()
+    except KeyboardInterrupt:
+        print("\ninterrupted")
+        return 130

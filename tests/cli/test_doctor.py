@@ -99,3 +99,19 @@ def test_unknown_store_fails_cleanly(patched):
     status, detail = doctor.check_vector_store()
     assert status == "fail"
     assert "chroma" in detail
+
+
+def test_run_doctor_quiets_info_logs_unless_env_set(monkeypatch, tmp_path):
+    """The ✓/✗ report must not be interleaved with the library's INFO chatter."""
+    import logging
+
+    from ingestlib.utils.logger import configure
+
+    monkeypatch.delenv("INGESTLIB_LOG_LEVEL", raising=False)
+    monkeypatch.chdir(tmp_path)          # no config.yaml → fails fast after configure
+    monkeypatch.delenv("INGESTLIB_CONFIG", raising=False)
+    try:
+        assert doctor.run_doctor() == 1  # missing config is a clean failure
+        assert logging.getLogger("ingestlib").level == logging.WARNING
+    finally:
+        configure(level="INFO")          # restore for the rest of the suite

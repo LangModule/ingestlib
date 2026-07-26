@@ -195,6 +195,15 @@ def _print(status: str, detail: str) -> None:
 
 def run_doctor() -> int:
     """Run every applicable check, print each result, return the exit code."""
+    import os
+
+    from ingestlib.utils.logger import configure
+
+    # The report lines ARE the output — quiet the library's INFO chatter
+    # (an explicit INGESTLIB_LOG_LEVEL still wins).
+    if not os.environ.get("INGESTLIB_LOG_LEVEL"):
+        configure(level="WARNING")
+
     print("ingestlib doctor")
 
     status, detail = check_python()
