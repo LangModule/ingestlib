@@ -75,11 +75,18 @@ ollama:
 
 ## Honest expectations
 
-A local 9B model is genuinely good at the pipeline's judgment tasks —
-classification, section labeling, chunk boundaries — and reads ordinary
-charts correctly. It will not match Nova or GPT-5 on *dense* chart pages
-and complex figures. Run your own documents through both stacks before
-committing; quality is corpus-dependent.
+Split the question in two:
+
+**Embeddings — measured equal to cloud.** On the retrieval eval (22
+ground-truth questions), the local `qwen3-embedding:0.6b` matched or beat
+the cloud embeddings: a perfect 1.00 on reranked hit@1/3/5 and MRR.
+Retrieval quality is not the compromise here.
+
+**LLM judgment — good, with known limits.** A local 9B is genuinely
+capable at classification, section labeling, and chunk boundaries, and
+reads ordinary charts correctly. It will not match Nova or GPT-5 on
+*dense* chart pages and complex figures. Run your own documents through
+both stacks before committing; quality is corpus-dependent.
 
 The one remaining external call in a default `--local` setup: none. If you
 later enable `reranker: jina`, that's the single piece that leaves the

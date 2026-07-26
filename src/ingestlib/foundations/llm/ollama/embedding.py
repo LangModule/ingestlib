@@ -56,6 +56,17 @@ def reset_embedders() -> None:
         _embedder = None
 
 
+# A local runner can drop a request mid-flight under load or while (re)loading
+# the model — the server surfaces it as a 400 whose message ends in "EOF".
+# That's a hiccup, not a verdict: retry briefly before giving up.
+_TRANSIENT_ATTEMPTS = 3
+_TRANSIENT_BACKOFF_SECONDS = 1.0
+
+
+def _is_transient_runner_error(exc: Exception) -> bool:
+    return type(exc).__name__ == "BadRequestError" and "EOF" in str(exc)
+
+
 def embed_text(
     text: str,
     purpose: EmbeddingPurpose = "GENERIC_INDEX",
@@ -69,7 +80,18 @@ def embed_text(
     logger.info("embed_text (ollama): dim=%d input_len=%d", dimension, len(text))
     t0 = time.perf_counter()
     try:
-        result = _get_embedder().embed_query(text)
+        for attempt in range(1, _TRANSIENT_ATTEMPTS + 1):
+            try:
+                result = _get_embedder().embed_query(text)
+                break
+            except Exception as exc:
+                if not _is_transient_runner_error(exc) or attempt == _TRANSIENT_ATTEMPTS:
+                    raise
+                logger.warning(
+                    "Ollama embed runner dropped the request (attempt %d/%d) — retrying",
+                    attempt, _TRANSIENT_ATTEMPTS,
+                )
+                time.sleep(_TRANSIENT_BACKOFF_SECONDS * attempt)
     except Exception as exc:
         hint = ollama_error_hint(exc, get_ollama_config().embedding_model_id)
         if hint:

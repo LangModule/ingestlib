@@ -27,4 +27,13 @@ def ollama_error_hint(exc: Exception, model: str) -> str | None:
         isinstance(exc, openai.BadRequestError) and "not found" in str(exc).lower()
     ):
         return f"model {model!r} is not on the server — run `ollama pull {model}`"
+    # An overloaded/VRAM-pressured runner drops requests mid-flight (400
+    # ending "EOF"). Transient drops are retried before reaching here — a
+    # persistent one means the server needs headroom.
+    if isinstance(exc, openai.BadRequestError) and "EOF" in str(exc):
+        return (
+            "the Ollama runner keeps dropping requests — free some memory "
+            "(`ollama ps` shows loaded models, `ollama stop <model>` unloads "
+            "one) or restart Ollama"
+        )
     return None

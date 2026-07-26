@@ -285,10 +285,13 @@ ollama pull qwen3-embedding:0.6b
 ```
 
 No API key. Vision, schema-enforced structured output, and 1024-dim
-embeddings all verified on the reference stack. Two honest notes: use
-the GGUF builds, not `-mlx` (Ollama's MLX engine silently drops images
-and schema enforcement), and a local 9B won't match the cloud models on
-dense charts — test with your own documents before committing.
+embeddings all verified on the reference stack — and **local embedding
+quality is measured, not assumed**: on the retrieval eval, qwen3-embedding
+matched or beat the cloud stack (perfect reranked hit@1/3/5 = 1.00). Two
+honest notes: use the GGUF builds, not `-mlx` (Ollama's MLX engine
+silently drops images and schema enforcement), and a local 9B won't match
+the cloud models on dense charts — test with your own documents before
+committing.
 Combined with `artifact_store: local` and `vector_store: sqlite`,
 nothing leaves your machine but the optional Jina rerank call
 (`reranker: none` closes even that).
@@ -379,6 +382,8 @@ questions over the fixture corpus, run through the real `retrieve()` flow
 under dense/hybrid × rerank on/off, scored by hit@k and MRR. Measured so far
 (consistent across all eight connectors): **with reranking, every answer
 lands in the top 3 hits (hit@3 = 1.00)**; hit@1 ranges 0.86–1.00 across runs.
+The fully-local stack holds the same bar — Ollama embeddings scored a
+perfect 1.00 across hit@1/3/5 and MRR on dense+rerank.
 Each run saves a timestamped snapshot to `evals/results/`, so quality changes
 are visible over time.
 

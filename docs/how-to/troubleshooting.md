@@ -48,6 +48,7 @@ searching.
 | `could not reach … — start Ollama ('ollama serve'…)` | The server isn't running (or `ollama.base_url` points at the wrong place). |
 | `model 'x' not found — 'ollama pull x'` | Pull the exact model the error names. |
 | Charts come back with wrong values, no error | You're on an `-mlx` build — it silently drops images. Use the GGUF build ([why](local-stack.md#the-rules-that-keep-it-working)). |
+| `the Ollama runner keeps dropping requests…` | The server is memory-pressured (usually two models resident). Transient drops are retried automatically; if it persists, `ollama ps` shows what's loaded, `ollama stop <model>` frees one, or restart Ollama. |
 
 ## Parsing & documents
 

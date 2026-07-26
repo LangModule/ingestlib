@@ -72,6 +72,63 @@ def test_hint_unrelated_error_returns_none():
     assert ollama_error_hint(ValueError("nope"), "m") is None
 
 
+def test_hint_persistent_runner_eof_names_the_memory_fix():
+    """When the EOF outlasts the retries, the terminal error must point at
+    server headroom, not dump a raw 400."""
+    import httpx
+    import openai
+
+    from ingestlib.foundations.llm.ollama.errors import ollama_error_hint
+
+    req = httpx.Request("POST", "http://localhost:11434/v1/embeddings")
+    exc = openai.BadRequestError(
+        'do embedding request: Post "http://127.0.0.1:1/v1/embeddings": EOF',
+        response=httpx.Response(400, request=req, json={}),
+        body={"error": {"message": "EOF"}},
+    )
+    hint = ollama_error_hint(exc, "qwen3-embedding:0.6b")
+    assert "ollama ps" in hint and "restart" in hint
+
+
+def test_transient_runner_eof_is_retried(monkeypatch, _clean_clients):
+    """A local runner can drop a request mid-flight (400 ending in 'EOF') —
+    observed in the wild during a corpus backfill. Two real typed failures
+    then a success must yield the vector, not an exception.
+
+    Control-flow test: the exception is the SDK's real BadRequestError; the
+    embedder is the module seam."""
+    import httpx
+    import openai
+
+    from ingestlib.foundations.llm.ollama import embedding as embedding_module
+
+    def _eof_error() -> openai.BadRequestError:
+        req = httpx.Request("POST", "http://localhost:11434/v1/embeddings")
+        resp = httpx.Response(400, request=req, json={"error": {
+            "message": 'do embedding request: Post "http://127.0.0.1:1/v1/embeddings": EOF',
+        }})
+        return openai.BadRequestError(
+            'do embedding request: EOF', response=resp,
+            body={"error": {"message": "EOF"}},
+        )
+
+    calls = {"n": 0}
+
+    class _FlakyEmbedder:
+        def embed_query(self, text):
+            calls["n"] += 1
+            if calls["n"] < 3:
+                raise _eof_error()
+            return [0.1] * 1024
+
+    monkeypatch.setattr(embedding_module, "_get_embedder", lambda: _FlakyEmbedder())
+    monkeypatch.setattr(embedding_module, "_TRANSIENT_BACKOFF_SECONDS", 0.0)
+
+    result = embedding_module.embed_text("retry me")
+    assert len(result) == 1024
+    assert calls["n"] == 3, "two EOF drops then success — all three attempts used"
+
+
 def test_invalid_max_tokens_raises():
     from ingestlib.foundations.llm.ollama import chat
 
