@@ -4,7 +4,7 @@ import time
 from typing import Any
 
 from ingestlib.config import get_bedrock_config
-from ingestlib.foundations.llm.bedrock.factory import get_rerank_agent_client
+from ingestlib.foundations.llm.bedrock.factory import bedrock_error_hint, get_rerank_agent_client
 from ingestlib.utils.logger import get_logger
 
 
@@ -62,7 +62,13 @@ def rerank(
     results: list[tuple[int, float]] = []
     next_token: str | None = None
     while True:
-        response = client.rerank(**request, **({"nextToken": next_token} if next_token else {}))
+        try:
+            response = client.rerank(**request, **({"nextToken": next_token} if next_token else {}))
+        except Exception as exc:
+            hint = bedrock_error_hint(exc)
+            if hint:
+                raise RuntimeError(f"Amazon Rerank failed: {hint}") from exc
+            raise
         results.extend((r["index"], r["relevanceScore"]) for r in response["results"])
         next_token = response.get("nextToken")
         if not next_token:

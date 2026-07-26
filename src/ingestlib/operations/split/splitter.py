@@ -26,6 +26,7 @@ from ingestlib.operations.split.sections import (
 )
 from ingestlib.operations.split.segmenter import segment_section
 from ingestlib.utils.logger import get_logger
+from ingestlib.utils.sync import run_sync
 
 
 logger = get_logger(__name__)
@@ -164,7 +165,9 @@ async def asplit(
 ) -> SplitResult:
     """Split a document into sections and natural chunks (async).
 
-    source           — a ParseResult from parse(), or a PDF/DOCX/PPTX path (no OCR run)
+    source           — a ParseResult from parse(), or a PDF/DOCX/PPTX path
+                       (no OCR run; scans and images have no text layer —
+                       parse() them first)
     category         — optional document-type label (e.g. from classify()) used in
                        each chunk's embedding_text breadcrumb
     max_chunk_tokens — ceiling on chunk size; natural boundaries rule below it
@@ -263,7 +266,10 @@ def split(
 
     Sync wrapper — use asplit() inside an event loop.
     """
-    return asyncio.run(asplit(
-        source, category=category, max_chunk_tokens=max_chunk_tokens,
-        vocabulary=vocabulary, unmatched=unmatched,
-    ))
+    return run_sync(
+        asplit(
+            source, category=category, max_chunk_tokens=max_chunk_tokens,
+            vocabulary=vocabulary, unmatched=unmatched,
+        ),
+        "asplit",
+    )

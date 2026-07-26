@@ -13,10 +13,11 @@ import asyncio
 from typing import Any
 
 from ingestlib.config import get_config
-from ingestlib.foundations.llm import aembed_text, aws_arerank, jina_arerank
+from ingestlib.foundations.llm import aembed_text, jina_arerank
 from ingestlib.services.retrieve.models import Hit, RetrievalResult
 from ingestlib.storage import VectorStore, default_store
 from ingestlib.utils.logger import get_logger
+from ingestlib.utils.sync import run_sync
 
 
 logger = get_logger(__name__)
@@ -24,8 +25,17 @@ logger = get_logger(__name__)
 # With reranking on, fetch a wider candidate pool for the reranker to sort.
 _CANDIDATE_MULTIPLIER = 4
 
-# config.yaml `reranker` key → implementation ("none" short-circuits instead)
-_RERANKERS = {"jina": jina_arerank, "aws": aws_arerank}
+# config.yaml `reranker` key → implementation ("none" short-circuits instead).
+# The aws entry resolves lazily so a jina/none pipeline never imports bedrock.
+_RERANKER_NAMES = ("jina", "aws")
+
+
+def _reranker(name: str):
+    if name == "jina":
+        return jina_arerank
+    from ingestlib.foundations.llm import aws_arerank
+
+    return aws_arerank
 
 
 async def aretrieve(
@@ -52,10 +62,10 @@ async def aretrieve(
     store = store or default_store()
 
     reranker = get_config().reranker
-    if reranker != "none" and reranker not in _RERANKERS:
+    if reranker != "none" and reranker not in _RERANKER_NAMES:
         raise ValueError(
             f"unknown reranker {reranker!r} in config.yaml — "
-            f"choose one of {sorted(_RERANKERS) + ['none']}"
+            f"choose one of {sorted(_RERANKER_NAMES) + ['none']}"
         )
     use_rerank = rerank and reranker != "none"
 
@@ -79,7 +89,7 @@ async def aretrieve(
 
     documents = [c.markdown or c.text for c in candidates]
     try:
-        ranking = await _RERANKERS[reranker](question, documents, top_n=top_k)
+        ranking = await _reranker(reranker)(question, documents, top_n=top_k)
     except Exception as exc:
         # retrieval must not die because the reranker hiccuped — degrade to
         # vector order and say so loudly
@@ -108,7 +118,10 @@ def retrieve(
 ) -> RetrievalResult:
     """Retrieve the most relevant chunks for a question. Sync wrapper — use
     aretrieve() inside an event loop."""
-    return asyncio.run(aretrieve(
-        question, top_k=top_k, filters=filters,
-        namespace=namespace, rerank=rerank, store=store,
-    ))
+    return run_sync(
+        aretrieve(
+            question, top_k=top_k, filters=filters,
+            namespace=namespace, rerank=rerank, store=store,
+        ),
+        "aretrieve",
+    )

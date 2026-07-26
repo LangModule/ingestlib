@@ -23,6 +23,7 @@ from ingestlib.operations.classify.chunker import (
 from ingestlib.operations.classify.models import CategoryScore, ClassifyResult
 from ingestlib.operations.parse.models import ParseResult
 from ingestlib.utils.logger import get_logger
+from ingestlib.utils.sync import run_sync
 
 
 logger = get_logger(__name__)
@@ -215,7 +216,9 @@ async def aclassify(
 ) -> ClassifyResult:
     """Classify a document's type (async).
 
-    source       — a ParseResult from parse(), or a PDF/DOCX/PPTX path (no OCR run)
+    source       — a ParseResult from parse(), or a document/image path
+                   (PDF/DOCX/PPTX/PNG/JPEG/WebP — no OCR run; images classify
+                   through the vision LLM)
     categories   — optional {snake_case_label: description}, max 20; when given,
                    the result is one of these labels or "uncategorized". None
                    uses rules.yaml's `classify:` preset; {} forces open-ended.
@@ -270,6 +273,7 @@ def classify(
     max_pages: int | None = None,
 ) -> ClassifyResult:
     """Classify a document's type. Sync wrapper — use aclassify() inside an event loop."""
-    return asyncio.run(aclassify(
-        source, categories, target_pages=target_pages, max_pages=max_pages
-    ))
+    return run_sync(
+        aclassify(source, categories, target_pages=target_pages, max_pages=max_pages),
+        "aclassify",
+    )

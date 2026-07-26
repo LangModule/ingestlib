@@ -2,7 +2,8 @@
 import pytest
 from pydantic import BaseModel, Field
 
-from ingestlib.foundations.llm import Image, achat_structured, chat_structured
+from ingestlib.foundations.llm import Image
+from ingestlib.foundations.llm.bedrock import achat_structured, chat_structured
 
 
 class _Verdict(BaseModel):

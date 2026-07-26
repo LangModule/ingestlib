@@ -1,7 +1,12 @@
 """Client-side validation guards."""
 import pytest
 
-from ingestlib.foundations.llm import chat, chat_with_thinking, get_llm, get_llm_with_thinking
+from ingestlib.foundations.llm.bedrock import (
+    chat,
+    chat_with_thinking,
+    get_llm,
+    get_llm_with_thinking,
+)
 
 
 def test_chat_invalid_max_tokens_raises():

@@ -15,6 +15,8 @@ def test_unreachable_server_hints_mlx_launch_command():
         paddle_vl._check_server(_DEAD_URL, backend="mlx-vlm-server")
     assert _DEAD_URL in str(exc.value)
     assert "backend=mlx-vlm-server" in str(exc.value)
+    # pip-install users have no uv and no repo — the command must run anywhere
+    assert "uv run" not in str(exc.value)
 
 
 def test_unreachable_server_hints_vllm_launch_command():

@@ -3,10 +3,10 @@
 config.yaml picks who serves each call family; operations and services
 import from here and never know which backend answered:
 
-    llm_provider: bedrock | openai        → chat / thinking / structured / get_llm
-    embedding_provider: bedrock | openai  → embed_text (and embed_image on bedrock)
+    llm_provider: bedrock | openai | ollama        → chat / thinking / structured / get_llm
+    embedding_provider: bedrock | openai | ollama  → embed_text (and embed_image on bedrock)
 
-Both backends expose identical signatures, so dispatch is a per-call config
+Every backend exposes identical signatures, so dispatch is a per-call config
 read — no client is built until a call actually happens. Switching
 embedding_provider changes the vector space: re-ingest (or --backfill) after.
 Image embeddings exist only on bedrock. Rerank keeps its explicit provider
@@ -20,29 +20,40 @@ from langchain_core.language_models.chat_models import BaseChatModel
 from pydantic import BaseModel
 
 from ingestlib.config import get_config
-from ingestlib.foundations.llm.bedrock import arerank as aws_arerank
-from ingestlib.foundations.llm.bedrock import rerank as aws_rerank
-from ingestlib.foundations.llm.bedrock.embedding import (
+from ingestlib.foundations.llm.jina import arerank as jina_arerank
+from ingestlib.foundations.llm.jina import rerank as jina_rerank
+from ingestlib.foundations.llm.types import (
     DEFAULT_DIMENSION,
-    EmbeddingDimension,
-    EmbeddingPurpose,
-    ImageDetailLevel,
-    ImageFormat,
-)
-# Resets only the bedrock clients; config.reset_config() clears every provider.
-from ingestlib.foundations.llm.bedrock.factory import reset_clients
-from ingestlib.foundations.llm.bedrock.nova import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_REASONING_EFFORT,
     DEFAULT_THINKING_MAX_TOKENS,
+    EmbeddingDimension,
+    EmbeddingPurpose,
     Image,
+    ImageDetailLevel,
+    ImageFormat,
     MaxTokens,
     ReasoningEffort,
 )
-from ingestlib.foundations.llm.jina import arerank as jina_arerank
-from ingestlib.foundations.llm.jina import rerank as jina_rerank
 
 BaseModelT = TypeVar("BaseModelT", bound=BaseModel)
+
+# The AWS pieces load on first use, not at import: a non-bedrock pipeline
+# never pays the boto3/langchain-aws import just to reach this surface.
+_LAZY_BEDROCK = {
+    "aws_rerank": "rerank",
+    "aws_arerank": "arerank",
+    # Resets only the bedrock clients; config.reset_config() clears every provider.
+    "reset_clients": "reset_clients",
+}
+
+
+def __getattr__(name: str):
+    if name in _LAZY_BEDROCK:
+        from ingestlib.foundations.llm import bedrock
+
+        return getattr(bedrock, _LAZY_BEDROCK[name])
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
 
 
 def _backend(provider: str) -> ModuleType:
@@ -54,7 +65,13 @@ def _backend(provider: str) -> ModuleType:
         from ingestlib.foundations.llm import openai
 
         return openai
-    raise ValueError(f"unknown LLM provider {provider!r} — expected 'bedrock' or 'openai'")
+    if provider == "ollama":
+        from ingestlib.foundations.llm import ollama
+
+        return ollama
+    raise ValueError(
+        f"unknown LLM provider {provider!r} — expected 'bedrock', 'openai', or 'ollama'"
+    )
 
 
 def _llm() -> ModuleType:

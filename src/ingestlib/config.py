@@ -65,6 +65,13 @@ class OpenAIConfig:
 
 
 @dataclass(frozen=True)
+class OllamaConfig:
+    base_url: str               # OpenAI-compatible server (Ollama, vLLM, LM Studio)
+    llm_model_id: str
+    embedding_model_id: str
+
+
+@dataclass(frozen=True)
 class PaddleVLConfig:
     backend: str                # mlx-vlm-server (Apple Silicon) | vllm-server (NVIDIA)
     server_url: str             # VLM inference server URL
@@ -158,15 +165,16 @@ class SplitConfig:
 
 @dataclass(frozen=True)
 class IngestConfig:
-    vector_store: str           # services' default connector (one of the eight below)
+    vector_store: str           # services' default connector (default sqlite — zero setup)
     reranker: str               # retrieve()'s reranker: jina | aws | none
     artifact_store: str         # where pipeline artifacts live: s3 | local
-    llm_provider: str           # who serves chat/structured calls: bedrock | openai
-    embedding_provider: str     # who embeds text: bedrock | openai — switching means re-ingest
+    llm_provider: str           # who serves chat/structured calls: bedrock | openai | ollama
+    embedding_provider: str     # who embeds text: bedrock | openai | ollama — switching means re-ingest
     aws: AWSConfig
     bedrock: BedrockConfig
     jina: JinaConfig
     openai: OpenAIConfig
+    ollama: OllamaConfig
     classify: ClassifyConfig
     split: SplitConfig
     paddle_vl: PaddleVLConfig
@@ -215,12 +223,50 @@ def _load_config() -> IngestConfig:
     with open(config_path, "r") as f:
         data = yaml.safe_load(f)
 
-    aws_data = data["aws"]
-    aws_config = AWSConfig(
-        profile=aws_data["profile"],
-        region=aws_data["region"],
-        account_id=str(aws_data["account_id"]),
-    )
+    # Choices first — they decide whether an AWS identity is required at all.
+    vector_store = data.get("vector_store", "sqlite")
+    reranker = data.get("reranker", "jina")
+    artifact_store = data.get("artifact_store", "s3")
+    llm_provider = data.get("llm_provider", "bedrock")
+    embedding_provider = data.get("embedding_provider", "bedrock")
+
+    aws_data = data.get("aws")
+    if aws_data is None:
+        needs = [
+            reason
+            for used, reason in (
+                (llm_provider == "bedrock", "llm_provider: bedrock (the default)"),
+                (embedding_provider == "bedrock", "embedding_provider: bedrock (the default)"),
+                (artifact_store == "s3", "artifact_store: s3 (the default)"),
+                (reranker == "aws", "reranker: aws"),
+                (vector_store == "opensearch"
+                 and "amazonaws.com" in os.environ.get("OPENSEARCH_URL", ""),
+                 "vector_store: opensearch (Amazon domain)"),
+            )
+            if used
+        ]
+        if needs:
+            raise ValueError(
+                f"config.yaml has no `aws` section, but these choices use AWS: "
+                f"{'; '.join(needs)}. Add aws: {{profile, region, account_id}} — "
+                f"or pick non-AWS options (llm_provider/embedding_provider: "
+                f"openai | ollama, artifact_store: local)."
+            )
+        # Nothing uses AWS — placeholder identity, never sent anywhere.
+        aws_config = AWSConfig(profile="", region="us-east-1", account_id="000000000000")
+    else:
+        missing = [key for key in ("profile", "region", "account_id") if key not in aws_data]
+        if missing:
+            raise ValueError(
+                f"config.yaml's `aws` section is missing {', '.join(missing)} — "
+                f"provide profile, region, and account_id, or delete the whole "
+                f"section if nothing uses AWS"
+            )
+        aws_config = AWSConfig(
+            profile=aws_data["profile"],
+            region=aws_data["region"],
+            account_id=str(aws_data["account_id"]),
+        )
 
     bedrock_data = data.get("bedrock", {})
     bedrock_config = BedrockConfig(
@@ -244,6 +290,13 @@ def _load_config() -> IngestConfig:
         api_key=os.environ.get("OPENAI_API_KEY", ""),
         llm_model_id=openai_data.get("llm_model_id", "gpt-5-mini"),
         embedding_model_id=openai_data.get("embedding_model_id", "text-embedding-3-small"),
+    )
+
+    ollama_data = data.get("ollama", {})
+    ollama_config = OllamaConfig(
+        base_url=ollama_data.get("base_url", "http://localhost:11434/v1"),
+        llm_model_id=ollama_data.get("llm_model_id", "qwen3.5:9b"),
+        embedding_model_id=ollama_data.get("embedding_model_id", "qwen3-embedding:0.6b"),
     )
 
     # Domain rules (classification rules + split categories) live in
@@ -345,15 +398,16 @@ def _load_config() -> IngestConfig:
     )
 
     return IngestConfig(
-        vector_store=data.get("vector_store", "pinecone"),
-        reranker=data.get("reranker", "jina"),
-        artifact_store=data.get("artifact_store", "s3"),
-        llm_provider=data.get("llm_provider", "bedrock"),
-        embedding_provider=data.get("embedding_provider", "bedrock"),
+        vector_store=vector_store,
+        reranker=reranker,
+        artifact_store=artifact_store,
+        llm_provider=llm_provider,
+        embedding_provider=embedding_provider,
         aws=aws_config,
         bedrock=bedrock_config,
         jina=jina_config,
         openai=openai_config,
+        ollama=ollama_config,
         classify=classify_config,
         split=split_config,
         paddle_vl=paddle_vl_config,
@@ -401,6 +455,11 @@ def get_jina_config() -> JinaConfig:
 def get_openai_config() -> OpenAIConfig:
     """OpenAI model IDs and API key."""
     return get_config().openai
+
+
+def get_ollama_config() -> OllamaConfig:
+    """Ollama server URL and model IDs (no key — the server is local)."""
+    return get_config().ollama
 
 
 def get_paddle_vl_config() -> PaddleVLConfig:
@@ -466,6 +525,8 @@ _CLIENT_RESETS = (
     ("ingestlib.foundations.llm.bedrock.factory", "reset_clients"),
     ("ingestlib.foundations.llm.openai.mini", "reset_models"),
     ("ingestlib.foundations.llm.openai.embedding", "reset_embedders"),
+    ("ingestlib.foundations.llm.ollama.qwen", "reset_models"),
+    ("ingestlib.foundations.llm.ollama.embedding", "reset_embedders"),
     ("ingestlib.foundations.ocr.paddle_vl", "reset_pipeline"),
     ("ingestlib.storage.blobs", "reset_blob_store"),
     ("ingestlib.storage.s3.client", "reset_s3_client"),

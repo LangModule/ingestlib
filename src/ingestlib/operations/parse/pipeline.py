@@ -17,6 +17,7 @@ from ingestlib.operations.parse.detector import detect_format
 from ingestlib.operations.parse.enricher import enrich_page
 from ingestlib.operations.parse.loaders import (
     LoadedPage,
+    load_image,
     load_office,
     load_pdf,
 )
@@ -24,6 +25,7 @@ from ingestlib.operations.parse.models import PageResult, ParseResult, SourceFor
 from ingestlib.operations.parse.reviewer import review_page
 from ingestlib.utils.files import sha256_of_file
 from ingestlib.utils.logger import get_logger
+from ingestlib.utils.sync import run_sync
 
 
 logger = get_logger(__name__)
@@ -44,6 +46,10 @@ def _load(
     """Format-specific loading. Returns (pages, metadata, was_converted)."""
     if fmt == "pdf":
         pages, meta = load_pdf(path, render=True, dpi=dpi)
+        return pages, meta, False
+    if fmt in ("png", "jpeg", "webp"):
+        # a single image is a one-page document; dpi has no meaning for it
+        pages, meta = load_image(path)
         return pages, meta, False
     # docx / pptx via LibreOffice → PDF
     pages, meta = load_office(path, render=True, dpi=dpi)
@@ -101,9 +107,10 @@ async def _process_page(
 async def aparse(path: Path | str, *, dpi: int = 200) -> ParseResult:
     """Parse a document into a ParseResult (async).
 
-    path — PDF/DOCX/PPTX to parse
-    dpi  — page render resolution; 200 balances OCR accuracy against
-           VLM token cost and memory
+    path — PDF/DOCX/PPTX document, or a PNG/JPEG/WebP image (parsed as a
+           one-page document)
+    dpi  — page render resolution for PDFs; 200 balances OCR accuracy
+           against VLM token cost and memory (images keep their own size)
     """
     start = time.perf_counter()
     path = Path(path)
@@ -154,4 +161,4 @@ def parse(path: Path | str, *, dpi: int = 200) -> ParseResult:
     Synchronous wrapper around aparse(). If you're already inside an event
     loop, use aparse() instead.
     """
-    return asyncio.run(aparse(path, dpi=dpi))
+    return run_sync(aparse(path, dpi=dpi), "aparse")

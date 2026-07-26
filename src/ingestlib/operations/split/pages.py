@@ -9,7 +9,11 @@ from typing import NamedTuple
 
 from ingestlib.operations.parse.assembler import render_region
 from ingestlib.operations.parse.detector import detect_format
-from ingestlib.operations.parse.loaders import load_office_content, load_pdf_content
+from ingestlib.operations.parse.loaders import (
+    load_image_content,
+    load_office_content,
+    load_pdf_content,
+)
 from ingestlib.operations.parse.models import ParseResult
 from ingestlib.utils.logger import get_logger
 
@@ -169,8 +173,20 @@ def extract_split_pages(source: ParseResult | Path | str) -> list[SplitPage]:
     else:
         path = Path(source)
         fmt = detect_format(path)
-        loaded, _ = load_pdf_content(path) if fmt == "pdf" else load_office_content(path)
+        if fmt == "pdf":
+            loaded, _ = load_pdf_content(path)
+        elif fmt in ("png", "jpeg", "webp"):
+            loaded, _ = load_image_content(path)
+        else:  # docx / pptx
+            loaded, _ = load_office_content(path)
         logger.info("split standalone load: %s (%d pages, no OCR)", path.name, len(loaded))
+        if loaded and not any(cp.text.strip() for cp in loaded):
+            raise ValueError(
+                f"{path.name} has no extractable text — scanned pages and "
+                f"images have no text layer, and split labels pages by their "
+                f"text. Run parse() first (it OCRs the pages) and pass the "
+                f"ParseResult to split()."
+            )
         pages = [
             SplitPage(page_num=i, text=cp.text, blocks=_blocks_from_text(i, cp.text))
             for i, cp in enumerate(loaded, start=1)

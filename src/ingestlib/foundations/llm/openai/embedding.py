@@ -11,7 +11,8 @@ import time
 from langchain_openai import OpenAIEmbeddings
 
 from ingestlib.config import get_openai_config
-from ingestlib.foundations.llm.bedrock.embedding import (
+from ingestlib.foundations.llm.openai.errors import openai_error_hint
+from ingestlib.foundations.llm.types import (
     DEFAULT_DIMENSION,
     EmbeddingDimension,
     EmbeddingPurpose,
@@ -68,7 +69,13 @@ def embed_text(
     _validate_dimension(dimension)
     logger.info("embed_text (openai): dim=%d input_len=%d", dimension, len(text))
     t0 = time.perf_counter()
-    result = _embedder(dimension).embed_query(text)
+    try:
+        result = _embedder(dimension).embed_query(text)
+    except Exception as exc:
+        hint = openai_error_hint(exc)
+        if hint:
+            raise RuntimeError(f"OpenAI embedding failed: {hint}") from exc
+        raise
     logger.info("embed_text done: %.2fs returned_dim=%d", time.perf_counter() - t0, len(result))
     return result
 

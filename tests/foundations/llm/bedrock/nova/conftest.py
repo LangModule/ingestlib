@@ -4,7 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from ingestlib.foundations.llm import Image, chat, chat_with_thinking
+from ingestlib.foundations.llm import Image
+from ingestlib.foundations.llm.bedrock import chat, chat_with_thinking
 
 _TESTS_DIR = Path(__file__).resolve().parent
 while _TESTS_DIR.name != "tests":

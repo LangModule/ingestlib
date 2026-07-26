@@ -70,3 +70,15 @@ def test_empty_categories_dict_forces_open_ended():
 
     r = classify(f"{_PDF}/insurance-acord.pdf", categories={})
     assert r.alternatives == [], "open-ended mode never has alternatives"
+
+
+def test_image_input_classifies_via_vision():
+    """A bare image classifies with NO OCR server — the vision content shape."""
+    import re
+
+    from ingestlib.operations.classify import classify
+
+    r = classify(_TESTS_DIR / "data" / "images" / "document_text.png")
+    assert re.fullmatch(r"[a-z][a-z0-9_]*", r.category), r.category
+    assert 0.0 <= r.confidence <= 1.0
+    assert r.pages_used == 1

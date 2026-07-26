@@ -128,5 +128,5 @@ def test_delete_document_removes_everything():
     artifacts.save_parse(pr)
     assert artifacts.document_exists(tmp_id)
     deleted = artifacts.delete_document(tmp_id)
-    assert deleted >= 3  # result.json + document.md + page + figure
+    assert deleted >= 5  # result.json + document.md + page + figure + meta
     assert artifacts.document_exists(tmp_id) is False

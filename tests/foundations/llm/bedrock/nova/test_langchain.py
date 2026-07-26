@@ -2,7 +2,7 @@
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage
 
-from ingestlib.foundations.llm import get_llm, get_llm_with_thinking
+from ingestlib.foundations.llm.bedrock import get_llm, get_llm_with_thinking
 
 
 def test_get_llm_returns_ChatBedrockConverse():

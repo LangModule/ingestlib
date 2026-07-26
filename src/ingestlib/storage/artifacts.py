@@ -74,6 +74,22 @@ def _get(key: str) -> bytes:
     return get_blob_store().get(key)
 
 
+def _get_required(key: str, doc_id: str, artifact: str, produced_by: str) -> bytes:
+    """Read an artifact that must exist — a missing one names the fix.
+
+    Raises FileNotFoundError (regardless of backend) so callers can catch
+    one exception type instead of botocore's NoSuchKey on s3.
+    """
+    body = _get_or_none(key)
+    if body is None:
+        raise FileNotFoundError(
+            f"no {artifact} artifact stored for doc_id {doc_id[:12]!r}… — run "
+            f"{produced_by} on the document first; list_documents() shows "
+            f"what's stored"
+        )
+    return body
+
+
 def _get_or_none(key: str) -> bytes | None:
     return get_blob_store().get_or_none(key)
 
@@ -210,7 +226,9 @@ def load_parse(doc_id: str, *, include_images: bool = False) -> ParseResult:
     figure crops as empty bytes — cheap, structure-only. include_images=True
     fetches every PNG back into the result.
     """
-    payload = json.loads(_get(_key(doc_id, "parse", "result.json")))
+    payload = json.loads(
+        _get_required(_key(doc_id, "parse", "result.json"), doc_id, "parse", "parse()")
+    )
 
     pages: list[PageResult] = []
     for p in payload["pages"]:
@@ -273,7 +291,10 @@ def save_classify(doc_id: str, result: ClassifyResult) -> None:
 
 def load_classify(doc_id: str) -> ClassifyResult:
     """Load a persisted ClassifyResult."""
-    return ClassifyResult.model_validate(json.loads(_get(_key(doc_id, "classify", "result.json"))))
+    body = _get_required(
+        _key(doc_id, "classify", "result.json"), doc_id, "classify", "classify() (or ingest())"
+    )
+    return ClassifyResult.model_validate(json.loads(body))
 
 
 def save_split(doc_id: str, result: SplitResult) -> None:
@@ -288,7 +309,10 @@ def save_split(doc_id: str, result: SplitResult) -> None:
 
 def load_split(doc_id: str) -> SplitResult:
     """Load a persisted SplitResult."""
-    return SplitResult.model_validate(json.loads(_get(_key(doc_id, "split", "result.json"))))
+    body = _get_required(
+        _key(doc_id, "split", "result.json"), doc_id, "split", "split() (or ingest())"
+    )
+    return SplitResult.model_validate(json.loads(body))
 
 
 def save_ingest_manifest(doc_id: str, manifest: dict[str, Any]) -> None:
@@ -298,7 +322,10 @@ def save_ingest_manifest(doc_id: str, manifest: dict[str, Any]) -> None:
 
 def load_ingest_manifest(doc_id: str) -> dict[str, Any]:
     """Load the vector-store sync record written by save_ingest_manifest."""
-    return json.loads(_get(_key(doc_id, "split", "ingest_manifest.json")))
+    body = _get_required(
+        _key(doc_id, "split", "ingest_manifest.json"), doc_id, "ingest manifest", "ingest()"
+    )
+    return json.loads(body)
 
 
 # ---------- registry ----------
@@ -330,7 +357,8 @@ def list_documents() -> list[DocumentMeta]:
 
 
 def page_image_key(doc_id: str, page_num: int) -> str:
-    """Artifact key of a page render — presign it (s3) or read_blob() it (local)."""
+    """Artifact key of a page render — read_blob() serves it on any backend
+    (on s3, get_s3_client().generate_presigned_url can serve it as a URL)."""
     return _page_key(doc_id, page_num)
 
 

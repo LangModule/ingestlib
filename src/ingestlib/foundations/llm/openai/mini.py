@@ -14,7 +14,8 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 from ingestlib.config import get_openai_config
-from ingestlib.foundations.llm.bedrock.nova import (
+from ingestlib.foundations.llm.openai.errors import openai_error_hint
+from ingestlib.foundations.llm.types import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_REASONING_EFFORT,
     DEFAULT_THINKING_MAX_TOKENS,
@@ -139,7 +140,13 @@ def _invoke(llm: ChatOpenAI, text: str, images: list[Image] | None, system: str 
         cfg.llm_model_id, len(text), n_images, system is not None,
     )
     t0 = time.perf_counter()
-    response = llm.invoke(_messages(text, images, system))
+    try:
+        response = llm.invoke(_messages(text, images, system))
+    except Exception as exc:
+        hint = openai_error_hint(exc)
+        if hint:
+            raise RuntimeError(f"OpenAI chat failed: {hint}") from exc
+        raise
     reply = _extract_text(response.content)
     logger.info(
         "OpenAI chat done: %.2fs response_len=%d", time.perf_counter() - t0, len(reply),
@@ -200,6 +207,9 @@ def chat_structured(
         try:
             result = llm.invoke(messages)
         except Exception as exc:  # schema validation / parse failure
+            hint = openai_error_hint(exc)
+            if hint:  # auth/billing/model failures don't improve on retry
+                raise RuntimeError(f"OpenAI chat failed: {hint}") from exc
             logger.warning(
                 "structured output attempt %d failed (%s: %s)",
                 attempt, type(exc).__name__, exc,

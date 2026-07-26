@@ -1,19 +1,17 @@
-# ingestlib configuration
+# ingestlib configuration — only what you choose lives here; every
+# omitted key is a library default.
 
-# Your AWS profile from ~/.aws/credentials, with Bedrock access.
-aws:
-  profile: your-aws-profile
-  region: us-east-1
-  account_id: "000000000000"
+# ── Your choices ────────────────────────────────────────────────────────
 
-# pinecone | qdrant | sqlite | pgvector | mongodb | milvus |
-# opensearch | weaviate — secrets in .env
-vector_store: pinecone
+# sqlite (default: one local file, no server, no keys) | pinecone | qdrant
+# | pgvector | mongodb | milvus | opensearch | weaviate — secrets in .env
+vector_store: sqlite
 
 # jina (needs JINA_API_KEY) | aws (same AWS credentials) | none
 reranker: jina
 
-# Who serves LLM and embedding calls: bedrock | openai (needs OPENAI_API_KEY).
+# Who serves LLM and embedding calls:
+#   bedrock (default) | openai (needs OPENAI_API_KEY) | ollama (local server, no key)
 # Switching embedding_provider changes the vector space — re-ingest after.
 llm_provider: bedrock
 embedding_provider: bedrock
@@ -22,64 +20,64 @@ embedding_provider: bedrock
 # s3 (durable, shareable) | local (a plain folder — zero cloud)
 artifact_store: s3
 
-# Bucket names are global across AWS. Created on first use.
-# Default: ingestlib-{aws.account_id}
-s3:
-  bucket: your-unique-bucket-name
-
-# local mode's folder; relative paths anchor to this file's dir
-# (wizard-managed machines get ~/.ingestlib/artifacts)
-artifacts:
-  path: artifacts
-
-bedrock:
-  llm_model_id: us.amazon.nova-2-lite-v1:0
-  embedding_model_id: amazon.nova-2-multimodal-embeddings-v1:0
-  rerank_model_id: amazon.rerank-v1:0
-  rerank_region: us-west-2
-
-jina:
-  base_url: https://api.jina.ai/v1
-  rerank_model_id: jina-reranker-v3
-
-# OpenAI backend (needs OPENAI_API_KEY): GPT-5 vision-capable LLM +
-# text-embedding-3 (text-only embeddings; image embeddings stay on bedrock)
-openai:
-  llm_model_id: gpt-5-mini
-  embedding_model_id: text-embedding-3-small
+# Your AWS profile from ~/.aws/credentials. Only needed while a choice
+# above uses AWS (bedrock provider, s3 artifacts, aws reranker, Amazon
+# OpenSearch) — delete this whole section otherwise.
+aws:
+  profile: your-aws-profile
+  region: us-east-1
+  account_id: "000000000000"
 
 # OCR server for parse/ingest: mlx-vlm-server (Apple Silicon) | vllm-server (NVIDIA)
 paddle_vl:
   backend: mlx-vlm-server
   server_url: http://localhost:8111/
-  api_model_name: PaddlePaddle/PaddleOCR-VL-1.6
+
+# ── Optional overrides — the values shown ARE the defaults ──────────────
+# Uncomment only what you want to change.
+
+# s3:
+#   bucket: ingestlib-{aws.account_id}   # bucket names are global across AWS
+# artifacts:
+#   path: artifacts                      # local mode's folder; relative → beside this file
+
+# bedrock:
+#   llm_model_id: us.amazon.nova-2-lite-v1:0
+#   embedding_model_id: amazon.nova-2-multimodal-embeddings-v1:0
+#   rerank_model_id: amazon.rerank-v1:0
+#   rerank_region: us-west-2
+# openai:
+#   llm_model_id: gpt-5-mini
+#   embedding_model_id: text-embedding-3-small
+# ollama:                                # base_url accepts any OpenAI-compatible
+#   base_url: http://localhost:11434/v1  # server (vLLM, LM Studio); use GGUF
+#   llm_model_id: qwen3.5:9b             # builds, not -mlx
+#   embedding_model_id: qwen3-embedding:0.6b
+# jina:
+#   base_url: https://api.jina.ai/v1
+#   rerank_model_id: jina-reranker-v3
+# paddle_vl:
+#   api_model_name: PaddlePaddle/PaddleOCR-VL-1.6
 
 # Indexes, collections, and tables are created on first use.
-pinecone:
-  index_name: ingestlib
-  sparse_index_name: ingestlib-sparse
-  sparse_model_id: pinecone-sparse-english-v0
-  cloud: aws
-  region: us-east-1
-
-qdrant:
-  collection_name: ingestlib
-
-sqlite:
-  path: ingestlib.db    # relative paths anchor to this file's dir
-
-pgvector:
-  table_name: ingestlib
-
-mongodb:
-  database: ingestlib
-  collection_name: ingestlib
-
-milvus:
-  collection_name: ingestlib
-
-opensearch:
-  index_name: ingestlib
-
-weaviate:
-  collection_name: Ingestlib    # Weaviate capitalizes collection names
+# pinecone:
+#   index_name: ingestlib
+#   sparse_index_name: ingestlib-sparse
+#   sparse_model_id: pinecone-sparse-english-v0
+#   cloud: aws
+#   region: us-east-1
+# qdrant:
+#   collection_name: ingestlib
+# sqlite:
+#   path: ingestlib.db                   # relative paths anchor beside this file
+# pgvector:
+#   table_name: ingestlib
+# mongodb:
+#   database: ingestlib
+#   collection_name: ingestlib
+# milvus:
+#   collection_name: ingestlib
+# opensearch:
+#   index_name: ingestlib
+# weaviate:
+#   collection_name: Ingestlib           # Weaviate capitalizes collection names

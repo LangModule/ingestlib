@@ -61,15 +61,21 @@ def rerank(
     )
     t0 = time.perf_counter()
     for attempt in range(1, _MAX_ATTEMPTS + 1):
-        response = httpx.post(
-            f"{cfg.base_url}/rerank",
-            headers={
-                "Content-Type": "application/json",
-                "Authorization": f"Bearer {cfg.api_key}",
-            },
-            json=payload,
-            timeout=60.0,
-        )
+        try:
+            response = httpx.post(
+                f"{cfg.base_url}/rerank",
+                headers={
+                    "Content-Type": "application/json",
+                    "Authorization": f"Bearer {cfg.api_key}",
+                },
+                json=payload,
+                timeout=60.0,
+            )
+        except httpx.TransportError as exc:
+            raise RuntimeError(
+                f"could not reach {cfg.base_url} — check your network/proxy, "
+                f"or jina.base_url in config.yaml"
+            ) from exc
         if response.status_code == 429 and attempt < _MAX_ATTEMPTS:
             # rate-limited — honor Retry-After when present, else back off
             wait = _retry_wait(response.headers.get("retry-after"), attempt)
@@ -80,6 +86,23 @@ def rerank(
             time.sleep(wait)
             continue
         break
+    # The three failures users actually hit get a one-line diagnosis; anything
+    # else surfaces as the raw HTTP error.
+    if response.status_code in (401, 403):
+        raise RuntimeError(
+            f"Jina rejected the API key ({response.status_code}) — check "
+            f"JINA_API_KEY in .env, or issue a new key at jina.ai/api-dashboard"
+        )
+    if response.status_code == 402:
+        raise RuntimeError(
+            "Jina token balance exhausted (402) — the free tier ran out; get a "
+            "new key at jina.ai/api-dashboard or top up, or set reranker: none"
+        )
+    if response.status_code == 429:
+        raise RuntimeError(
+            f"Jina rate limit held through {_MAX_ATTEMPTS} attempts (429) — the "
+            f"free tier allows 100 requests/minute; wait a moment and retry"
+        )
     response.raise_for_status()
     results = [(r["index"], r["relevance_score"]) for r in response.json()["results"]]
     logger.info(

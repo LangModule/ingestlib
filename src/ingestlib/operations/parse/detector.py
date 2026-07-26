@@ -8,6 +8,10 @@ _EXT_TO_FORMAT: dict[str, SourceFormat] = {
     ".pdf": "pdf",
     ".docx": "docx",
     ".pptx": "pptx",
+    ".png": "png",
+    ".jpg": "jpeg",
+    ".jpeg": "jpeg",
+    ".webp": "webp",
 }
 
 SUPPORTED_EXTENSIONS: tuple[str, ...] = tuple(sorted(_EXT_TO_FORMAT.keys()))

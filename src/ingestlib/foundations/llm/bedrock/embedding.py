@@ -3,22 +3,23 @@ import asyncio
 import base64
 import json
 import time
-from typing import Any, Literal
+from typing import Any
 
 from ingestlib.config import get_bedrock_config
-from ingestlib.foundations.llm.bedrock.factory import get_runtime_client
+from ingestlib.foundations.llm.bedrock.factory import bedrock_error_hint, get_runtime_client
+# Shared types re-exported for compatibility — their home is llm/types.py.
+from ingestlib.foundations.llm.types import (  # noqa: F401
+    DEFAULT_DIMENSION,
+    SUPPORTED_DIMENSIONS,
+    EmbeddingDimension,
+    EmbeddingPurpose,
+    ImageDetailLevel,
+    ImageFormat,
+)
 from ingestlib.utils.logger import get_logger
 
 
 logger = get_logger(__name__)
-
-EmbeddingPurpose = Literal["GENERIC_INDEX", "GENERIC_RETRIEVAL", "DOCUMENT_RETRIEVAL"]
-EmbeddingDimension = Literal[256, 384, 1024, 3072]
-ImageFormat = Literal["jpeg", "png", "webp", "gif"]
-ImageDetailLevel = Literal["STANDARD_IMAGE", "DOCUMENT_IMAGE"]
-
-DEFAULT_DIMENSION: EmbeddingDimension = 1024
-SUPPORTED_DIMENSIONS: tuple[int, ...] = (256, 384, 1024, 3072)
 
 
 def _validate_dimension(dimension: int) -> None:
@@ -31,12 +32,18 @@ def _validate_dimension(dimension: int) -> None:
 def _invoke(body: dict[str, Any]) -> dict[str, Any]:
     client = get_runtime_client()
     cfg = get_bedrock_config()
-    response = client.invoke_model(
-        modelId=cfg.embedding_model_id,
-        body=json.dumps(body),
-        contentType="application/json",
-        accept="application/json",
-    )
+    try:
+        response = client.invoke_model(
+            modelId=cfg.embedding_model_id,
+            body=json.dumps(body),
+            contentType="application/json",
+            accept="application/json",
+        )
+    except Exception as exc:
+        hint = bedrock_error_hint(exc)
+        if hint:
+            raise RuntimeError(f"Bedrock embedding failed: {hint}") from exc
+        raise
     return json.loads(response["body"].read())
 
 

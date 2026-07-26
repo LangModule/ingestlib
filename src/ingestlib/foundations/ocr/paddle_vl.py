@@ -106,12 +106,14 @@ def _check_server(server_url: str, backend: str) -> None:
         hint = (
             "  vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111"
             if backend == "vllm-server"
-            else "  uv run python -m mlx_vlm.server --port 8111 "
+            else "  python -m mlx_vlm.server --port 8111 "
                  "--model PaddlePaddle/PaddleOCR-VL-1.6"
         )
         raise RuntimeError(
             f"PaddleOCR-VL inference server not reachable at {server_url} "
-            f"(backend={backend}). Start it with:\n{hint}"
+            f"(backend={backend}). Start it with:\n{hint}\n"
+            f"Just started it? The first launch downloads ~1.8 GB of model "
+            f"weights — wait for it to finish loading."
         ) from exc
 
 

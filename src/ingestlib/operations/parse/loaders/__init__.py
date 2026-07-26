@@ -10,6 +10,11 @@ Two loading shapes per format:
 The rendered shape feeds the parse pipeline; the content shape is the cheap
 path for operations that read documents without layout (classify, split).
 """
+from ingestlib.operations.parse.loaders.image import (
+    load_image,
+    load_image_content,
+    load_image_from_bytes,
+)
 from ingestlib.operations.parse.loaders.office import (
     OfficeExtension,
     load_office,
@@ -29,6 +34,9 @@ __all__ = [
     "ContentPage",
     "LoadedPage",
     "OfficeExtension",
+    "load_image",
+    "load_image_content",
+    "load_image_from_bytes",
     "load_office",
     "load_office_content",
     "load_office_from_bytes",

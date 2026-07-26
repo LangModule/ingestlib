@@ -148,6 +148,27 @@ def test_read_blob_serves_page_images(local_store):
     assert artifacts.read_blob(key) == b"\x89PNG-page"
 
 
+def test_load_on_unknown_doc_id_names_the_fix(local_store):
+    """A doc_id that was never stored must not surface a raw path error —
+    the message names the missing artifact, the call that produces it, and
+    list_documents()."""
+    with pytest.raises(FileNotFoundError, match="parse.*list_documents"):
+        artifacts.load_parse("f" * 64)
+    with pytest.raises(FileNotFoundError, match="classify.*list_documents"):
+        artifacts.load_classify("f" * 64)
+    with pytest.raises(FileNotFoundError, match="split.*list_documents"):
+        artifacts.load_split("f" * 64)
+    with pytest.raises(FileNotFoundError, match="ingest.*list_documents"):
+        artifacts.load_ingest_manifest("f" * 64)
+
+
+def test_load_classify_before_classify_is_the_same_clear_error(local_store):
+    """Parsed but never classified — the standalone-user path."""
+    artifacts.save_parse(_synthetic_parse_result())
+    with pytest.raises(FileNotFoundError, match="classify"):
+        artifacts.load_classify(_DOC_ID)
+
+
 def test_delete_document_removes_everything(local_store):
     artifacts.save_parse(_synthetic_parse_result())
     deleted = artifacts.delete_document(_DOC_ID)

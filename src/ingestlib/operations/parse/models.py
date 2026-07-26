@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, computed_field
 from ingestlib.foundations.ocr.models import Region
 
 
-SourceFormat = Literal["pdf", "docx", "pptx"]
+SourceFormat = Literal["pdf", "docx", "pptx", "png", "jpeg", "webp"]
 
 
 class FigureImage(BaseModel):

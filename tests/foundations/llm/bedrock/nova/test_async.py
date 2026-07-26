@@ -1,7 +1,7 @@
 """Async wrappers produce identical results to sync at temp=0."""
 import asyncio
 
-from ingestlib.foundations.llm import achat, achat_with_thinking, chat
+from ingestlib.foundations.llm.bedrock import achat, achat_with_thinking, chat
 
 
 async def test_achat_matches_sync():

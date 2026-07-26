@@ -225,6 +225,8 @@ async def main() -> None:
     out.write_text(json.dumps({
         "store": args.store,
         "reranker": reranker,
+        "llm_provider": get_config().llm_provider,
+        "embedding_provider": get_config().embedding_provider,
         "top_k": args.top_k,
         "questions": len(dataset),
         "duration_seconds": round(duration, 1),

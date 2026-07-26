@@ -31,6 +31,8 @@ _THIRD_PARTY_LOGGERS: tuple[str, ...] = (
     "httpx",
     "httpcore",
     "botocore",
+    "opensearch",  # logs every request at INFO
+    "pymilvus",
 )
 
 _LEVEL_COLORS = {

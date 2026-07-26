@@ -36,13 +36,22 @@ def _build_clients() -> None:
             else boto3.Session(region_name=aws.region)
         )
     except ProfileNotFound:
-        logger.warning("profile %r not found, falling back to default session", profile)
-        _session = boto3.Session(region_name=aws.region)
+        # Never fall back silently: default credentials could belong to a
+        # DIFFERENT account, and a typo'd profile must not spend against it.
+        available = boto3.Session().available_profiles
+        raise RuntimeError(
+            f"AWS profile {profile!r} (config.yaml aws.profile) not found in "
+            f"~/.aws — available profiles: {available or 'none'}. Fix the name, "
+            f"or leave it empty to use the default credential chain."
+        ) from None
 
     retry_cfg = Config(
         retries={"total_max_attempts": 6, "mode": "standard"},
         connect_timeout=10,
-        read_timeout=3600,
+        # Long enough for a max-length generation (65535 tokens takes several
+        # minutes), short enough that a wedged connection surfaces in minutes
+        # instead of stalling a pipeline stage for an hour.
+        read_timeout=600,
     )
     _runtime_client = _session.client(
         "bedrock-runtime", region_name=aws.region, config=retry_cfg
@@ -81,6 +90,43 @@ def reset_clients() -> None:
         _session = None
         _runtime_client = None
         _rerank_agent_client = None
+
+
+def bedrock_error_hint(exc: Exception) -> str | None:
+    """One-sentence fix for the classic first-run failures, or None.
+
+    Model access and expired credentials account for nearly every first
+    Bedrock error, and the raw boto3 messages point users at the wrong
+    place (IAM) or nowhere. Callers re-raise with the hint, keeping the
+    original exception chained."""
+    code = ""
+    response = getattr(exc, "response", None)
+    if isinstance(response, dict):
+        code = response.get("Error", {}).get("Code", "")
+    name = type(exc).__name__
+    text = str(exc)
+
+    if code == "AccessDeniedException":
+        if "not authorized to perform" in text:
+            return (
+                "IAM denied the call — attach bedrock:InvokeModel permission "
+                "for the Nova models to your profile's identity"
+            )
+        region = get_aws_config().region
+        return (
+            f"enable model access in the Bedrock console (Model access page, "
+            f"region {region}) — this is separate from IAM permissions"
+        )
+    if code in ("ExpiredTokenException", "ExpiredToken", "UnrecognizedClientException",
+                "InvalidClientTokenId") or name in (
+            "UnauthorizedSSOTokenError", "SSOTokenLoadError",
+            "TokenRetrievalError", "NoCredentialsError"):
+        profile = (get_aws_config().profile or "<profile>").strip() or "<profile>"
+        return (
+            f"AWS session expired or no credentials — run "
+            f"`aws sso login --profile {profile}` (or `aws configure`)"
+        )
+    return None
 
 
 def get_model(key: str) -> object | None:

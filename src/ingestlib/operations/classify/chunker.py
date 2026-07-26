@@ -10,7 +10,11 @@ from pathlib import Path
 from typing import NamedTuple
 
 from ingestlib.operations.parse.detector import detect_format
-from ingestlib.operations.parse.loaders import load_office_content, load_pdf_content
+from ingestlib.operations.parse.loaders import (
+    load_image_content,
+    load_office_content,
+    load_pdf_content,
+)
 from ingestlib.operations.parse.models import ParseResult
 from ingestlib.utils.logger import get_logger
 
@@ -54,12 +58,20 @@ def extract_pages(source: ParseResult | Path | str) -> list[PageContent]:
     fmt = detect_format(path)
     if fmt == "pdf":
         loaded, _ = load_pdf_content(path)
+    elif fmt in ("png", "jpeg", "webp"):
+        loaded, _ = load_image_content(path)
     else:  # docx / pptx
         loaded, _ = load_office_content(path)
     logger.info(
         "classify standalone load: %s (%d pages, %d embedded images, no OCR)",
         path.name, len(loaded), sum(len(p.images) for p in loaded),
     )
+    if loaded and not any(cp.text.strip() or cp.images for cp in loaded):
+        raise ValueError(
+            f"{path.name} has no extractable text or images — scanned pages "
+            f"have no text layer. Run parse() first (it OCRs the pages) and "
+            f"pass the ParseResult to classify()."
+        )
     return [
         PageContent(text=cp.text[:PAGE_TEXT_LIMIT], images=cp.images, page_num=i)
         for i, cp in enumerate(loaded, start=1)

@@ -64,6 +64,20 @@ def _convert_to_pdf_bytes(office_bytes: bytes, ext: OfficeExtension) -> bytes:
                 timeout=_CONVERSION_TIMEOUT_SECONDS,
                 capture_output=True,
             )
+        except FileNotFoundError:
+            raise RuntimeError(
+                f"LibreOffice is not installed (`{_LIBREOFFICE_BIN}` not found) — "
+                f"it converts {ext} files to PDF. Install it:\n"
+                f"  brew install --cask libreoffice          # macOS\n"
+                f"  sudo apt install libreoffice-core libreoffice-writer "
+                f"libreoffice-impress   # Linux\n"
+                f"PDF inputs work without it."
+            ) from None
+        except subprocess.TimeoutExpired:
+            raise RuntimeError(
+                f"LibreOffice took over {_CONVERSION_TIMEOUT_SECONDS}s converting "
+                f"the {ext} input and was stopped — the file may be enormous or corrupt"
+            ) from None
         except subprocess.CalledProcessError as exc:
             # capture_output swallows stderr — surface it or failures
             # (missing fonts, corrupt files) are undiagnosable

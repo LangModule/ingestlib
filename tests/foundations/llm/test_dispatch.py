@@ -27,13 +27,16 @@ def set_providers(monkeypatch):
 
 
 def test_backend_selection(set_providers):
-    from ingestlib.foundations.llm import bedrock, openai
+    from ingestlib.foundations.llm import bedrock, ollama, openai
 
     set_providers()
     assert llm._llm() is bedrock and llm._embedder() is bedrock
 
     set_providers(llm_provider="openai", embedding_provider="openai")
     assert llm._llm() is openai and llm._embedder() is openai
+
+    set_providers(llm_provider="ollama", embedding_provider="ollama")
+    assert llm._llm() is ollama and llm._embedder() is ollama
 
 
 def test_llm_and_embedding_providers_are_independent(set_providers):
@@ -91,6 +94,12 @@ async def test_achat_structured_dispatches(set_providers, monkeypatch):
 
 def test_embed_image_on_openai_raises_not_implemented(set_providers):
     set_providers(embedding_provider="openai")
+    with pytest.raises(NotImplementedError, match="image"):
+        llm.embed_image(b"png-bytes", "png")
+
+
+def test_embed_image_on_ollama_raises_not_implemented(set_providers):
+    set_providers(embedding_provider="ollama")
     with pytest.raises(NotImplementedError, match="image"):
         llm.embed_image(b"png-bytes", "png")
 

@@ -3,9 +3,9 @@
 ![ingestlib — self-hosted document intelligence for RAG](assets/cover.png)
 
 Self-hosted document intelligence for RAG pipelines. One library that takes a
-raw document — PDF, DOCX, PPTX — and produces searchable, **cited**,
-retrieval-ready chunks: the territory of LlamaParse / Reducto /
-Unstructured.io, running on your own stack.
+raw document — PDF, DOCX, PPTX, or a PNG/JPEG/WebP image — and produces
+searchable, **cited**, retrieval-ready chunks: the territory of LlamaParse /
+Reducto / Unstructured.io, running on your own stack.
 
 ```python
 from ingestlib.services import ingest, retrieve
@@ -36,7 +36,8 @@ Weaviate — all hybrid dense + sparse), **S3 or a local folder** for
 artifacts (`artifact_store: s3 | local`). ~$0.002/page in LLM spend. An
 **OpenAI backend** (GPT-5 vision-capable chat + text-embedding-3) ships
 alongside Bedrock — flip `llm_provider: openai` / `embedding_provider:
-openai` to run the whole pipeline on it instead. See below.
+openai` to run the whole pipeline on it instead — or `ollama` to keep
+every LLM call on your own machine. See below.
 
 ## Quickstart
 
@@ -46,13 +47,13 @@ openai` to run the whole pipeline on it instead. See below.
 - **AWS account** with Bedrock access (`us-east-1`): Nova 2 Lite + Nova 2
   multimodal embeddings — the default provider; the OpenAI backend can run
   the whole pipeline instead (see below)
-- **Vector database** — Pinecone account (serverless, free tier works;
-  the default), a Qdrant server (local docker or Qdrant Cloud), a Postgres
+- **Vector database** — none at all by default: the sqlite connector
+  stores vectors in a local file. Or a Pinecone account (serverless,
+  free tier works), a Qdrant server (local docker or Qdrant Cloud), a Postgres
   with pgvector (RDS/Supabase/Neon or self-hosted), a MongoDB with search
   (Atlas any tier or 8.2+ self-managed), a Milvus (local docker or Zilliz
   Cloud), an OpenSearch (Amazon domain or local docker), a Weaviate (local
-  docker or Weaviate Cloud) — each just one connection URL — or none at
-  all: the sqlite connector stores vectors in a local file
+  docker or Weaviate Cloud) — each just one connection URL
 - **Jina AI account** for reranking (free tier: 100 RPM) — the default; or set
   `reranker: aws` (Amazon Rerank, same AWS credentials) or `reranker: none`
   in config.yaml and skip Jina entirely
@@ -85,7 +86,7 @@ Parse runs PaddleOCR-VL-1.6 behind an inference server. First launch downloads
 
 ```bash
 # Apple Silicon (Metal GPU)
-uv run python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
+python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
 
 # NVIDIA (then set paddle_vl.backend: vllm-server in config.yaml)
 vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111
@@ -102,13 +103,17 @@ cp rules.example.yaml rules.yaml     # optional: your classify & split rules (se
 aws configure --profile your-aws-profile   # Bedrock-enabled credentials
 ```
 
-Edit `config.yaml`: the `aws` section is the only required part — then pick
-your vector store, reranker, and artifact store. Everything else has working
-defaults. **The S3 bucket (default `ingestlib-{account_id}`) and the vector
-indexes/collections are created automatically on first use** — no manual
-setup. Prefer no cloud storage at all? `artifact_store: local` keeps every
-parse, page image, and chunk in a plain folder beside your config.yaml —
-browsable in a file manager, and moving a corpus between backends is a copy.
+Edit `config.yaml`: pick your providers, vector store, reranker, and
+artifact store — everything else has working defaults (`vector_store:
+sqlite` needs no server and no keys). The `aws` section is required only
+while a choice uses AWS (the default bedrock provider, s3 artifacts, the
+aws reranker, an Amazon OpenSearch domain) — delete it otherwise and the
+config loader will tell you if something still needs it. **The S3 bucket
+(default `ingestlib-{account_id}`) and the vector indexes/collections are
+created automatically on first use** — no manual setup. Prefer no cloud
+storage at all? `artifact_store: local` keeps every parse, page image, and
+chunk in a plain folder beside your config.yaml — browsable in a file
+manager, and moving a corpus between backends is a copy.
 
 Config is discovered at call time, never at import: `INGESTLIB_CONFIG=/path/to/config.yaml`
 wins, otherwise the working directory and its parents are searched — so
@@ -147,7 +152,7 @@ for c in chunks.chunks:
 Persistence and vector access are explicit too:
 
 ```python
-from ingestlib.storage import artifacts, PineconeStore
+from ingestlib.storage import artifacts
 
 doc_id = artifacts.save_parse(result)   # artifact store: source, result.json, page PNGs, crops
 artifacts.list_documents()              # registry: filename, pages, category, chunks
@@ -229,6 +234,37 @@ chat("Read this chart", images=[Image(png_bytes, "png")])   # vision works
 embed_text("a chunk of text")                               # 1024-dim default
 ```
 
+## Local backend (Ollama)
+
+The third provider keeps every LLM call on your machine — the fully
+air-gapped pipeline. Point config.yaml at a local
+[Ollama](https://ollama.com) (or any OpenAI-compatible server: vLLM,
+LM Studio):
+
+```yaml
+llm_provider: ollama
+embedding_provider: ollama
+
+ollama:                                    # these are the defaults
+  base_url: http://localhost:11434/v1
+  llm_model_id: qwen3.5:9b
+  embedding_model_id: qwen3-embedding:0.6b
+```
+
+```bash
+ollama pull qwen3.5:9b
+ollama pull qwen3-embedding:0.6b
+```
+
+No API key. Vision, schema-enforced structured output, and 1024-dim
+embeddings all verified on the reference stack. Two honest notes: use
+the GGUF builds, not `-mlx` (Ollama's MLX engine silently drops images
+and schema enforcement), and a local 9B won't match the cloud models on
+dense charts — run `make eval` and judge with your own documents.
+Combined with `artifact_store: local` and `vector_store: sqlite`,
+nothing leaves your machine but the optional Jina rerank call
+(`reranker: none` closes even that).
+
 ## Architecture
 
 ```
@@ -238,8 +274,8 @@ src/ingestlib/
 ├── storage/        artifacts (S3 | local) · base (VectorStore contract) · 8 connectors
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
-├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Jina) · ocr (PaddleOCR-VL)
-├── utils/          logger · files
+├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Ollama Qwen · Jina) · ocr (PaddleOCR-VL)
+├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env → typed configs
 ```
 
@@ -278,8 +314,9 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~340 tests, ~2min; e2e groups skip)
+make test                  # fast suite (~415 tests, ~2min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
+make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
 make test-classify         # classify e2e         (needs the LLM provider)
 make test-split            # split e2e            (needs the LLM provider)
@@ -322,9 +359,10 @@ are visible over time.
 
 ## Scope
 
-English documents; PDF / DOCX / PPTX input. Images, charts, and tables
-**inside** documents are fully extracted and interpreted; direct image files
-and handwriting are out of scope by design.
+English documents; PDF / DOCX / PPTX / PNG / JPEG / WebP input. Images,
+charts, and tables **inside** documents are fully extracted and interpreted,
+and a single image file parses as a one-page document; handwriting is out
+of scope by design.
 
 ## The studio
 
@@ -337,7 +375,8 @@ retrieval playground where every answer points to its source on the page.
 ## Roadmap
 
 - Extract: schema-driven field extraction with source provenance
-- Per-run content rules on `ingest()` (classify/split already accept them)
+- `ingestlib init` / `ingestlib doctor` — CLI setup scaffold and stack
+  health checks
 
 ## License
 

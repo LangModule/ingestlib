@@ -77,3 +77,15 @@ def test_save_images_roundtrip(result, tmp_path):
     written = result.save_images(tmp_path)
     assert len(written) == sum(len(p.figures) for p in result.pages)
     assert all(w.exists() and w.stat().st_size > 0 for w in written)
+
+
+def test_image_input_parses_end_to_end():
+    """A bare PNG through the full pipeline — the scanned-page code path."""
+    from ingestlib.operations.parse import parse
+
+    r = parse(_DATA_DIR / "images" / "document_text.png")
+    assert r.source_format == "png" and r.was_converted is False
+    assert r.page_count == 1
+    page = r.pages[0]
+    assert page.native_text == "", "images have no text layer"
+    assert len(page.regions) > 0 and page.markdown.strip()

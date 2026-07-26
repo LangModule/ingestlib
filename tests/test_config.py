@@ -64,7 +64,7 @@ def test_aws_only_config_loads_with_all_defaults(scratch_config):
     assert cfg.openai.embedding_model_id == "text-embedding-3-small"
     assert cfg.paddle_vl.api_model_name == "PaddlePaddle/PaddleOCR-VL-1.6"
     assert cfg.s3.bucket == "ingestlib-123456789012"
-    assert cfg.vector_store == "pinecone"
+    assert cfg.vector_store == "sqlite"
     assert cfg.reranker == "jina"
     assert cfg.artifact_store == "s3"
     assert cfg.llm_provider == "bedrock"
@@ -78,10 +78,33 @@ def test_artifacts_path_anchors_beside_config(scratch_config):
     assert cfg.artifacts.path == (scratch_config / "artifacts").resolve()
 
 
-def test_missing_aws_section_raises(scratch_config):
+def test_missing_aws_with_aws_choices_raises_naming_them(scratch_config):
+    """The defaults (bedrock provider, s3 artifacts) use AWS — a config with
+    no aws section must say WHICH choices need it."""
     _write(scratch_config, "vector_store: sqlite\n")
-    with pytest.raises(KeyError):
+    with pytest.raises(ValueError, match="llm_provider: bedrock"):
         get_config()
+
+
+def test_partial_aws_section_raises_naming_missing_keys(scratch_config):
+    _write(scratch_config, "aws:\n  profile: p\n")
+    with pytest.raises(ValueError, match="missing region, account_id"):
+        get_config()
+
+
+def test_zero_cloud_config_needs_no_aws_section(scratch_config):
+    """Nothing AWS-flavored chosen → the aws section is not required."""
+    _write(
+        scratch_config,
+        "llm_provider: ollama\n"
+        "embedding_provider: ollama\n"
+        "artifact_store: local\n"
+        "vector_store: sqlite\n"
+        "reranker: none\n",
+    )
+    cfg = get_config()
+    assert cfg.aws.profile == ""
+    assert cfg.llm_provider == "ollama" and cfg.artifact_store == "local"
 
 
 def test_reranker_and_vector_store_keys_are_read(scratch_config):

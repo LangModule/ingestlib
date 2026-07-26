@@ -79,6 +79,21 @@ def _extract_metadata(pdf: pdfium.PdfDocument) -> dict[str, Any]:
     return out
 
 
+def _open_pdf(pdf_bytes: bytes) -> pdfium.PdfDocument:
+    """Open bytes as a PDF, translating pdfium's failures into a diagnosis."""
+    try:
+        return pdfium.PdfDocument(pdf_bytes)
+    except pdfium.PdfiumError as exc:
+        if "password" in str(exc).lower():
+            raise RuntimeError(
+                "this PDF is password-protected — remove the password first "
+                "(e.g. open it and print/export to a new PDF)"
+            ) from exc
+        raise RuntimeError(
+            "not a readable PDF — the file appears corrupt or truncated"
+        ) from exc
+
+
 def load_pdf_from_bytes(
     pdf_bytes: bytes,
     *,
@@ -92,7 +107,7 @@ def load_pdf_from_bytes(
     """
     # native handles are closed explicitly — GC finalizers are too lazy for a
     # long-running server parsing large documents
-    pdf = pdfium.PdfDocument(pdf_bytes)
+    pdf = _open_pdf(pdf_bytes)
     try:
         pages: list[LoadedPage] = []
         for page in pdf:
@@ -185,7 +200,7 @@ def load_pdf_content_from_bytes(
     (classify, split): text comes from the text layer, images are the actual
     pictures inside the PDF rather than rasterized pages.
     """
-    pdf = pdfium.PdfDocument(pdf_bytes)
+    pdf = _open_pdf(pdf_bytes)
     try:
         pages: list[ContentPage] = []
         for page in pdf:

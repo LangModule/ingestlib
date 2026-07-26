@@ -23,11 +23,11 @@ import re
 import threading
 from urllib.parse import urlparse
 
-import boto3
 from opensearchpy import OpenSearch, Urllib3AWSV4SignerAuth, Urllib3HttpConnection
 from opensearchpy.exceptions import RequestError
 
 from ingestlib.config import get_aws_config, get_opensearch_config
+from ingestlib.utils.aws import aws_session
 from ingestlib.utils.logger import get_logger
 
 
@@ -60,9 +60,7 @@ def get_opensearch_client() -> OpenSearch:
             if aws_match:
                 region, service = aws_match.groups()
                 aws = get_aws_config()
-                credentials = boto3.Session(
-                    profile_name=aws.profile or None, region_name=region
-                ).get_credentials()
+                credentials = aws_session(aws.profile, region).get_credentials()
                 if credentials is None:
                     raise RuntimeError(
                         f"no AWS credentials for profile {aws.profile!r} — "

@@ -2,15 +2,29 @@
 import asyncio
 import base64
 import time
-from typing import Any, Literal, NamedTuple, TypeVar
+from typing import Any, TypeVar
 
 from langchain_aws import ChatBedrockConverse
 from langchain_core.messages import HumanMessage, SystemMessage
 from pydantic import BaseModel
 
 from ingestlib.config import get_bedrock_config
-from ingestlib.foundations.llm.bedrock.embedding import ImageFormat
-from ingestlib.foundations.llm.bedrock.factory import cache_model, get_model, get_runtime_client
+from ingestlib.foundations.llm.bedrock.factory import (
+    bedrock_error_hint,
+    cache_model,
+    get_model,
+    get_runtime_client,
+)
+# Shared types re-exported for compatibility — their home is llm/types.py.
+from ingestlib.foundations.llm.types import (  # noqa: F401
+    DEFAULT_MAX_TOKENS,
+    DEFAULT_REASONING_EFFORT,
+    DEFAULT_THINKING_MAX_TOKENS,
+    SUPPORTED_MAX_TOKENS,
+    Image,
+    MaxTokens,
+    ReasoningEffort,
+)
 from ingestlib.utils.logger import get_logger
 
 
@@ -18,20 +32,6 @@ BaseModelT = TypeVar("BaseModelT", bound=BaseModel)
 
 
 logger = get_logger(__name__)
-
-MaxTokens = Literal[8192, 16384, 32768, 65535]
-ReasoningEffort = Literal["low", "medium", "high"]
-
-SUPPORTED_MAX_TOKENS: tuple[int, ...] = (8192, 16384, 32768, 65535)
-DEFAULT_MAX_TOKENS: MaxTokens = 16384
-DEFAULT_THINKING_MAX_TOKENS: MaxTokens = 32768
-DEFAULT_REASONING_EFFORT: ReasoningEffort = "medium"
-
-
-class Image(NamedTuple):
-    """In-memory image payload: raw bytes + format ("jpeg" | "png" | "webp" | "gif")."""
-    data: bytes
-    format: ImageFormat
 
 
 def _validate_max_tokens(max_tokens: int) -> None:
@@ -157,7 +157,13 @@ def _converse(
         additional_fields is not None,
     )
     t0 = time.perf_counter()
-    response = client.converse(**kwargs)
+    try:
+        response = client.converse(**kwargs)
+    except Exception as exc:
+        hint = bedrock_error_hint(exc)
+        if hint:
+            raise RuntimeError(f"Bedrock chat failed: {hint}") from exc
+        raise
     reply = _extract_text(response)
     logger.info(
         "Nova converse done: %.2fs response_len=%d",
@@ -275,6 +281,9 @@ def chat_structured(
         try:
             result = llm.invoke(messages)
         except Exception as exc:  # tool-call parse / schema validation failure
+            hint = bedrock_error_hint(exc)
+            if hint:  # access/credential failures don't improve on retry
+                raise RuntimeError(f"Bedrock chat failed: {hint}") from exc
             logger.warning(
                 "structured output attempt %d failed (%s: %s)",
                 attempt, type(exc).__name__, exc,

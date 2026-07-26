@@ -21,6 +21,7 @@ from ingestlib.services.ingest.models import IngestResult
 from ingestlib.storage import VectorStore, artifacts, default_store
 from ingestlib.utils.files import sha256_of_file
 from ingestlib.utils.logger import get_logger
+from ingestlib.utils.sync import run_sync
 
 
 logger = get_logger(__name__)
@@ -77,22 +78,35 @@ async def aingest(
     namespace: str = "",
     skip_existing: bool = True,
     max_chunk_tokens: int = DEFAULT_MAX_CHUNK_TOKENS,
+    categories: dict[str, str] | None = None,
+    target_pages: str | None = None,
+    max_pages: int | None = None,
+    vocabulary: dict[str, str] | None = None,
+    unmatched: str | None = None,
     on_stage: StageCallback | None = None,
 ) -> IngestResult:
     """Run a document through the full pipeline (async).
 
-    The classify and split stages honor rules.yaml's presets when they
-    exist (`classify:` closed-set rules + page settings; `split:` user
-    section vocabulary + unmatched mode) — see rules.example.yaml.
+    The content-rule arguments pass straight to classify and split with
+    their exact semantics: None resolves from rules.yaml's preset, an
+    explicit {} forces open-ended/discovery, explicit values always win.
 
-    path             — PDF/DOCX/PPTX to ingest
+    path             — PDF/DOCX/PPTX document, or a PNG/JPEG/WebP image
     store            — vector store connector; defaults to the one selected
                        by config.yaml's `vector_store` key
     namespace        — vector-store namespace for multi-corpus setups
     skip_existing    — return status="skipped" when this exact file (by
                        checksum) already completed the FULL pipeline; a run
-                       that failed partway is retried
+                       that failed partway is retried. Dedup keys on file
+                       CONTENT only — re-ingesting with different rules
+                       still skips; pass skip_existing=False to re-run
     max_chunk_tokens — split's chunk-size ceiling
+    categories       — classify rules {label: description}, max 20
+    target_pages     — classify page selection like "1,3,5-7" (1-based)
+    max_pages        — classify page cap applied after selection
+    vocabulary       — split section categories {name: description}, max 50
+    unmatched        — split's policy for pages fitting no category:
+                       "other" | "require" | "skip"
     on_stage         — optional progress callback, called as on_stage(stage,
                        event) with stage parse|classify|split|embed|upsert and
                        event start|done; a stage that raises leaves its
@@ -129,7 +143,10 @@ async def aingest(
         await asyncio.to_thread(artifacts.save_parse, parse_result)
 
     with _stage("classify", durations, on_stage):
-        classify_result = await aclassify(parse_result)
+        classify_result = await aclassify(
+            parse_result, categories,
+            target_pages=target_pages, max_pages=max_pages,
+        )
         await asyncio.to_thread(artifacts.save_classify, doc_id, classify_result)
 
     with _stage("split", durations, on_stage):
@@ -137,6 +154,8 @@ async def aingest(
             parse_result,
             category=classify_result.category,
             max_chunk_tokens=max_chunk_tokens,
+            vocabulary=vocabulary,
+            unmatched=unmatched,
         )
         await asyncio.to_thread(artifacts.save_split, doc_id, split_result)
 
@@ -189,12 +208,22 @@ def ingest(
     namespace: str = "",
     skip_existing: bool = True,
     max_chunk_tokens: int = DEFAULT_MAX_CHUNK_TOKENS,
+    categories: dict[str, str] | None = None,
+    target_pages: str | None = None,
+    max_pages: int | None = None,
+    vocabulary: dict[str, str] | None = None,
+    unmatched: str | None = None,
     on_stage: StageCallback | None = None,
 ) -> IngestResult:
     """Run a document through the full pipeline. Sync wrapper — use aingest()
     inside an event loop."""
-    return asyncio.run(aingest(
-        path, store=store, namespace=namespace,
-        skip_existing=skip_existing, max_chunk_tokens=max_chunk_tokens,
-        on_stage=on_stage,
-    ))
+    return run_sync(
+        aingest(
+            path, store=store, namespace=namespace,
+            skip_existing=skip_existing, max_chunk_tokens=max_chunk_tokens,
+            categories=categories, target_pages=target_pages,
+            max_pages=max_pages, vocabulary=vocabulary, unmatched=unmatched,
+            on_stage=on_stage,
+        ),
+        "aingest",
+    )
