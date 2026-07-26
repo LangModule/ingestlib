@@ -36,3 +36,15 @@ def test_load_image_content_is_the_image_itself():
     assert len(pages[0].images) == 1
     img = PILImage.open(__import__("io").BytesIO(pages[0].images[0]))
     assert max(img.size) <= 1600, "LLM-bound images are downscaled"
+
+
+def test_webp_loads_like_any_other_image():
+    """WebP is a claimed input format — prove it through the real loader,
+    not just the extension table."""
+    scan = _TESTS_DIR / "data" / "images" / "document_scan.webp"
+    pages, _ = load_image(scan)
+    assert len(pages) == 1
+    assert pages[0].image_bytes.startswith(b"\x89PNG"), "renders normalize to PNG"
+
+    content_pages, _ = load_image_content(scan)
+    assert len(content_pages[0].images) == 1

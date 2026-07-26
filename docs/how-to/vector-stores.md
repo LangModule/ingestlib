@@ -14,6 +14,13 @@ vector_store: sqlite   # or any tab below
 If you select a store whose SDK isn't installed, the error names the exact
 extra: `pip install "ingestlib[qdrant]"`.
 
+Prefer compose over the per-tab `docker run` commands? The repo's
+[`infra/docker-compose.yml`](https://github.com/LangModule/ingestlib/blob/main/infra/docker-compose.yml)
+starts any backend with one profile —
+`docker compose -f infra/docker-compose.yml --profile qdrant up -d` —
+with ports matching the tabs below, and encodes the startup gotchas
+(pg18 volume layout, mongodb's dual mounts, Milvus's companions).
+
 === "sqlite"
 
     The default. One local file, no server, no keys — sqlite-vec for
@@ -161,6 +168,11 @@ extra: `pip install "ingestlib[qdrant]"`.
     OPENSEARCH_URL=http://localhost:9200
     ```
 
+    For a real Amazon domain, the repo ships a CloudFormation template
+    for the cheapest k-NN-capable configuration (~$0.10/hour, delete
+    when idle):
+    [`infra/opensearch.yaml`](https://github.com/LangModule/ingestlib/blob/main/infra/opensearch.yaml).
+
 === "Weaviate"
 
     HNSW dense + native BM25, fused server-side in one hybrid call. Local
@@ -204,6 +216,7 @@ uv run ingestlib doctor        # includes a reachability check for the selected 
 
 ## Migrating between stores
 
-Artifacts are the source of truth, so moving stores is a re-ingest, not an
-export: change `vector_store`, then re-run ingestion over your corpus —
-parses are reused from the artifact store, so no OCR or LLM calls repeat.
+Moving stores is a re-ingest, not an export: change `vector_store`, then
+re-run ingestion over your corpus with `skip_existing=False`. Today that
+re-runs the pipeline per document; a backfill fast path that re-embeds
+straight from stored artifacts is on the roadmap.

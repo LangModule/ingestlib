@@ -8,7 +8,7 @@
       "Resource": [
         "arn:aws:bedrock:*::foundation-model/amazon.nova-2-lite-v1:0",
         "arn:aws:bedrock:*::foundation-model/amazon.nova-2-multimodal-embeddings-v1:0",
-        "arn:aws:bedrock:*:656077800096:inference-profile/us.amazon.nova-2-lite-v1:0"
+        "arn:aws:bedrock:*:ACCOUNT_ID:inference-profile/us.amazon.nova-2-lite-v1:0"
       ]
     },
     {
@@ -18,7 +18,7 @@
         "s3:CreateBucket",
         "s3:ListBucket"
       ],
-      "Resource": "arn:aws:s3:::ingestlib"
+      "Resource": "arn:aws:s3:::BUCKET_NAME"
     },
     {
       "Sid": "IngestlibObjects",
@@ -28,7 +28,7 @@
         "s3:GetObject",
         "s3:DeleteObject"
       ],
-      "Resource": "arn:aws:s3:::ingestlib/*"
+      "Resource": "arn:aws:s3:::BUCKET_NAME/*"
     },
     {
       "Sid": "IngestlibRerank",

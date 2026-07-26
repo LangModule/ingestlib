@@ -30,10 +30,10 @@ pruning on re-ingest, no infrastructure creation on the read path,
 namespace isolation everywhere.
 
 **Artifacts are the source of truth; vectors are an index.** Every stage's
-output persists before the next stage runs. The vector store can be wiped
-and rebuilt from artifacts without repeating a single OCR or LLM call —
-which is also what makes switching stores or embedding models a re-embed,
-not a re-parse.
+output persists before the next stage runs, so nothing about a corpus is
+ever locked inside a vector database — parses, chunks, and page renders
+all reload from the artifact store. (A backfill fast path that rebuilds a
+vector store straight from these artifacts is on the roadmap.)
 
 **Provenance is structural, not annotated.** Chunks record the parse
 region ids they cover, chunk boundaries can't cut through a region, and

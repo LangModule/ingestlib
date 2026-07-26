@@ -247,9 +247,10 @@ embedding_provider: openai    # chunk + query embeddings
 
 Combined with `artifact_store: local`, `vector_store: sqlite`, and
 `reranker: jina` (or `none`), the pipeline needs no AWS at all. Two rules:
-switching `embedding_provider` changes the vector space, so re-ingest (or
-`--backfill`) afterward — vectors from different embedding models never mix
-in one index. And text embeddings only: OpenAI has no image-embedding model.
+switching `embedding_provider` changes the vector space, so re-ingest
+afterward (`skip_existing=False`) — vectors from different embedding models
+never mix in one index. And text embeddings only: OpenAI has no
+image-embedding model.
 
 The backend is also importable directly, ignoring the config switch:
 
@@ -287,7 +288,7 @@ No API key. Vision, schema-enforced structured output, and 1024-dim
 embeddings all verified on the reference stack. Two honest notes: use
 the GGUF builds, not `-mlx` (Ollama's MLX engine silently drops images
 and schema enforcement), and a local 9B won't match the cloud models on
-dense charts — run `make eval` and judge with your own documents.
+dense charts — test with your own documents before committing.
 Combined with `artifact_store: local` and `vector_store: sqlite`,
 nothing leaves your machine but the optional Jina rerank call
 (`reranker: none` closes even that).
@@ -304,7 +305,7 @@ src/ingestlib/
 ├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Ollama Qwen · Jina) · ocr (PaddleOCR-VL)
 ├── cli/            the `ingestlib` command — init (setup scaffold) · doctor (health checks)
 ├── utils/          logger · files · sync · aws
-└── config.py       config.yaml + .env → typed configs
+└── config.py       config.yaml + .env + rules.yaml → typed configs
 ```
 
 Strict downward dependencies. The `VectorStore` contract means backends drop
@@ -342,7 +343,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~415 tests, ~2min; e2e groups skip)
+make test                  # fast suite (~440 tests, ~3min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
@@ -364,8 +365,12 @@ make eval                  # retrieval quality eval (see below)
 make docs                  # live-preview the documentation site
 ```
 
-Fixture PDFs live in `tests/data/pdf/` — 14 real documents (research papers,
-earnings decks, insurance forms, timetables, 10-Ks).
+Fixtures live in `tests/data/` — 15 real PDFs (research papers, earnings
+decks, insurance forms, 10-Ks, a 16-page receipt scan, a password-protected
+one), document images incl. WebP, and real DOCX/PPTX files. The
+server-backed connector suites need their servers:
+`docker compose -f infra/docker-compose.yml --profile all up -d` starts
+every local store (or `--profile qdrant` etc. for just one).
 
 ### Retrieval quality
 

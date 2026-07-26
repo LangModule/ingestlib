@@ -50,6 +50,11 @@ errors will walk you through if you hit them:
 
 Best for: teams sharing a corpus, production, anything multi-machine.
 
+A least-privilege IAM policy for the default stack (Bedrock + the
+artifact bucket + Amazon Rerank) lives in the repo's
+[`infra/` folder](https://github.com/LangModule/ingestlib/tree/main/infra)
+— replace the placeholders and attach.
+
 ## One API over both
 
 Your code never branches on the backend:
@@ -65,10 +70,12 @@ artifacts.delete_document(doc_id)
 
 ## Why artifacts matter
 
-The artifact store is the **source of truth**; the vector store is a
-rebuildable index over it. Because parses persist here, re-ingesting into
-a different vector store — or after an embedding-provider switch — reuses
-every stored parse and repeats zero OCR/LLM work.
+The artifact store is the **source of truth**; the vector store is an
+index over it. Every stage's full output survives here, so nothing about
+your corpus is ever locked inside a vector database — `load_parse`,
+`load_split`, and the page renders reconstruct everything. (A backfill
+fast path that re-embeds straight from these artifacts — without
+re-running the pipeline — is on the roadmap.)
 
 ---
 

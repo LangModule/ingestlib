@@ -38,18 +38,19 @@ def test_system_prompt_accepted_without_error():
     assert v.category.strip()
 
 
-def test_with_image_input(doc_chart_bytes):
+def test_with_image_input(doc_text_bytes):
     class _ImageVerdict(BaseModel):
-        is_document_page: bool
+        is_identity_document: bool
         summary: str
 
     v = chat_structured(
-        "Is this image a document page (vs a photograph)? Summarize it in one sentence.",
+        "Is this image an identity document (vs a nature photograph)? "
+        "Summarize it in one sentence.",
         schema=_ImageVerdict,
-        images=[Image(doc_chart_bytes, "png")],
+        images=[Image(doc_text_bytes, "png")],
     )
     assert isinstance(v, _ImageVerdict)
-    assert v.is_document_page is True
+    assert v.is_identity_document is True
 
 
 async def test_achat_structured_matches_sync_shape():

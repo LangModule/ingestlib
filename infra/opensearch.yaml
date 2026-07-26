@@ -7,19 +7,20 @@
 #   aws cloudformation deploy \
 #     --template-file infra/opensearch.yaml \
 #     --stack-name ingestlib-opensearch \
-#     --profile my-name --region us-east-1
+#     --parameter-overrides MasterUserArn=arn:aws:iam::YOUR_ACCOUNT_ID:user/your-user \
+#     --profile your-profile --region us-east-1
 #
 # Endpoint:
 #   aws cloudformation describe-stacks \
 #     --stack-name ingestlib-opensearch \
 #     --query "Stacks[0].Outputs[?OutputKey=='DomainEndpoint'].OutputValue" \
-#     --output text --profile my-name --region us-east-1
+#     --output text --profile your-profile --region us-east-1
 #
-# Remove (billing ends; the vector index is rebuildable from stored artifacts
-# via backfill):
+# Remove (billing ends; re-ingesting your corpus rebuilds the index in a
+# fresh domain):
 #   aws cloudformation delete-stack \
 #     --stack-name ingestlib-opensearch \
-#     --profile my-name --region us-east-1
+#     --profile your-profile --region us-east-1
 
 AWSTemplateFormatVersion: "2010-09-09"
 Description: >-
@@ -38,8 +39,11 @@ Parameters:
     Default: r8g.medium.search
   MasterUserArn:
     Type: String
-    Default: arn:aws:iam::656077800096:user/ram-bedrock
-    Description: IAM principal that fine-grained access control treats as master.
+    Description: >-
+      IAM principal that fine-grained access control treats as master —
+      the user or role your config.yaml aws.profile authenticates as,
+      e.g. arn:aws:iam::123456789012:user/your-user. No default: pass
+      --parameter-overrides MasterUserArn=... on deploy.
 
 Resources:
   Domain:

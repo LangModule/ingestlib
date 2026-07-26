@@ -5,7 +5,7 @@
       "Sid": "IngestlibStack",
       "Effect": "Allow",
       "Action": "cloudformation:*",
-      "Resource": "arn:aws:cloudformation:us-east-1:656077800096:stack/ingestlib-opensearch/*"
+      "Resource": "arn:aws:cloudformation:us-east-1:ACCOUNT_ID:stack/ingestlib-opensearch/*"
     },
     {
       "Sid": "IngestlibStackTemplateOps",
@@ -20,7 +20,7 @@
       "Sid": "IngestlibOpenSearchDomain",
       "Effect": "Allow",
       "Action": "es:*",
-      "Resource": "arn:aws:es:us-east-1:656077800096:domain/ingestlib*"
+      "Resource": "arn:aws:es:us-east-1:ACCOUNT_ID:domain/ingestlib*"
     }
   ]
 }

@@ -39,11 +39,13 @@ def test_chat_with_image_identifies_content(oai, photo_bytes):
 
 
 def test_chat_reads_document_page(oai, doc_chart_bytes):
+    """Asserting on the chart's printed title proves the image actually
+    reached the model, not just that the model said something plausible."""
     r = oai.chat(
-        "Is this image a document page or a photograph of an animal? One word.",
+        "What title is printed at the top of this chart? Reply with the title only.",
         images=[Image(doc_chart_bytes, "png")],
     )
-    assert "document" in r.lower(), f"expected 'document' in response, got {r!r}"
+    assert "sales" in r.lower(), f"expected the chart title 'My sales', got {r!r}"
 
 
 def test_thinking_answers_correctly():

@@ -1,0 +1,130 @@
+# Local servers for ingestlib's vector-store connectors — one profile per
+# backend, so you start exactly the one your config.yaml selects:
+#
+#   docker compose -f infra/docker-compose.yml --profile qdrant up -d
+#   docker compose -f infra/docker-compose.yml --profile qdrant down
+#
+# Profiles: qdrant | pgvector | mongodb | milvus | opensearch | weaviate,
+# plus `all` (contributors running `make test-all`). Ports and credentials
+# match the formats .env.example documents. Data persists in named volumes;
+# `down -v` wipes it.
+#
+# Not here by nature: sqlite (no server) and pinecone (cloud-only).
+
+name: ingestlib
+
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    profiles: ["qdrant", "all"]
+    ports:
+      - "6333:6333"   # REST
+      - "6334:6334"   # gRPC
+    volumes:
+      - qdrant-data:/qdrant/storage
+    # .env: QDRANT_URL=http://localhost:6333
+
+  pgvector:
+    image: pgvector/pgvector:pg18
+    profiles: ["pgvector", "all"]
+    environment:
+      POSTGRES_PASSWORD: pw
+    ports:
+      - "5432:5432"
+    volumes:
+      # pg18+ images want the mount ONE level up from the classic
+      # /var/lib/postgresql/data — the old path makes the entrypoint exit
+      - pgvector-data:/var/lib/postgresql
+    # .env: PGVECTOR_URL=postgresql://postgres:pw@localhost:5432/postgres
+
+  mongodb:
+    # Vanilla `mongo` images CANNOT serve $vectorSearch/$search — they lack
+    # the mongot search process. atlas-local bundles mongod + mongot.
+    image: mongodb/mongodb-atlas-local:latest
+    profiles: ["mongodb", "all"]
+    ports:
+      - "27017:27017"
+    volumes:
+      # BOTH mounts, or restarts crash-loop: init writes the replica-set
+      # keyfile to /data/configdb, and the data in /data/db demands it
+      - mongodb-data:/data/db
+      - mongodb-config:/data/configdb
+    # .env: MONGODB_URL=mongodb://localhost:27017/?directConnection=true
+
+  # --- milvus needs its two companions (the official standalone shape;
+  #     the single-container form panics without embedded-etcd config) ---
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.18
+    profiles: ["milvus", "all"]
+    environment:
+      ETCD_AUTO_COMPACTION_MODE: revision
+      ETCD_AUTO_COMPACTION_RETENTION: "1000"
+      ETCD_QUOTA_BACKEND_BYTES: "4294967296"
+      ETCD_SNAPSHOT_COUNT: "50000"
+    command: etcd -advertise-client-urls=http://milvus-etcd:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    volumes:
+      - milvus-etcd-data:/etcd
+
+  milvus-minio:
+    image: minio/minio:RELEASE.2024-05-28T17-19-04Z
+    profiles: ["milvus", "all"]
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    command: minio server /minio_data
+    volumes:
+      - milvus-minio-data:/minio_data
+
+  milvus:
+    image: milvusdb/milvus:v2.6.4
+    profiles: ["milvus", "all"]
+    command: ["milvus", "run", "standalone"]
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+    ports:
+      - "19530:19530"  # SDK
+      - "9091:9091"    # health/metrics
+    depends_on:
+      - milvus-etcd
+      - milvus-minio
+    volumes:
+      - milvus-data:/var/lib/milvus
+    # .env: MILVUS_URL=http://localhost:19530
+
+  opensearch:
+    image: opensearchproject/opensearch:latest
+    profiles: ["opensearch", "all"]
+    environment:
+      discovery.type: single-node
+      DISABLE_SECURITY_PLUGIN: "true"
+      OPENSEARCH_JAVA_OPTS: "-Xms512m -Xmx512m"
+    ports:
+      - "9200:9200"
+    volumes:
+      - opensearch-data:/usr/share/opensearch/data
+    # .env: OPENSEARCH_URL=http://localhost:9200
+
+  weaviate:
+    image: cr.weaviate.io/semitechnologies/weaviate:latest
+    profiles: ["weaviate", "all"]
+    environment:
+      AUTHENTICATION_ANONYMOUS_ACCESS_ENABLED: "true"
+      PERSISTENCE_DATA_PATH: /var/lib/weaviate
+    ports:
+      - "8080:8080"    # HTTP
+      - "50051:50051"  # gRPC — the v4 client needs BOTH
+    volumes:
+      - weaviate-data:/var/lib/weaviate
+    # .env: WEAVIATE_URL=http://localhost:8080
+
+volumes:
+  qdrant-data:
+  pgvector-data:
+  mongodb-data:
+  mongodb-config:
+  milvus-etcd-data:
+  milvus-minio-data:
+  milvus-data:
+  opensearch-data:
+  weaviate-data:

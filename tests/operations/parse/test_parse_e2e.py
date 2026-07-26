@@ -89,3 +89,23 @@ def test_image_input_parses_end_to_end():
     page = r.pages[0]
     assert page.native_text == "", "images have no text layer"
     assert len(page.regions) > 0 and page.markdown.strip()
+
+
+def test_docx_parses_end_to_end():
+    """A real Word document through LibreOffice conversion + the full pipeline."""
+    from ingestlib.operations.parse import parse
+
+    r = parse(_DATA_DIR / "word" / "project-plan.docx")
+    assert r.source_format == "docx" and r.was_converted is True
+    assert r.page_count >= 1
+    assert all(p.markdown.strip() for p in r.pages)
+
+
+def test_pptx_parses_end_to_end():
+    """A real slide deck — one page per slide, each with content."""
+    from ingestlib.operations.parse import parse
+
+    r = parse(_DATA_DIR / "ppt" / "slide-deck.pptx")
+    assert r.source_format == "pptx" and r.was_converted is True
+    assert r.page_count > 1
+    assert all(p.markdown.strip() for p in r.pages)

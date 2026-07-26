@@ -58,6 +58,8 @@ Inside an event loop (a notebook, a web handler), use the `a`-prefixed
 form — the sync form will tell you so if you forget:
 
 ```python
+from ingestlib.operations import aparse
+
 result = await aparse("report.pdf")
 ```
 

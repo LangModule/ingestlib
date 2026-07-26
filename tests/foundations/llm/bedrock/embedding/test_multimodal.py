@@ -1,7 +1,13 @@
-"""Cross-modal semantic ordering — the whole point of multimodal embeddings."""
+"""Cross-modal semantic ordering — the whole point of multimodal embeddings.
+
+Probes describe the REAL fixtures: photo.jpg is a cat photograph,
+document_text.png is a driver's license, document_chart.png is a monthly
+sales chart. Measured margins are wide (right pairing ~0.3-0.4 cosine,
+wrong ~0.08), so these orderings are stable, not lucky.
+"""
 
 
-def test_text_cat_closer_to_photo_than_to_periodic_table(
+def test_text_cat_closer_to_photo_than_to_chart(
     embed, cos_sim, photo_path, doc_chart_path
 ):
     v_text = embed.text("a photograph of a domestic cat sitting outdoors")
@@ -17,10 +23,10 @@ def test_text_cat_closer_to_photo_than_to_periodic_table(
     )
 
 
-def test_text_form_closer_to_document_page_than_to_photo(
+def test_text_license_closer_to_license_image_than_to_photo(
     embed, cos_sim, doc_text_path, photo_path
 ):
-    v_text = embed.text("an employment application form with fields for name, address, and job history")
+    v_text = embed.text("a driver's license identity card with a photo, name, and address")
     v_doc = embed.image(doc_text_path, detail_level="DOCUMENT_IMAGE")
     v_photo = embed.image(photo_path, detail_level="STANDARD_IMAGE")
 
@@ -28,15 +34,15 @@ def test_text_form_closer_to_document_page_than_to_photo(
     sim_wrong = cos_sim(v_text, v_photo)
 
     assert sim_correct > sim_wrong, (
-        f'"form" text↔doc_text sim {sim_correct:.4f} not greater than '
-        f'"form" text↔photo sim {sim_wrong:.4f}'
+        f'"license" text↔license sim {sim_correct:.4f} not greater than '
+        f'"license" text↔photo sim {sim_wrong:.4f}'
     )
 
 
-def test_text_periodic_table_closer_to_chart_image_than_to_photo(
+def test_text_sales_chart_closer_to_chart_image_than_to_photo(
     embed, cos_sim, doc_chart_path, photo_path
 ):
-    v_text = embed.text("the periodic table of chemical elements with rows and columns")
+    v_text = embed.text("a bar chart of monthly sales showing units sold per month")
     v_chart = embed.image(doc_chart_path, detail_level="DOCUMENT_IMAGE")
     v_photo = embed.image(photo_path, detail_level="STANDARD_IMAGE")
 
@@ -44,8 +50,8 @@ def test_text_periodic_table_closer_to_chart_image_than_to_photo(
     sim_wrong = cos_sim(v_text, v_photo)
 
     assert sim_correct > sim_wrong, (
-        f'"periodic table" text↔chart sim {sim_correct:.4f} not greater than '
-        f'"periodic table" text↔photo sim {sim_wrong:.4f}'
+        f'"sales chart" text↔chart sim {sim_correct:.4f} not greater than '
+        f'"sales chart" text↔photo sim {sim_wrong:.4f}'
     )
 
 
@@ -54,12 +60,12 @@ def test_wrong_text_does_not_beat_right_text_for_photo(
 ):
     v_photo = embed.image(photo_path, detail_level="STANDARD_IMAGE")
     v_right = embed.text("a photograph of a domestic cat sitting outdoors")
-    v_wrong = embed.text("the periodic table of chemical elements with rows and columns")
+    v_wrong = embed.text("a bar chart of monthly sales showing units sold per month")
 
     sim_right = cos_sim(v_photo, v_right)
     sim_wrong = cos_sim(v_photo, v_wrong)
 
     assert sim_right > sim_wrong, (
         f"photo↔cat_text sim {sim_right:.4f} not greater than "
-        f"photo↔periodic_table_text sim {sim_wrong:.4f}"
+        f"photo↔chart_text sim {sim_wrong:.4f}"
     )

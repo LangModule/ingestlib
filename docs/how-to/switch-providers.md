@@ -47,17 +47,16 @@ embedding_provider: ollama
 
     Vectors from different embedding models are mutually meaningless — a
     query embedded by the new model finds garbage among vectors from the
-    old one. After switching, re-ingest:
+    old one. After switching, re-ingest your corpus:
 
     ```python
-    for meta in artifacts.list_documents():
-        ingest(f"corpus/{meta.filename}", skip_existing=False)
+    ingest("corpus/report.pdf", skip_existing=False)   # per document
     ```
 
-    Parses are reused from the artifact store, so this repeats **no OCR
-    and no parse-stage LLM calls** — just re-embedding and upserting.
-    Alternatively, keep one store/namespace per embedding model and switch
-    between them.
+    Today this re-runs the full pipeline per document (a re-embed-only
+    fast path over stored artifacts is on the roadmap). Alternatively,
+    keep one store or namespace per embedding model and switch between
+    them — no re-work at all.
 
 Switching only `llm_provider` needs none of this — it takes effect on the
 next call.

@@ -12,8 +12,9 @@ backends, documented in
 [What just happened](../get-started/first-pipeline.md#whats-in-the-artifact-store).
 
 Because artifacts are the source of truth, the vector store is
-*rebuildable*: wipe it, re-run ingestion, and everything regenerates from
-stored parses without a single OCR or LLM call being repeated.
+*rebuildable*: wipe it, re-run ingestion, and every document regenerates.
+Today that re-runs the pipeline per document; a backfill fast path that
+re-embeds straight from stored artifacts is on the roadmap.
 
 ## The vector store — the search index
 

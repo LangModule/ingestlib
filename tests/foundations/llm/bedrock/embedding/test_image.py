@@ -61,21 +61,9 @@ def test_different_images_produce_different_vectors(embed, cos_sim, photo_path, 
     assert cos_sim(v_photo, v_chart) < 0.99
 
 
-def test_document_images_closer_to_each_other_than_to_photo(
-    embed, cos_sim, photo_path, doc_text_path, doc_chart_path
-):
-    """Two document pages should embed closer than a document page and a random photo."""
-    v_doc_text = embed.image(doc_text_path, detail_level="DOCUMENT_IMAGE")
-    v_doc_chart = embed.image(doc_chart_path, detail_level="DOCUMENT_IMAGE")
-    v_photo = embed.image(photo_path, detail_level="STANDARD_IMAGE")
-
-    sim_doc_doc = cos_sim(v_doc_text, v_doc_chart)
-    sim_doc_photo_a = cos_sim(v_doc_text, v_photo)
-    sim_doc_photo_b = cos_sim(v_doc_chart, v_photo)
-
-    assert sim_doc_doc > sim_doc_photo_a, (
-        f"doc↔doc {sim_doc_doc:.4f} not greater than doc_text↔photo {sim_doc_photo_a:.4f}"
-    )
-    assert sim_doc_doc > sim_doc_photo_b, (
-        f"doc↔doc {sim_doc_doc:.4f} not greater than doc_chart↔photo {sim_doc_photo_b:.4f}"
-    )
+# NOTE: an image↔image "documents cluster together" test used to live here.
+# Measured against real fixtures the premise is fixture-dependent (three
+# unrelated document images embed near-orthogonally, ~0.08-0.11 cosine), and
+# nothing in the pipeline compares image embeddings to image embeddings —
+# multimodal retrieval is text↔image, pinned in test_multimodal.py with
+# wide measured margins.

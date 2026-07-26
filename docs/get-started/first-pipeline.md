@@ -68,8 +68,9 @@ parse   = artifacts.load_parse(doc_id)   # full ParseResult (structure only)
 chunks  = artifacts.load_split(doc_id).chunks
 ```
 
-This is why parse never runs twice for the same file: classify, split, and
-any of your own tooling reuse the stored result.
+Dedup means the pipeline never re-runs for an unchanged file — and your
+own tooling can `load_parse` the stored result instead of ever parsing
+again.
 
 ## What's in the vector store
 
