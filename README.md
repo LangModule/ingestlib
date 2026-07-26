@@ -45,8 +45,8 @@ every LLM call on your own machine. See below.
 
 - Python 3.12+ and [uv](https://github.com/astral-sh/uv)
 - **AWS account** with Bedrock access (`us-east-1`): Nova 2 Lite + Nova 2
-  multimodal embeddings — the default provider; the OpenAI backend can run
-  the whole pipeline instead (see below)
+  multimodal embeddings — the default provider; the OpenAI backend or a
+  local Ollama can run the whole pipeline instead (see below)
 - **Vector database** — none at all by default: the sqlite connector
   stores vectors in a local file. Or a Pinecone account (serverless,
   free tier works), a Qdrant server (local docker or Qdrant Cloud), a Postgres
@@ -61,7 +61,7 @@ every LLM call on your own machine. See below.
 ### 2. Install
 
 ```bash
-pip install ingestlib          # or: uv add ingestlib
+uv add ingestlib               # or: pip install ingestlib
 ```
 
 Or work from source:
@@ -86,7 +86,7 @@ Parse runs PaddleOCR-VL-1.6 behind an inference server. First launch downloads
 
 ```bash
 # Apple Silicon (Metal GPU)
-python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
+uv run python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
 
 # NVIDIA (then set paddle_vl.backend: vllm-server in config.yaml)
 vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111
@@ -96,16 +96,23 @@ The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
 
 ### 4. Configure
 
+`ingestlib init` scaffolds the setup files into the current directory:
+
 ```bash
-cp .env.example .env                 # API keys: Jina, plus your vector store's (sqlite needs none)
-cp config.example.yaml config.yaml   # AWS profile + vector store + reranker choice
-cp rules.example.yaml rules.yaml     # optional: your classify & split rules (see below)
-aws configure --profile your-aws-profile   # Bedrock-enabled credentials
+uv run ingestlib init            # default stack: Bedrock + sqlite + Jina → config.yaml + .env
+uv run ingestlib init --local    # zero-cloud: Ollama + sqlite + local artifacts — no keys at all
+```
+
+For the default stack, add Bedrock-enabled credentials:
+
+```bash
+aws configure --profile your-aws-profile
 ```
 
 Edit `config.yaml`: pick your providers, vector store, reranker, and
 artifact store — everything else has working defaults (`vector_store:
-sqlite` needs no server and no keys). The `aws` section is required only
+sqlite` needs no server and no keys) — and fill `.env` with the keys your
+choices need (Jina for the default reranker; `--local` needs none). The `aws` section is required only
 while a choice uses AWS (the default bedrock provider, s3 artifacts, the
 aws reranker, an Amazon OpenSearch domain) — delete it otherwise and the
 config loader will tell you if something still needs it. **The S3 bucket
@@ -119,7 +126,19 @@ Config is discovered at call time, never at import: `INGESTLIB_CONFIG=/path/to/c
 wins, otherwise the working directory and its parents are searched — so
 installed usage works the same as running inside this repo.
 
-### 5. Run
+### 5. Verify
+
+```bash
+uv run ingestlib doctor
+```
+
+Doctor checks every configured choice with real calls — config discovery,
+LibreOffice, the OCR server, an LLM ping, an embedding (with its dimension),
+the reranker, the artifact store, and the vector store. Every failed line
+prints the one-sentence fix (wrong AWS profile → your available profiles,
+missing key → where to get one, model not pulled → the exact `ollama pull`).
+
+### 6. Run
 
 ```python
 from ingestlib.services import ingest, retrieve
@@ -181,7 +200,7 @@ split("report.pdf",
 ```
 
 ```yaml
-# rules.yaml — copy rules.example.yaml; infra stays in config.yaml,
+# rules.yaml — beside your config.yaml; infra stays in config.yaml,
 # what your documents MEAN lives here
 classify:
   max_pages: 5
@@ -275,6 +294,7 @@ src/ingestlib/
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
 ├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Ollama Qwen · Jina) · ocr (PaddleOCR-VL)
+├── cli/            the `ingestlib` command — init (setup scaffold) · doctor (health checks)
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env → typed configs
 ```
@@ -330,6 +350,7 @@ make test-milvus           # vector connector e2e (needs Milvus at MILVUS_URL)
 make test-opensearch       # vector connector e2e (needs OpenSearch at OPENSEARCH_URL)
 make test-weaviate         # vector connector e2e (needs Weaviate at WEAVIATE_URL)
 make test-services         # full product e2e     (needs the entire stack)
+make test-cli              # init scaffold + doctor checks (no gate)
 make test-all              # everything
 make eval                  # retrieval quality eval (see below)
 make docs                  # live-preview the documentation site
@@ -375,8 +396,8 @@ retrieval playground where every answer points to its source on the page.
 ## Roadmap
 
 - Extract: schema-driven field extraction with source provenance
-- `ingestlib init` / `ingestlib doctor` — CLI setup scaffold and stack
-  health checks
+- Dependency extras (`ingestlib[qdrant]`, …) — slim core install instead
+  of all eight vector SDKs
 
 ## License
 
