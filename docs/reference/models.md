@@ -1,7 +1,8 @@
 # Result models
 
-What the operations return. All are Pydantic models; parse results can
-be saved to and loaded from the artifact store byte-identically.
+The typed results every call returns. All are frozen Pydantic models —
+serializable with `.model_dump()` / reconstructable with
+`.model_validate()`.
 
 ## Parse
 
@@ -25,4 +26,18 @@ be saved to and loaded from the artifact store byte-identically.
 
 ::: ingestlib.operations.split.models.Chunk
 
-::: ingestlib.operations.split.models.VocabEntry
+## Ingest
+
+::: ingestlib.services.ingest.models.IngestResult
+
+## Retrieve
+
+::: ingestlib.services.retrieve.models.RetrievalResult
+
+::: ingestlib.services.retrieve.models.Hit
+
+## OCR primitives
+
+::: ingestlib.foundations.ocr.models.Region
+
+::: ingestlib.foundations.ocr.models.BoundingBox

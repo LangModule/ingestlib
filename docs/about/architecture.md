@@ -1,51 +1,60 @@
 # Architecture
 
+Four layers, strict downward dependencies — nothing lower knows what sits
+above it.
+
+```text
+src/ingestlib/
+├── services/       ingest · retrieve            — the product
+├── operations/     parse · classify · split     — the tools (each standalone)
+├── storage/        artifacts (S3 | local) · VectorStore contract · 8 connectors
+├── foundations/    llm (Bedrock · OpenAI · Ollama · Jina rerank) · ocr (PaddleOCR-VL)
+├── cli/            the `ingestlib` command — init · doctor
+├── utils/          logger · files · sync · aws
+└── config.py       config.yaml + .env + rules.yaml → typed, frozen configs
 ```
-services      ingest · retrieve            the composed flows
-operations    parse · classify · split     each usable standalone
-storage       artifact store (s3 | local) + 8 vector-store connectors
-foundations   LLM providers (bedrock | openai) + OCR engine (PaddleOCR-VL)
-```
 
-Four layers; every layer only calls downward. The rules that shape the
-codebase:
+## The load-bearing decisions
 
-## One engine, one judgment LLM
+**Provider dispatch is a per-call config read.** Operations import
+`chat`/`embed_text` from one surface; which backend answers is decided at
+call time. No client is built until a call happens, and backends that
+aren't selected are never imported — a sqlite + ollama pipeline never
+touches boto3.
 
-Parsing uses exactly two models with a sharp division of labor: a small
-local vision-language model (PaddleOCR-VL-1.6) for layout-aware reading
-— which it does at state-of-the-art accuracy — and a frontier LLM only
-for what the small model verifiably gets wrong: chart values, figure
-descriptions, and a per-region review pass. All *judgment* in the
-pipeline (classification, section vocabulary, chunk boundaries) goes
-through the same single LLM, behind the provider switch.
+**The VectorStore contract absorbs backend quirks.** ID schemes, metadata
+encoding, fusion mechanics, deletion semantics — each connector handles
+its backend's reality internally (documented at the top of each module) so
+pipelines are written once. Shared guarantees: idempotent upserts, orphan
+pruning on re-ingest, no infrastructure creation on the read path,
+namespace isolation everywhere.
 
-## Provenance is load-bearing
+**Artifacts are the source of truth; vectors are an index.** Every stage's
+output persists before the next stage runs. The vector store can be wiped
+and rebuilt from artifacts without repeating a single OCR or LLM call —
+which is also what makes switching stores or embedding models a re-embed,
+not a re-parse.
 
-Every parsed block carries a `region_id` and bounding box; every chunk
-carries `region_ids` per page; every retrieval hit resolves back to
-exact regions on exact pages. The review pass returns *per-region*
-corrections rather than rewriting pages precisely so this chain never
-breaks. Citations are a data structure, not a string format.
+**Provenance is structural, not annotated.** Chunks record the parse
+region ids they cover, chunk boundaries can't cut through a region, and
+the full payload rides on the vector. The citation chain
+(hit → regions → bboxes → page render) needs no extra database.
 
-## The artifact store is the source of truth
+**Errors carry their fix.** Every backend boundary translates its classic
+failures — wrong AWS profile, missing model access, dead Ollama, exhausted
+Jina quota — into one-sentence remedies, re-raised with the original
+chained. `ingestlib doctor` is those same translations, run proactively.
 
-Every stage's output is persisted under `documents/{doc_id}/` (the
-content hash). Vector stores are derived indexes — rebuildable from
-stored splits at any time, which is what makes switching connectors or
-embedding providers a backfill rather than a re-parse.
+**Config is discovered at call time, never at import.** Importing
+ingestlib does nothing; the first real call finds `config.yaml` (explicit
+env var, else CWD and parents). Frozen dataclasses make a loaded config
+immutable; changing files mid-process takes an explicit reset.
 
-## Explicit writes, lazy configuration
+## Testing philosophy
 
-Nothing writes to storage behind the caller's back — persistence happens
-in `ingest()` or explicit `artifacts.save_*` calls. Nothing reads
-configuration at import time — the first library call discovers
-config.yaml, and `reset_config()` reloads it in-process (this is what
-lets the studio apply settings edits with zero restarts).
-
-## Guarantees live in code, not prompts
-
-Where correctness matters — tables never split, captions bound to their
-figures, chunk-size ceilings, valid section partitions, closed-set
-labels — an LLM proposes and Python enforces. Prompts are suggestions;
-the post-processing is the contract.
+Real APIs, never mocks. Pure logic runs on every test invocation;
+server-hitting suites are opt-in via `RUN_*_E2E` gates. Failures are
+tested by *provoking real ones* — bogus keys get real 401s, dead ports get
+real connection refusals — so the error translations are verified against
+reality, not against a mock's guess. The sqlite connector's full suite
+runs ungated: there is no server, so in-process *is* the real thing.

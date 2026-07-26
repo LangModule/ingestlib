@@ -1,46 +1,56 @@
 # Limits & scope
 
-What ingestlib deliberately does not do, and the edges to know about.
+What ingestlib deliberately doesn't do, plus the honest edges of what it
+does. Trust in the citations depends on being straight about this.
 
-## Scope decisions
+## Scope
 
-- **English-only.** Prompts, stemmers, and lexical analyzers are tuned
-  for English.
-- **PDF / DOCX / PPTX in.** No direct image input (PNG/JPG as files) —
-  but images *inside* documents are fully handled (extracted,
-  described, embedded as text).
-- **No handwriting.** RAG scope is printed documents.
-- **Single-tenant by design.** No auth, no job queue, no multi-user
-  database. Namespaces partition corpora within one deployment.
+- **English documents.** The OCR model reads 100+ languages, but the
+  pipeline's prompts, stemmers, and full-text configurations are English.
+- **PDF, DOCX, PPTX, and images (PNG/JPEG/WebP) in.** No XLSX — 
+  spreadsheets deserve a real tables-first design, not a bad PDF
+  conversion; it's on the roadmap.
+- **Ingestion is the product; retrieval is a reference.** `retrieve()` is
+  a solid hybrid-search + rerank implementation, deliberately not a
+  query-pipeline framework (no multi-query, no agents). Everything your
+  own reader needs rides on the stored chunk payloads.
 
-## Behavioral edges
+## Honest edges
 
-- **Unlabeled chart values are estimates.** When a bar has no printed
-  number, the enricher estimates from geometry and marks it `~` — no
-  parser can read unprinted numbers.
-- **Content-addressed IDs**: a one-byte-different file is a new
-  document. Version linking ("this replaces that") is app-layer.
-- **Page caps**: classify reads at most 100 pages (front matter
-  identifies type); split caps at 500; parse has no cap. A try-style
-  in-memory run should stay small — page renders are held in memory.
-- **Re-parses shift chunk boundaries.** Parse involves an LLM, so two
-  parses of the same file can chunk slightly differently; `doc_id`
-  (byte hash) is the stable identity, not chunk numbering.
-- **Switching `embedding_provider` invalidates existing vectors** —
-  see [AI providers](../guides/providers.md) for the safe recipe.
+**Unlabeled chart values are estimates.** Printed numbers and callouts are
+captured exactly; bar heights without labels are read as estimates and
+marked `~` in the data table. No parser can read numbers that aren't
+printed.
 
-## Operational notes
+**Handwriting is out of scope.** The OCR model is unreliable on it, and
+page-level frontier-VLM transcription would break the cost model and the
+region-level provenance guarantee. Expect near-empty output on
+handwritten pages.
 
-- The OCR server is the throughput bottleneck (GPU-serialized);
-  everything else pipelines behind it.
-- Jina's free tier is rate-limited (100 RPM); the client retries with
-  backoff and honors `Retry-After`, and reranking degrades to vector
-  order rather than failing retrieval.
-- Amazon Rerank default quotas are low (2 RPM) — request an increase
-  for real workloads.
+**A one-byte change is a new document.** Content addressing means v2 of a
+file gets a new `doc_id` with no link to v1 — and v1's chunks stay in the
+store until you delete them. Folder-sync and replace-aware ingestion are
+on the roadmap.
+
+**Local models trail cloud models on dense charts.** The Ollama reference
+stack handles the pipeline's judgment tasks well; complex multi-series
+charts are where Nova/GPT-5 still win. Test on your own corpus.
+
+**Very large documents are memory-hungry.** Parse holds page renders in
+memory for the duration of a document; multi-hundred-page PDFs work but
+haven't been optimized. Streaming/checkpointed parsing is roadmap work.
+
+## Deduplication semantics
+
+By design, dedup keys on **file content only** — not on rules or settings.
+Ingesting the same bytes with different categories still returns
+`skipped`; pass `skip_existing=False` to re-run. A partially-failed ingest
+is always retried, because only the manifest — the pipeline's final
+write — marks completion.
 
 ## Roadmap
 
-Extraction (structured field pulling), per-run rules on `ingest()`,
-larger-scale runs (100+ pages end-to-end), and an eval dashboard. See
-the [GitHub issues](https://github.com/LangModule/ingestlib/issues).
+The near-term list, in order: dependency extras for a slim install,
+document lifecycle (replace + folder sync), scanned-fixture verification,
+schema-driven **Extract** as the fourth operation, XLSX. Watch
+[GitHub](https://github.com/LangModule/ingestlib) for progress.

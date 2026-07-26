@@ -1,7 +1,7 @@
 site_name: ingestlib
 site_description: >-
   Self-hosted document intelligence for RAG — parse, classify, and split
-  PDF/DOCX/PPTX into searchable, cited, retrieval-ready chunks.
+  PDF/DOCX/PPTX and images into searchable, cited, retrieval-ready chunks.
 site_url: https://langmodule.github.io/ingestlib/
 repo_url: https://github.com/LangModule/ingestlib
 repo_name: LangModule/ingestlib
@@ -25,9 +25,13 @@ theme:
         icon: material/brightness-7
         name: Switch to dark mode
   features:
+    - navigation.tabs
+    - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
+    - navigation.footer
     - content.code.copy
+    - content.tabs.link
     - search.suggest
     - toc.follow
 
@@ -47,7 +51,12 @@ plugins:
 
 markdown_extensions:
   - admonition
+  - attr_list
+  - md_in_html
   - tables
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - toc:
       permalink: true
   - pymdownx.highlight
@@ -58,28 +67,40 @@ markdown_extensions:
 
 nav:
   - Home: index.md
-  - Getting started:
-      - Installation: getting-started/installation.md
-      - Configuration: getting-started/configuration.md
-      - Quickstart: getting-started/quickstart.md
-  - Guides:
-      - Parse: guides/parse.md
-      - Classify: guides/classify.md
-      - Split: guides/split.md
-      - Content rules: guides/content-rules.md
-      - Ingest: guides/ingest.md
-      - Retrieve: guides/retrieve.md
-      - Vector stores: guides/vector-stores.md
-      - AI providers: guides/providers.md
-      - Artifact store: guides/artifact-store.md
-      - The studio: guides/studio.md
-  - API reference:
-      - Operations: reference/operations.md
-      - Services: reference/services.md
+  - Get started:
+      - Installation: get-started/installation.md
+      - Quickstart: get-started/quickstart.md
+      - What just happened: get-started/first-pipeline.md
+  - Concepts:
+      - The pipeline: concepts/pipeline.md
+      - Provenance & citations: concepts/provenance.md
+      - Configuration model: concepts/configuration.md
+      - Providers: concepts/providers.md
+      - Storage model: concepts/storage.md
+  - How-to guides:
+      - Documents:
+          - Parse any format: how-to/parse-documents.md
+          - Use parse results: how-to/parse-results.md
+      - Content rules:
+          - Your categories & sections: how-to/content-rules.md
+      - Pipeline:
+          - Ingest documents: how-to/ingest.md
+          - Retrieve & filter: how-to/retrieve.md
+          - Build cited answers: how-to/cited-answers.md
+      - Setup:
+          - Run fully local: how-to/local-stack.md
+          - Connect a vector store: how-to/vector-stores.md
+          - Choose an artifact store: how-to/artifact-stores.md
+          - Switch AI providers: how-to/switch-providers.md
+          - Async, notebooks & logging: how-to/async-and-logging.md
+      - Troubleshooting: how-to/troubleshooting.md
+  - Reference:
+      - CLI: reference/cli.md
+      - Configuration: reference/configuration.md
+      - Operations API: reference/operations.md
+      - Services API: reference/services.md
+      - Storage API: reference/storage.md
       - Result models: reference/models.md
-      - Storage: reference/storage.md
-      - Configuration: reference/config.md
   - About:
       - Architecture: about/architecture.md
-      - Benchmarks: about/benchmarks.md
       - Limits & scope: about/limits.md
