@@ -44,6 +44,16 @@ serializable with `.model_dump()` / reconstructable with
 
 ::: ingestlib.services.retrieve.models.Hit
 
+## Lifecycle
+
+::: ingestlib.services.lifecycle.models.RemoveResult
+
+::: ingestlib.services.lifecycle.models.SyncResult
+
+::: ingestlib.services.lifecycle.models.SyncAction
+
+::: ingestlib.services.lifecycle.models.BackfillResult
+
 ## OCR primitives
 
 ::: ingestlib.foundations.ocr.models.Region

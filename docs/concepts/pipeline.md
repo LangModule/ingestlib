@@ -3,7 +3,10 @@
 ingestlib is four **operations** and two **services**. Each operation
 works standalone; the services chain the first three and add persistence.
 The fourth, `extract()`, is a standalone reader — it pulls structured
-data out of a document and is not part of the ingest chain.
+data out of a document and is not part of the ingest chain. Around the two
+services sit the corpus-management helpers — `remove`, `sync`, `backfill` —
+that keep the stores in step with changing files
+([Manage a corpus](../how-to/manage-corpus.md)).
 
 ```text
                      ┌───────────────── services ─────────────────┐

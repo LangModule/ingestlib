@@ -77,6 +77,7 @@ async def aingest(
     store: VectorStore | None = None,
     namespace: str = "",
     skip_existing: bool = True,
+    replaces: str | None = None,
     max_chunk_tokens: int = DEFAULT_MAX_CHUNK_TOKENS,
     categories: dict[str, str] | None = None,
     target_pages: str | None = None,
@@ -91,6 +92,13 @@ async def aingest(
     their exact semantics: None resolves from rules.yaml's preset, an
     explicit {} forces open-ended/discovery, explicit values always win.
 
+    Lifecycle: a document's logical identity is (namespace, source path).
+    When this path already holds an OLDER version (different checksum), the
+    new version replaces it — the old version's vectors and artifacts are
+    deleted AFTER the new one is fully live, so retrieval never has a gap
+    (status="replaced"). Same checksum arriving from a new path is a move:
+    only the registry re-points, nothing runs (status="moved").
+
     path             — PDF/DOCX/PPTX document, or a PNG/JPEG/WebP image
     store            — vector store connector; defaults to the one selected
                        by config.yaml's `vector_store` key
@@ -100,6 +108,9 @@ async def aingest(
                        that failed partway is retried. Dedup keys on file
                        CONTENT only — re-ingesting with different rules
                        still skips; pass skip_existing=False to re-run
+    replaces         — explicit doc_id of the version this file supersedes;
+                       normally unnecessary (path matching detects it), for
+                       when the new version lives at a different path
     max_chunk_tokens — split's chunk-size ceiling
     categories       — classify rules {label: description}, max 20
     target_pages     — classify page selection like "1,3,5-7" (1-based)
@@ -108,7 +119,8 @@ async def aingest(
     unmatched        — split's policy for pages fitting no category:
                        "other" | "require" | "skip"
     on_stage         — optional progress callback, called as on_stage(stage,
-                       event) with stage parse|classify|split|embed|upsert and
+                       event) with stage parse|classify|split|embed|upsert —
+                       plus replace when an old version is deleted — and
                        event start|done; a stage that raises leaves its
                        "start" unmatched. Exceptions from the callback are
                        logged and ignored. Never called on the skip_existing
@@ -117,13 +129,30 @@ async def aingest(
     path = Path(path)
     doc_id = await asyncio.to_thread(sha256_of_file, path)
 
+    if replaces is not None and not await asyncio.to_thread(
+        artifacts.document_exists, replaces
+    ):
+        raise ValueError(
+            f"replaces={replaces[:12]!r}… matches no stored document — "
+            f"list_documents() shows what's stored"
+        )
+
     if skip_existing and await asyncio.to_thread(artifacts.ingest_complete, doc_id):
         meta = await asyncio.to_thread(artifacts.get_document_meta, doc_id)
+        status = "skipped"
+        resolved = str(path.resolve())
+        if meta.source_path and meta.source_path != resolved:
+            # THE MOVE CASE: same content, new location. The registry must
+            # follow, or a later sync(old_dir, prune=True) would delete a
+            # document that still exists.
+            await asyncio.to_thread(artifacts.set_source_path, doc_id, path)
+            status = "moved"
         logger.info(
-            "ingest skipped (already fully ingested): %s doc_id=%s", path.name, doc_id[:12]
+            "ingest %s (already fully ingested): %s doc_id=%s",
+            status, path.name, doc_id[:12],
         )
         return IngestResult(
-            status="skipped",
+            status=status,
             doc_id=doc_id,
             filename=path.name,
             category=meta.category,
@@ -131,6 +160,16 @@ async def aingest(
             sections=meta.sections,
             chunks=meta.chunks,
         )
+
+    # who does this version supersede? explicit replaces= wins; otherwise the
+    # document currently claiming this (namespace, path)
+    old_doc_id = replaces
+    if old_doc_id is None:
+        prior = await asyncio.to_thread(artifacts.find_by_path, path, namespace)
+        if prior is not None and prior.doc_id != doc_id:
+            old_doc_id = prior.doc_id
+    if old_doc_id == doc_id:  # replacing a doc with its own bytes is a no-op
+        old_doc_id = None
 
     store = store or default_store()
     durations: dict[str, float] = {}
@@ -182,8 +221,21 @@ async def aingest(
             "embedded_at": datetime.now(timezone.utc).isoformat(),
         })
 
+    if old_doc_id is not None:
+        # the new version is fully live (manifest written) — now the old one
+        # goes. A crash here leaves BOTH versions (over-complete, sync()
+        # repairs); the reverse order could lose the document entirely.
+        from ingestlib.services.lifecycle.remover import aremove  # lazy: sync() imports aingest
+
+        with _stage("replace", durations, on_stage):
+            removed = await aremove(old_doc_id, namespace=namespace, store=store)
+            logger.info(
+                "replaced %s → %s (%d old vector(s) deleted)",
+                old_doc_id[:12], doc_id[:12], removed.vectors_deleted,
+            )
+
     result = IngestResult(
-        status="ingested",
+        status="replaced" if old_doc_id is not None else "ingested",
         doc_id=doc_id,
         filename=path.name,
         category=classify_result.category,
@@ -192,6 +244,7 @@ async def aingest(
         sections=len(split_result.sections),
         chunks=len(chunks),
         vectors=vectors,
+        replaced_doc_id=old_doc_id or "",
         durations={k: round(v, 2) for k, v in durations.items()},
     )
     logger.info(
@@ -207,6 +260,7 @@ def ingest(
     store: VectorStore | None = None,
     namespace: str = "",
     skip_existing: bool = True,
+    replaces: str | None = None,
     max_chunk_tokens: int = DEFAULT_MAX_CHUNK_TOKENS,
     categories: dict[str, str] | None = None,
     target_pages: str | None = None,
@@ -220,7 +274,8 @@ def ingest(
     return run_sync(
         aingest(
             path, store=store, namespace=namespace,
-            skip_existing=skip_existing, max_chunk_tokens=max_chunk_tokens,
+            skip_existing=skip_existing, replaces=replaces,
+            max_chunk_tokens=max_chunk_tokens,
             categories=categories, target_pages=target_pages,
             max_pages=max_pages, vocabulary=vocabulary, unmatched=unmatched,
             on_stage=on_stage,

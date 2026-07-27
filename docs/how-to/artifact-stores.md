@@ -73,9 +73,9 @@ artifacts.delete_document(doc_id)
 The artifact store is the **source of truth**; the vector store is an
 index over it. Every stage's full output survives here, so nothing about
 your corpus is ever locked inside a vector database — `load_parse`,
-`load_split`, and the page renders reconstruct everything. (A backfill
-fast path that re-embeds straight from these artifacts — without
-re-running the pipeline — is on the roadmap.)
+`load_split`, and the page renders reconstruct everything, and
+[`backfill()`](manage-corpus.md#rebuild-the-vector-store-backfill) re-embeds
+straight from these artifacts — no re-parse — to rebuild a vector store.
 
 ---
 

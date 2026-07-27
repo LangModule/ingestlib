@@ -48,6 +48,12 @@ class DocumentMeta(BaseModel):
     Written at save_parse; category / section counts are patched in by
     save_classify and save_split. Self-heals from parse/result.json when a
     document predates this file.
+
+    source_path + namespace are the document's LOGICAL identity — the file
+    this content came from and the corpus partition it lives in. They drive
+    lifecycle: replace-on-reingest, move detection, sync(), prune. Both
+    self-heal for pre-lifecycle documents (source_path from
+    parse/result.json, namespace from the ingest manifest).
     """
 
     model_config = ConfigDict(frozen=True)
@@ -60,6 +66,8 @@ class DocumentMeta(BaseModel):
     category: str = ""
     sections: int = 0
     chunks: int = 0
+    source_path: str = ""
+    namespace: str = ""
 
 
 def _key(doc_id: str, *parts: str) -> str:
@@ -119,27 +127,51 @@ def _patch_meta(doc_id: str, **fields: Any) -> None:
 
 
 def _load_meta(doc_id: str) -> DocumentMeta:
-    """Load meta.json; rebuild it from parse/result.json for pre-meta documents."""
+    """Load meta.json; rebuild missing pieces from the stage artifacts.
+
+    Two self-heals keep old corpora current with zero migration: a
+    missing/corrupt meta.json is rebuilt from parse/result.json, and a
+    pre-lifecycle meta (no source_path) gains source_path + namespace from
+    the parse artifact and the ingest manifest — every stored document
+    carries its logical identity, however old.
+    """
+    meta: DocumentMeta | None = None
     body = _get_or_none(_meta_key(doc_id))
     if body is not None:
         try:
-            return DocumentMeta.model_validate(json.loads(body))
+            meta = DocumentMeta.model_validate(json.loads(body))
         except Exception:
             logger.warning(
                 "meta.json for %s is corrupt — rebuilding from the parse artifact",
                 doc_id[:12],
             )
+    if meta is not None and meta.source_path:
+        return meta
+
     parse_body = _get_or_none(_key(doc_id, "parse", "result.json"))
     if parse_body is None:  # nothing to heal from — a bare/foreign prefix
-        return DocumentMeta(doc_id=doc_id)
-    # self-heal: derive from the parse result, then persist
+        return meta or DocumentMeta(doc_id=doc_id)
     payload = json.loads(parse_body)
+    # best-effort: a relative path recorded by parse resolves against CWD,
+    # the same rule find_by_path applies to its query
+    source_path = str(Path(payload["source_path"]).resolve())
+    manifest_body = _get_or_none(_key(doc_id, "split", "ingest_manifest.json"))
+    namespace = json.loads(manifest_body).get("namespace", "") if manifest_body else ""
+
+    if meta is not None:
+        # pre-lifecycle meta — patch identity in, keep the stage fields
+        _patch_meta(doc_id, source_path=source_path, namespace=namespace)
+        return meta.model_copy(
+            update={"source_path": source_path, "namespace": namespace}
+        )
     meta = DocumentMeta(
         doc_id=doc_id,
         filename=Path(payload["source_path"]).name,
         source_format=payload["source_format"],
         page_count=len(payload["pages"]),
         created_at=payload["created_at"],
+        source_path=source_path,
+        namespace=namespace,
     )
     _put_json(_meta_key(doc_id), meta.model_dump())
     return meta
@@ -200,6 +232,7 @@ def save_parse(result: ParseResult) -> str:
         source_format=result.source_format,
         page_count=result.page_count,
         created_at=result.created_at.isoformat(),
+        source_path=str(source.resolve()),
     )
 
     logger.info(
@@ -322,6 +355,7 @@ def load_split(doc_id: str) -> SplitResult:
 def save_ingest_manifest(doc_id: str, manifest: dict[str, Any]) -> None:
     """Record what was pushed to the vector store (index, namespace, vector IDs)."""
     _put_json(_key(doc_id, "split", "ingest_manifest.json"), manifest)
+    _patch_meta(doc_id, namespace=manifest.get("namespace", ""))
 
 
 def load_ingest_manifest(doc_id: str) -> dict[str, Any]:
@@ -388,6 +422,34 @@ def list_documents() -> list[DocumentMeta]:
     """Registry of every persisted document — id, filename, pages, category, counts."""
     doc_ids = get_blob_store().list_top_dirs(_PREFIX)
     return [_load_meta(d) for d in doc_ids]
+
+
+def find_by_path(path: Path | str, namespace: str = "") -> DocumentMeta | None:
+    """The document currently claiming this source path — logical identity.
+
+    Matches on the resolved absolute path AND the namespace. When a crashed
+    replace left two documents claiming the same path, the newest created_at
+    wins here and sync() repairs the duplicate.
+    """
+    target = str(Path(path).resolve())
+    matches = [
+        m for m in list_documents()
+        if m.source_path == target and m.namespace == namespace
+    ]
+    if not matches:
+        return None
+    return max(matches, key=lambda m: m.created_at)
+
+
+def set_source_path(doc_id: str, path: Path | str) -> None:
+    """Re-point a document's logical identity after its file moved.
+
+    The content — and so the doc_id — is unchanged: only the registry's
+    source_path is patched, nothing re-runs. ingest() calls this when the
+    same checksum arrives from a new path.
+    """
+    _patch_meta(doc_id, source_path=str(Path(path).resolve()))
+    logger.info("moved: doc_id=%s now at %s", doc_id[:12], path)
 
 
 def page_image_key(doc_id: str, page_num: int) -> str:

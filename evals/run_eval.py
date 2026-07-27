@@ -26,7 +26,6 @@ from pathlib import Path
 import yaml
 
 from ingestlib.config import get_config
-from ingestlib.foundations.llm import aembed_text
 from ingestlib.services.ingest.ingestor import aingest
 from ingestlib.services.retrieve.retriever import aretrieve
 from ingestlib.storage import (
@@ -94,24 +93,8 @@ async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
         print(f"    -> {result.status}: {result.chunks} chunks in {result.total_seconds:.0f}s")
 
 
-async def backfill_store(store: VectorStore) -> None:
-    """Re-embed every document's stored split artifact into the store.
-
-    Parse/classify/split are reused from the artifact store — only embedding and
-    upsert run, so no VL server is needed. Upserts are idempotent, so
-    re-backfilling an already-populated store is safe.
-    """
-    semaphore = asyncio.Semaphore(8)
-
-    async def embed(text: str) -> list[float]:
-        async with semaphore:
-            return await aembed_text(text)
-
-    for meta in artifacts.list_documents():
-        chunks = artifacts.load_split(meta.doc_id).chunks
-        embeddings = list(await asyncio.gather(*[embed(c.embedding_text) for c in chunks]))
-        store.upsert_chunks(meta.doc_id, chunks, embeddings, category=meta.category)
-        print(f"  backfilled {meta.filename}: {len(chunks)} chunks ({meta.category})")
+# backfill lives in the library since v1.1 (services.lifecycle.abackfill) —
+# the eval exercises the shipped function instead of carrying its own copy
 
 
 def is_hit(hit, expected_doc_id: str, pages: list[int], keywords: list[str]) -> bool:
@@ -205,8 +188,11 @@ async def main() -> None:
         print(f"ensuring corpus is ingested into {args.store} ...")
         await ensure_ingested(sorted(set(pdfs)), store_cls())
     if args.backfill:
+        from ingestlib.services import abackfill
+
         print(f"backfilling {args.store} from stored split artifacts ...")
-        await backfill_store(store_cls())
+        filled = await abackfill(store=store_cls())
+        print(f"  backfilled {filled.documents} document(s), {filled.chunks} chunk(s)")
 
     results = []
     t0 = time.perf_counter()

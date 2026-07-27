@@ -5,10 +5,18 @@ from pydantic import BaseModel, ConfigDict, Field
 class IngestResult(BaseModel):
     """Outcome of one document's journey through the full pipeline.
 
-    status    — "ingested" (fresh run) or "skipped" (this checksum already
-                completed the full pipeline and skip_existing was True)
+    status    — "ingested"  fresh run
+                "skipped"   this checksum already completed the full pipeline
+                            (skip_existing was True)
+                "moved"     same checksum arrived from a new path — only the
+                            registry's source_path was re-pointed, nothing ran
+                "replaced"  a previous version held this source path; it was
+                            fully deleted (vectors + artifacts) after the new
+                            version went live — see replaced_doc_id
     doc_id    — the document's content checksum; keys every artifact and vector
-    durations — per-stage wall-clock seconds (parse/classify/split/embed/upsert)
+    replaced_doc_id — the old version's doc_id when status is "replaced"
+    durations — per-stage wall-clock seconds (parse/classify/split/embed/
+                upsert, plus replace when an old version was deleted)
     """
 
     model_config = ConfigDict(frozen=True)
@@ -22,6 +30,7 @@ class IngestResult(BaseModel):
     sections: int = 0
     chunks: int = 0
     vectors: int = 0
+    replaced_doc_id: str = ""
     durations: dict[str, float] = Field(default_factory=dict)
 
     @property

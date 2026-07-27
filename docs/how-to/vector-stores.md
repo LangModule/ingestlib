@@ -216,7 +216,7 @@ uv run ingestlib doctor        # includes a reachability check for the selected 
 
 ## Migrating between stores
 
-Moving stores is a re-ingest, not an export: change `vector_store`, then
-re-run ingestion over your corpus with `skip_existing=False`. Today that
-re-runs the pipeline per document; a backfill fast path that re-embeds
-straight from stored artifacts is on the roadmap.
+Moving stores is a rebuild, not an export: change `vector_store`, then run
+[`backfill()`](manage-corpus.md#rebuild-the-vector-store-backfill) (or
+`ingestlib backfill`), which re-embeds every document straight from its
+stored split artifact — no re-parse — into the new connector.

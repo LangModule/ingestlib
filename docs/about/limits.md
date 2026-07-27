@@ -27,10 +27,12 @@ page-level frontier-VLM transcription would break the cost model and the
 region-level provenance guarantee. Expect near-empty output on
 handwritten pages.
 
-**A one-byte change is a new document.** Content addressing means v2 of a
-file gets a new `doc_id` with no link to v1 — and v1's chunks stay in the
-store until you delete them. Folder-sync and replace-aware ingestion are
-on the roadmap.
+**A one-byte change is a new document — but the old version is replaced,
+not orphaned.** Content addressing gives v2 a new `doc_id`, and re-ingesting
+the file at the same path deletes v1's chunks and artifacts automatically
+(logical identity = namespace + path). Old versions never accumulate. What
+ingestlib deliberately does *not* keep is version **history** — once
+replaced, v1 is gone, not archived. See [Manage a corpus](../how-to/manage-corpus.md).
 
 **Extract's `grounded` flag is text verification, not truth.** It means
 the value was found in the cited source text (with numeric normalization,
@@ -57,7 +59,7 @@ write — marks completion.
 
 ## Roadmap
 
-The near-term list, in order: document lifecycle (replace + folder sync,
-and a backfill fast path that re-embeds straight from stored artifacts),
-XLSX. Watch
-[GitHub](https://github.com/LangModule/ingestlib) for progress.
+Document lifecycle shipped in v1.1 — replace-aware ingestion, folder
+[`sync()`](../how-to/manage-corpus.md), and [`backfill()`](../how-to/manage-corpus.md#rebuild-the-vector-store-backfill).
+Near-term next: 100-page hardening (streaming/checkpointed parse) and XLSX
+input. Watch [GitHub](https://github.com/LangModule/ingestlib) for progress.

@@ -16,23 +16,39 @@ print(r.durations)     # per-stage seconds — parse dominates
 
 Accepts PDF, DOCX, PPTX, and PNG/JPEG/WebP images.
 
-## Deduplication
+## Deduplication and versioning
 
-Documents are identified by content checksum. By default
-(`skip_existing=True`):
+Documents have two identities: content (`doc_id = sha256(bytes)`) and logical
+(`namespace` + source path). By default (`skip_existing=True`) ingest reconciles
+against both:
 
-- the same bytes ingested again → `status="skipped"`, nothing runs
-- a run that **failed partway is retried** — only a fully completed
-  pipeline (its ingest manifest written) counts as done
-- dedup keys on content **only** — different rules or settings still skip;
-  force a re-run with `skip_existing=False`
+| status | when |
+|---|---|
+| `skipped` | same bytes, same path, already fully ingested |
+| `moved` | same bytes, new path — only the registry is re-pointed |
+| `replaced` | this path held an **older** version; it's deleted after the new one goes live |
+| `ingested` | new document |
+
+- A run that **failed partway is retried** — only a completed pipeline (manifest
+  written) counts as done.
+- **Editing a file and re-ingesting replaces the old version** — vectors and
+  artifacts of the previous version are removed, so retrieval never returns
+  stale content. This is automatic; the [corpus guide](manage-corpus.md) covers
+  it in full.
 
 ```python
-r = ingest("report.pdf", skip_existing=False)   # re-run regardless
+r = ingest("report.pdf")                        # edited file → status="replaced"
+r.replaced_doc_id                               # the old version, now deleted
+
+ingest("report.pdf", skip_existing=False)       # force a re-run of unchanged bytes
+ingest("v2.pdf", replaces=old_doc_id)           # supersede a version at another path
 ```
 
-Re-ingestion overwrites the document's vectors in place — never
+Re-ingesting the same content overwrites its vectors in place — never
 duplicates, and stale chunks from a previous run are pruned.
+
+To reconcile a whole folder (add/replace/move/prune) in one call, use
+[`sync()`](manage-corpus.md#sync-a-folder).
 
 ## Progress reporting
 
@@ -84,15 +100,16 @@ and figures are never split regardless.
 
 ## Delete a document
 
-Remove it from both stores:
+One call erases it from both stores (vectors first, then artifacts):
 
 ```python
-from ingestlib.storage import artifacts, default_store
+from ingestlib.services import remove
 
-store = default_store()
-store.delete_document(doc_id)        # vectors gone
-artifacts.delete_document(doc_id)    # parse/classify/split artifacts gone
+remove("report.pdf")     # by source path, or a doc_id / unique prefix
 ```
+
+See [Manage a corpus](manage-corpus.md#remove-one-document) for the full
+lifecycle — replace, sync, prune, backfill.
 
 ## A folder at a time
 

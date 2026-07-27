@@ -45,7 +45,8 @@ Statements:
   ARNs use a wildcard region because the Nova model id is a cross-region
   inference profile that can route to any of its underlying regions.
 - `IngestlibBucket` and `IngestlibObjects` cover the artifact bucket,
-  including delete (used by `artifacts.delete_document`).
+  including delete (used by `artifacts.delete_document`, and by the
+  lifecycle `remove()` / `sync(..., prune=True)` that build on it).
 - `IngestlibRerank` and `IngestlibRerankModel` are needed only when
   config.yaml sets `reranker: aws`. Amazon Rerank is served from
   us-west-2, and `bedrock:Rerank` does not support resource-level

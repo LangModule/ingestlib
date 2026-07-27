@@ -11,6 +11,18 @@ stage to the artifact store. retrieve runs embed → vector search → rerank
 source provenance.
 """
 from ingestlib.services.ingest import IngestResult, StageCallback, aingest, ingest
+from ingestlib.services.lifecycle import (
+    BackfillResult,
+    RemoveResult,
+    SyncAction,
+    SyncResult,
+    abackfill,
+    aremove,
+    async_sync,
+    backfill,
+    remove,
+    sync,
+)
 from ingestlib.services.retrieve import Hit, RetrievalResult, aretrieve, retrieve
 
 __all__ = [
@@ -22,4 +34,14 @@ __all__ = [
     "aretrieve",
     "RetrievalResult",
     "Hit",
+    "remove",
+    "aremove",
+    "RemoveResult",
+    "sync",
+    "async_sync",
+    "SyncResult",
+    "SyncAction",
+    "backfill",
+    "abackfill",
+    "BackfillResult",
 ]

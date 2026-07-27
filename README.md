@@ -161,6 +161,37 @@ for hit in res.hits:
     print(hit.rerank_score, hit.citation, hit.chunk.heading)
 ```
 
+## Manage a corpus
+
+Real corpora change. Re-ingesting an edited file **replaces** the old version
+(its vectors and artifacts are deleted — no stale chunks), a rename is a cheap
+**move**, and `sync()` reconciles a whole folder in one call:
+
+```python
+from ingestlib.services import ingest, sync, remove, backfill
+
+ingest("report.pdf")                       # edited file → status="replaced"
+sync("corpus/", prune=True)                # add new, replace changed, drop deleted
+remove("old.pdf")                          # erase one doc from both stores
+backfill()                                 # rebuild the vector store from artifacts
+```
+
+The same verbs are on the CLI — a corpus is managed from the shell, no Python
+needed:
+
+```bash
+ingestlib ingest report.pdf docs/          # files or folders
+ingestlib sync corpus/ --prune --dry-run   # preview, then drop --dry-run
+ingestlib list                             # every stored document
+ingestlib remove report.pdf                # erase one
+ingestlib backfill                         # rebuild the index (provider switch, new store)
+ingestlib search "what were the risks?"    # cited retrieval from the shell
+```
+
+Documents carry a logical identity (`namespace` + source path), so lifecycle
+knows a re-ingest from a brand-new file. Full guide:
+[Manage a corpus](https://langmodule.github.io/ingestlib/how-to/manage-corpus/).
+
 ## Using the operations directly
 
 Every operation also works standalone:
@@ -329,13 +360,13 @@ nothing leaves your machine but the optional Jina rerank call
 
 ```
 src/ingestlib/
-├── services/       ingest · retrieve          — the product
+├── services/       ingest · retrieve · lifecycle (remove · sync · backfill) — the product
 ├── operations/     parse · classify · split · extract — the tools (each standalone)
 ├── storage/        artifacts (S3 | local) · base (VectorStore contract) · 8 connectors
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
 ├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Ollama Qwen · Jina) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init (setup scaffold) · doctor (health checks)
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env + rules.yaml → typed configs
 ```
@@ -375,7 +406,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~480 tests, ~3min; e2e groups skip)
+make test                  # fast suite (~530 tests, ~3min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
@@ -392,7 +423,8 @@ make test-milvus           # vector connector e2e (needs Milvus at MILVUS_URL)
 make test-opensearch       # vector connector e2e (needs OpenSearch at OPENSEARCH_URL)
 make test-weaviate         # vector connector e2e (needs Weaviate at WEAVIATE_URL)
 make test-services         # full product e2e     (needs the entire stack)
-make test-cli              # init scaffold + doctor checks (no gate)
+make test-cli              # CLI: init/doctor + corpus commands (no gate)
+make test-lifecycle        # remove/sync/backfill + replace-aware ingest (no gate)
 make test-all              # everything
 make eval                  # retrieval quality eval (see below)
 make docs                  # live-preview the documentation site
@@ -443,7 +475,11 @@ retrieval playground where every answer points to its source on the page.
 
 ## Roadmap
 
-- Document lifecycle: `ingest(path, replaces=…)` and folder sync
+- 100-page hardening: streaming / checkpointed parse for large documents
+- XLSX input (tables-first, not a PDF conversion)
+
+Recently shipped: document lifecycle — replace-aware ingestion, folder `sync()`,
+`backfill()`, and the corpus CLI (v1.1).
 
 ## License
 

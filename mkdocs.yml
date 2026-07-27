@@ -87,6 +87,7 @@ nav:
           - Your categories & sections: how-to/content-rules.md
       - Pipeline:
           - Ingest documents: how-to/ingest.md
+          - Manage a corpus: how-to/manage-corpus.md
           - Retrieve & filter: how-to/retrieve.md
           - Build cited answers: how-to/cited-answers.md
       - Setup:

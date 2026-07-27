@@ -5,11 +5,11 @@ above it.
 
 ```text
 src/ingestlib/
-├── services/       ingest · retrieve            — the product
+├── services/       ingest · retrieve · lifecycle (remove · sync · backfill) — the product
 ├── operations/     parse · classify · split · extract — the tools (each standalone)
 ├── storage/        artifacts (S3 | local) · VectorStore contract · 8 connectors
 ├── foundations/    llm (Bedrock · OpenAI · Ollama · Jina rerank) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init · doctor
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env + rules.yaml → typed, frozen configs
 ```
@@ -32,8 +32,8 @@ namespace isolation everywhere.
 **Artifacts are the source of truth; vectors are an index.** Every stage's
 output persists before the next stage runs, so nothing about a corpus is
 ever locked inside a vector database — parses, chunks, and page renders
-all reload from the artifact store. (A backfill fast path that rebuilds a
-vector store straight from these artifacts is on the roadmap.)
+all reload from the artifact store. `backfill()` rebuilds a vector store
+straight from these artifacts, no re-parse.
 
 **Provenance is structural, not annotated.** Chunks record the parse
 region ids they cover, chunk boundaries can't cut through a region, and

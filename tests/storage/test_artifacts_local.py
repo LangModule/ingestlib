@@ -19,7 +19,7 @@ from ingestlib.storage.blobs import LocalBlobStore, get_blob_store, reset_blob_s
 _DOC_ID = "local-test-" + "0" * 54
 
 
-def _synthetic_parse_result():
+def _synthetic_parse_result(doc_id: str = _DOC_ID, source: str = "synthetic.pdf"):
     from ingestlib.foundations.ocr.models import BoundingBox, Region
     from ingestlib.operations.parse.models import FigureImage, PageResult, ParseResult
 
@@ -46,9 +46,9 @@ def _synthetic_parse_result():
     )
     return ParseResult(
         pages=[page],
-        source_path=Path("synthetic.pdf"),
+        source_path=Path(source),
         source_format="pdf",
-        source_checksum=_DOC_ID,
+        source_checksum=doc_id,
     )
 
 
@@ -137,6 +137,9 @@ def test_meta_self_heals_from_parse_artifact(local_store):
     meta = artifacts.get_document_meta(_DOC_ID)
     assert meta.filename == "synthetic.pdf"
     assert meta.page_count == 1
+    assert meta.source_path.endswith("synthetic.pdf"), (
+        "the rebuild must include the logical identity"
+    )
     assert (local_store / "documents" / _DOC_ID / "meta.json").is_file(), (
         "healing must persist the rebuilt meta"
     )
@@ -224,3 +227,77 @@ def test_corrupt_meta_is_rebuilt_not_crashed(local_store):
     meta = artifacts.get_document_meta(_DOC_ID)
     assert meta.page_count == 1
     assert json.loads(meta_path.read_text())["filename"] == "synthetic.pdf"
+
+
+# ---------- logical identity (lifecycle) ----------
+
+
+def test_save_parse_records_logical_identity(local_store):
+    artifacts.save_parse(_synthetic_parse_result())
+    meta = artifacts.get_document_meta(_DOC_ID)
+    assert meta.source_path == str(Path("synthetic.pdf").resolve())
+    assert meta.namespace == ""  # namespace arrives with the ingest manifest
+
+
+def test_manifest_patches_namespace_into_meta(local_store):
+    artifacts.save_parse(_synthetic_parse_result())
+    artifacts.save_ingest_manifest(_DOC_ID, {"namespace": "tenant-a", "dimension": 8})
+    assert artifacts.get_document_meta(_DOC_ID).namespace == "tenant-a"
+
+
+def test_pre_lifecycle_meta_gains_identity_without_losing_stage_fields(local_store):
+    """A meta.json written before source_path/namespace existed heals both in
+    from the parse artifact and the ingest manifest — and keeps its
+    category/chunk counts (patch, not rebuild)."""
+    from ingestlib.operations.classify.models import ClassifyResult
+
+    artifacts.save_parse(_synthetic_parse_result())
+    artifacts.save_classify(_DOC_ID, ClassifyResult(category="survey", confidence=0.9))
+    artifacts.save_ingest_manifest(_DOC_ID, {"namespace": "tenant-a"})
+
+    # simulate the pre-lifecycle file: strip the identity fields
+    meta_path = local_store / "documents" / _DOC_ID / "meta.json"
+    old = json.loads(meta_path.read_text())
+    del old["source_path"], old["namespace"]
+    meta_path.write_text(json.dumps(old))
+
+    meta = artifacts.get_document_meta(_DOC_ID)
+    assert meta.source_path.endswith("synthetic.pdf")
+    assert meta.namespace == "tenant-a"
+    assert meta.category == "survey", "healing must not lose stage fields"
+    persisted = json.loads(meta_path.read_text())
+    assert persisted["source_path"] == meta.source_path, "heal must persist"
+
+
+def test_find_by_path(local_store):
+    artifacts.save_parse(_synthetic_parse_result())
+
+    hit = artifacts.find_by_path("synthetic.pdf")
+    assert hit is not None and hit.doc_id == _DOC_ID
+    assert artifacts.find_by_path("other.pdf") is None
+    assert artifacts.find_by_path("synthetic.pdf", namespace="tenant-a") is None, (
+        "namespace scopes the logical identity"
+    )
+
+
+def test_find_by_path_duplicate_resolves_to_newest(local_store):
+    """Two documents claiming one path (a crashed replace) — the newest
+    created_at wins; sync() repairs the duplicate later."""
+    other_id = "local-test-" + "1" * 54
+    artifacts.save_parse(_synthetic_parse_result())
+    artifacts.save_parse(_synthetic_parse_result(doc_id=other_id))
+    # same recorded path for both; force a deterministic created_at order
+    artifacts._patch_meta(_DOC_ID, created_at="2026-01-01T00:00:00+00:00")
+    artifacts._patch_meta(other_id, created_at="2026-02-01T00:00:00+00:00")
+
+    hit = artifacts.find_by_path("synthetic.pdf")
+    assert hit is not None and hit.doc_id == other_id
+
+
+def test_set_source_path_repoints_identity(local_store):
+    artifacts.save_parse(_synthetic_parse_result())
+    artifacts.set_source_path(_DOC_ID, "moved/renamed.pdf")
+    meta = artifacts.get_document_meta(_DOC_ID)
+    assert meta.source_path == str(Path("moved/renamed.pdf").resolve())
+    assert artifacts.find_by_path("moved/renamed.pdf").doc_id == _DOC_ID
+    assert artifacts.find_by_path("synthetic.pdf") is None

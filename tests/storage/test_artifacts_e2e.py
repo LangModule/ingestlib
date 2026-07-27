@@ -69,6 +69,17 @@ def test_document_exists_after_save(saved_doc):
     assert artifacts.document_exists("f" * 64) is False
 
 
+def test_meta_carries_logical_identity(saved_doc):
+    """source_path lands in meta on the S3 backend too, and find_by_path
+    resolves it — the lifecycle registry works identically on both stores."""
+    from ingestlib.storage import artifacts
+
+    meta = artifacts.get_document_meta(saved_doc)
+    assert meta.source_path.endswith(".pdf")
+    hit = artifacts.find_by_path(meta.source_path)
+    assert hit is not None and hit.doc_id == saved_doc
+
+
 def test_load_parse_structure_round_trip(saved_doc):
     from ingestlib.storage import artifacts
 
