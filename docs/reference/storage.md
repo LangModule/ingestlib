@@ -17,6 +17,10 @@ from ingestlib.storage import artifacts
 
 ::: ingestlib.storage.artifacts.load_split
 
+::: ingestlib.storage.artifacts.save_extract
+
+::: ingestlib.storage.artifacts.load_extract
+
 ::: ingestlib.storage.artifacts.load_ingest_manifest
 
 ::: ingestlib.storage.artifacts.document_exists

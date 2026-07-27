@@ -4,7 +4,8 @@
 
 Self-hosted document intelligence for RAG pipelines. One library that takes a
 raw document — PDF, DOCX, PPTX, or a PNG/JPEG/WebP image — and produces
-searchable, **cited**, retrieval-ready chunks: the territory of LlamaParse /
+searchable, **cited**, retrieval-ready chunks, plus schema-driven
+extraction with verified citations: the territory of LlamaParse /
 Reducto / Unstructured.io, running on your own stack.
 
 ```python
@@ -25,6 +26,7 @@ guides for every stage, the full configuration reference, and the API docs.
 | **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, **charts converted to data tables** (estimated values marked `~`, printed callouts and growth labels captured), figures extracted as PNG crops with captions and AI descriptions — every block traceable to a bounding box on the page |
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended, or constrained to your rules (per call or preset in `rules.yaml`, with page targeting) — confidence and ranked alternatives included. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, … — LLM-discovered, or **your own categories** via rules) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
+| **Extract** | **Your Pydantic schema, filled from the document** — one instance (`mode="one"`) or every instance in a batch (`mode="many"`, e.g. all receipts in a scanned expense bundle). Every field carries **verified provenance**: page + region citations checked against the parse, values grounded in the cited source text, and honest confidence — uncited or ungrounded answers are capped, hallucinated citations dropped |
 | **Ingest** | The whole pipeline in one call, every stage persisted to the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
 | **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
 
@@ -176,12 +178,39 @@ for c in chunks.chunks:
     print(c.token_estimate, c.embedding_text.splitlines()[0])
 ```
 
+And the fourth operation pulls **structured data** out — your schema,
+filled and cited:
+
+```python
+from pydantic import BaseModel
+from ingestlib.operations import extract
+
+class Receipt(BaseModel):
+    merchant: str
+    total: float
+    currency: str
+
+report = extract(parse("expenses.pdf"), schema=Receipt, mode="many")
+for item in report.items:
+    print(item.value.merchant, item.value.total, item.citation)
+# BART 20.0 p.10  ·  Hilton 214.6 p.2  ·  …
+print(report.items[0].fields["total"].grounded)   # True — verified in the cited region
+```
+
+`mode="one"` fills a single instance from the whole document (a 10-K's
+headline financials); `mode="many"` finds every instance across the pages.
+A `ParseResult` input gives region-level citations on scans; a raw path
+reads the native text layer with page-level citations and no OCR server.
+Confidence is honest: a field whose citation doesn't check out is capped,
+and a value not found in its cited text is flagged `grounded=False`.
+
 Persistence and vector access are explicit too:
 
 ```python
 from ingestlib.storage import artifacts
 
 doc_id = artifacts.save_parse(result)   # artifact store: source, result.json, page PNGs, crops
+artifacts.save_extract(doc_id, report)  # extraction results persist beside the parse
 artifacts.list_documents()              # registry: filename, pages, category, chunks
 ```
 
@@ -301,7 +330,7 @@ nothing leaves your machine but the optional Jina rerank call
 ```
 src/ingestlib/
 ├── services/       ingest · retrieve          — the product
-├── operations/     parse · classify · split   — the tools (each standalone)
+├── operations/     parse · classify · split · extract — the tools (each standalone)
 ├── storage/        artifacts (S3 | local) · base (VectorStore contract) · 8 connectors
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
@@ -346,12 +375,13 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~440 tests, ~3min; e2e groups skip)
+make test                  # fast suite (~480 tests, ~3min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
 make test-classify         # classify e2e         (needs the LLM provider)
 make test-split            # split e2e            (needs the LLM provider)
+make test-extract          # extract e2e          (needs the LLM provider; scans need the VL server)
 make test-s3               # artifact store e2e   (needs AWS)
 make test-pinecone         # vector connector e2e (needs Pinecone + embeddings)
 make test-qdrant           # vector connector e2e (needs a Qdrant server + embeddings)
@@ -413,7 +443,6 @@ retrieval playground where every answer points to its source on the page.
 
 ## Roadmap
 
-- Extract: schema-driven field extraction with source provenance
 - Document lifecycle: `ingest(path, replaces=…)` and folder sync
 
 ## License

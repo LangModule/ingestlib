@@ -70,6 +70,23 @@ png = artifacts.read_blob(artifacts.page_image_key(hit.chunk.document_id, 4))
 Draw `boxes` over `png` and the answer highlights its source on the page.
 The full recipe is in [Build cited answers](../how-to/cited-answers.md).
 
+## Field-level provenance in extract
+
+`extract()` extends the same chain to individual **fields**. Every field
+of every extracted item carries a `FieldValue` with:
+
+- `pages` and `region_ids` — where the value was read (region-level when
+  extracting from a `ParseResult`, page-level on the native-text path)
+- `grounded` — whether the value was actually found in the cited source
+  text (numeric forms normalized: `383285.0` matches a printed `383,285`)
+- `confidence` — honest by construction: citations are validated against
+  the real parse regions, hallucinated ones are dropped, and a field
+  that is uncited or fails grounding has its confidence capped
+
+`ExtractedItem.citation` renders it the same way (`p.10`), and the same
+`load_parse` + `page_image_key` recipe above turns an extracted field
+into a highlighted box on the page.
+
 ## Why chunks stay traceable
 
 Two design rules protect the chain:

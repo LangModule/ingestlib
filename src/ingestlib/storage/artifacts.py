@@ -12,7 +12,8 @@ both, everything under one prefix per document:
     ├── parse/figures/{fig.filename} ...      figure/chart crops
     ├── classify/result.json                  ClassifyResult
     ├── split/result.json                     SplitResult (chunks with provenance)
-    └── split/ingest_manifest.json            vector-store sync record
+    ├── split/ingest_manifest.json            vector-store sync record
+    └── extract/{SchemaName}.json             ExtractResult per extraction schema
 
 doc_id is the parse checksum, so re-saving the same file overwrites in place and
 "already ingested?" is a single existence check. The citation chain needs no
@@ -21,7 +22,10 @@ bboxes straight from this layout.
 """
 import json
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # import-time layering stays downward; annotation only
+    from ingestlib.operations.extract.models import ExtractResult
 
 from pydantic import BaseModel, ConfigDict
 
@@ -326,6 +330,36 @@ def load_ingest_manifest(doc_id: str) -> dict[str, Any]:
         _key(doc_id, "split", "ingest_manifest.json"), doc_id, "ingest manifest", "ingest()"
     )
     return json.loads(body)
+
+
+def save_extract(doc_id: str, result: "ExtractResult") -> None:
+    """Persist an ExtractResult, keyed by its schema name — extractions with
+    different schemas against the same document coexist."""
+    _put_json(
+        _key(doc_id, "extract", f"{result.schema_name}.json"),
+        result.model_dump(mode="json"),
+    )
+    logger.info(
+        "saved extract artifact: doc_id=%s schema=%s items=%d",
+        doc_id[:12], result.schema_name, len(result.items),
+    )
+
+
+def load_extract(doc_id: str, schema: type) -> "ExtractResult":
+    """Load a persisted ExtractResult for `schema`, revalidating every item's
+    value back into the schema class (they round-trip as plain dicts)."""
+    from ingestlib.operations.extract.models import ExtractResult
+
+    body = _get_required(
+        _key(doc_id, "extract", f"{schema.__name__}.json"),
+        doc_id, f"extract ({schema.__name__})", "extract()",
+    )
+    result = ExtractResult.model_validate(json.loads(body))
+    items = [
+        item.model_copy(update={"value": schema.model_validate(item.value)})
+        for item in result.items
+    ]
+    return result.model_copy(update={"items": items})
 
 
 # ---------- registry ----------

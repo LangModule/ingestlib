@@ -1,7 +1,7 @@
 [project]
 name = "ingestlib"
-version = "0.8.0"
-description = "Self-hosted document intelligence for RAG — parse, classify, and split PDF/DOCX/PPTX and images into searchable, cited, retrieval-ready chunks"
+version = "1.0.0"
+description = "Self-hosted document intelligence for RAG — parse, classify, split, and extract from PDF/DOCX/PPTX and images: searchable, cited, retrieval-ready chunks and schema-driven extraction"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -20,7 +20,7 @@ keywords = [
     "retrieval",
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
+    "Development Status :: 5 - Production/Stable",
     "Intended Audience :: Developers",
     "Operating System :: MacOS",
     "Operating System :: POSIX :: Linux",
@@ -114,3 +114,13 @@ target-version = "py312"
 testpaths = ["tests"]
 addopts = "-ra"
 asyncio_mode = "auto"
+filterwarnings = [
+    # Third-party noise, understood and harmless — kept out of test reports.
+    # paddlex warns that the mlx backend ignores its pixel hints on every OCR
+    # call; the library already suppresses this for users (paddle_vl.py), but
+    # pytest's warning capture overrides module-level filters.
+    "ignore:.*does not support `min_pixels`.*:UserWarning",
+    "ignore:.*does not support `max_pixels`.*:UserWarning",
+    # paddlepaddle suggests installing ccache at import, once per process
+    "ignore:No ccache found.*:UserWarning",
+]

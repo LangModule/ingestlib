@@ -26,6 +26,14 @@ serializable with `.model_dump()` / reconstructable with
 
 ::: ingestlib.operations.split.models.Chunk
 
+## Extract
+
+::: ingestlib.operations.extract.models.ExtractResult
+
+::: ingestlib.operations.extract.models.ExtractedItem
+
+::: ingestlib.operations.extract.models.FieldValue
+
 ## Ingest
 
 ::: ingestlib.services.ingest.models.IngestResult

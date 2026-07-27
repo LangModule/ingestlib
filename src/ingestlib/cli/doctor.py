@@ -7,8 +7,8 @@ throughout the library turn failures into one-sentence fixes, and doctor is
 where they all surface together.
 
 Statuses: ok — works; warn — degraded but the core pipeline runs (e.g. the
-OCR server is down: parse/ingest need it, classify/split/retrieve don't);
-fail — this choice is broken. Exit code 1 when anything fails.
+OCR server is down: parse/ingest need it, classify/split/extract/retrieve
+don't); fail — this choice is broken. Exit code 1 when anything fails.
 """
 import shutil
 import sys
@@ -45,7 +45,7 @@ def check_ocr_server() -> Check:
     except Exception as exc:
         return "warn", (
             f"{exc}\n(parse/ingest need the OCR server; "
-            f"classify, split, and retrieve run without it)"
+            f"classify, split, extract, and retrieve run without it)"
         )
     return "ok", f"OCR server answering at {cfg.server_url}"
 

@@ -58,7 +58,7 @@ searching.
 | `LibreOffice is not installed ('soffice' not found)…` | Needed for DOCX/PPTX only; the error includes install commands. PDFs and images work without it. |
 | `this PDF is password-protected…` | Remove the password (open and print/export to a new PDF). |
 | `not a readable PDF — the file appears corrupt or truncated` | Re-export or re-download the file. |
-| `x has no extractable text … Run parse() first` | You called `classify()`/`split()` directly on a scan or image — they read native text. Parse it (OCR), then pass the `ParseResult`. |
+| `x has no extractable text … Run parse() first` | You called `classify()`/`split()`/`extract()` directly on a scan or image — they read native text. Parse it (OCR), then pass the `ParseResult`. |
 
 ## Runtime
 

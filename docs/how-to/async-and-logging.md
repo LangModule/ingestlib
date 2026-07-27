@@ -10,6 +10,7 @@ form — same signature, same behavior:
 | `parse` | `aparse` |
 | `classify` | `aclassify` |
 | `split` | `asplit` |
+| `extract` | `aextract` |
 | `ingest` | `aingest` |
 | `retrieve` | `aretrieve` |
 

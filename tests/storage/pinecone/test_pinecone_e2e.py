@@ -127,7 +127,7 @@ def test_reupsert_with_fewer_chunks_leaves_no_orphans(store, upserted):
 def test_delete_document_removes_vectors_from_both_indexes(store, upserted):
     deleted = store.delete_document(_DOC_ID)
     assert deleted == 2
-    time.sleep(5)
+    time.sleep(8)  # eventual consistency — deletes settle no faster than writes
     from ingestlib.foundations.llm import embed_text
 
     q = embed_text("participants recruited", purpose="GENERIC_RETRIEVAL")

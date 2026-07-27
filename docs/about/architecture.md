@@ -6,7 +6,7 @@ above it.
 ```text
 src/ingestlib/
 ├── services/       ingest · retrieve            — the product
-├── operations/     parse · classify · split     — the tools (each standalone)
+├── operations/     parse · classify · split · extract — the tools (each standalone)
 ├── storage/        artifacts (S3 | local) · VectorStore contract · 8 connectors
 ├── foundations/    llm (Bedrock · OpenAI · Ollama · Jina rerank) · ocr (PaddleOCR-VL)
 ├── cli/            the `ingestlib` command — init · doctor

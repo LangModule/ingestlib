@@ -3,8 +3,8 @@
 Converts the source through LibreOffice into PDF bytes, then delegates to the
 PDF loader — both loading shapes: rendered pages (load_office, the parse
 pipeline's input) and lightweight content (load_office_content: native text +
-embedded images for classify/split). Downstream output is produced from the
-intermediate PDF exactly as it would be for a native PDF input.
+embedded images for the no-OCR operations). Downstream output is produced
+from the intermediate PDF exactly as it would be for a native PDF input.
 """
 import subprocess
 from pathlib import Path

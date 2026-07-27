@@ -82,7 +82,7 @@ seconds.
 
 !!! note "Only parsing needs the server"
 
-    `classify()`, `split()`, and `retrieve()` all run without the OCR
+    `classify()`, `split()`, `extract()`, and `retrieve()` all run without the OCR
     server. If you only see a server warning from `ingestlib doctor`, the
     rest of the pipeline still works.
 

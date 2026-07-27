@@ -1,4 +1,4 @@
-.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-cli eval
+.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-cli eval
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -10,7 +10,7 @@ test-cli:
 
 # entire suite including every opt-in group (needs VL server running + Bedrock access)
 test-all:
-	RUN_AWS_RERANK=1 RUN_OLLAMA_E2E=1 RUN_OCR_E2E=1 RUN_PARSE_E2E=1 RUN_CLASSIFY_E2E=1 RUN_SPLIT_E2E=1 RUN_S3_E2E=1 RUN_PINECONE_E2E=1 RUN_QDRANT_E2E=1 RUN_PGVECTOR_E2E=1 RUN_MONGODB_E2E=1 RUN_MILVUS_E2E=1 RUN_OPENSEARCH_E2E=1 RUN_WEAVIATE_E2E=1 RUN_SERVICES_E2E=1 uv run pytest tests/
+	RUN_AWS_RERANK=1 RUN_OLLAMA_E2E=1 RUN_OCR_E2E=1 RUN_PARSE_E2E=1 RUN_CLASSIFY_E2E=1 RUN_SPLIT_E2E=1 RUN_EXTRACT_E2E=1 RUN_S3_E2E=1 RUN_PINECONE_E2E=1 RUN_QDRANT_E2E=1 RUN_PGVECTOR_E2E=1 RUN_MONGODB_E2E=1 RUN_MILVUS_E2E=1 RUN_OPENSEARCH_E2E=1 RUN_WEAVIATE_E2E=1 RUN_SERVICES_E2E=1 uv run pytest tests/
 
 # --- llm layer (mirrors src/ingestlib/foundations/llm/) ---
 
@@ -61,6 +61,12 @@ test-classify:
 
 test-split:
 	RUN_SPLIT_E2E=1 uv run pytest tests/operations/split/
+
+# --- extract operation (mirrors src/ingestlib/operations/extract/) — needs the LLM provider
+#     (the scanned-document case also needs the VL server) ---
+
+test-extract:
+	RUN_EXTRACT_E2E=1 uv run pytest tests/operations/extract/
 
 # --- storage (S3 artifacts) — needs AWS credentials ---
 

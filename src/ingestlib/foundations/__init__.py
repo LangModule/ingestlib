@@ -7,6 +7,6 @@ Sub-packages:
           reranking (Jina and Amazon Rerank)
     ocr — PaddleOCR-VL engine (layout + recognition) and the shared region types
 
-Operations (parse / classify / split) compose these; nothing here knows the
-operations exist.
+Operations (parse / classify / split / extract) compose these; nothing here
+knows the operations exist.
 """

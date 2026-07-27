@@ -66,7 +66,7 @@ _LOCAL_CONFIG = """\
 llm_provider: ollama          # qwen3.5:9b via a local Ollama server
 embedding_provider: ollama    # qwen3-embedding:0.6b (1024-dim)
 vector_store: sqlite          # one local file, created on first use
-artifact_store: local         # parse/classify/split outputs as plain files
+artifact_store: local         # every operation's outputs as plain files
 reranker: none                # vector order as-is; jina/aws need accounts
 
 # OCR server for parse/ingest: mlx-vlm-server (Apple Silicon) | vllm-server (NVIDIA)

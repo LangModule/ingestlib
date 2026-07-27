@@ -1,7 +1,8 @@
 site_name: ingestlib
 site_description: >-
-  Self-hosted document intelligence for RAG — parse, classify, and split
-  PDF/DOCX/PPTX and images into searchable, cited, retrieval-ready chunks.
+  Self-hosted document intelligence for RAG — parse, classify, split, and
+  extract from PDF/DOCX/PPTX and images: searchable, cited,
+  retrieval-ready chunks and schema-driven extraction.
 site_url: https://langmodule.github.io/ingestlib/
 repo_url: https://github.com/LangModule/ingestlib
 repo_name: LangModule/ingestlib
@@ -81,6 +82,7 @@ nav:
       - Documents:
           - Parse any format: how-to/parse-documents.md
           - Use parse results: how-to/parse-results.md
+          - Extract structured data: how-to/extract.md
       - Content rules:
           - Your categories & sections: how-to/content-rules.md
       - Pipeline:

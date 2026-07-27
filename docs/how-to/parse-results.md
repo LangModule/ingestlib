@@ -84,5 +84,5 @@ exact region ids — the standalone-path chunks cite pages only.
 
 ---
 
-Next: [Your categories & sections](content-rules.md) — constrain classify
-and split to your domain.
+Next: [Extract structured data](extract.md) — your schema, filled and
+cited from the parse.

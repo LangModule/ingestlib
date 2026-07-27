@@ -97,7 +97,7 @@ class ParseResult(BaseModel):
 
     pages             — list of PageResult in document order
     source_path       — path of the file that was parsed
-    source_format     — pdf | docx | pptx
+    source_format     — pdf | docx | pptx | png | jpeg | webp
     was_converted     — True when the source was a DOCX/PPTX routed through
                         LibreOffice before parsing
     source_metadata   — properties extracted from the source file (title, author,

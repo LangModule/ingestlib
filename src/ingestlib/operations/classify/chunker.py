@@ -1,9 +1,9 @@
-"""Page extraction and chunking for classify — works with or without a prior parse.
+"""Page extraction and chunking for classify — extract reuses the native path.
 
 extract_pages() accepts either a ParseResult (enriched markdown + the figure/chart
 crops parse already extracted) or a file path (native text + embedded raster
 images pulled straight from the PDF objects — no OCR, no VL model, no page
-rendering). Both normalize to the same PageContent shape, so the classifier is
+rendering). Both normalize to the same PageContent shape, so the consumer is
 input-agnostic and only ever sees real content: text plus actual pictures.
 """
 from pathlib import Path
@@ -70,7 +70,7 @@ def extract_pages(source: ParseResult | Path | str) -> list[PageContent]:
         raise ValueError(
             f"{path.name} has no extractable text or images — scanned pages "
             f"have no text layer. Run parse() first (it OCRs the pages) and "
-            f"pass the ParseResult to classify()."
+            f"pass the ParseResult."
         )
     return [
         PageContent(text=cp.text[:PAGE_TEXT_LIMIT], images=cp.images, page_num=i)

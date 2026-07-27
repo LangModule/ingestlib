@@ -5,7 +5,7 @@ Two loading shapes:
                                                     (the parse pipeline's input)
   load_pdf_content / load_pdf_content_from_bytes  — native text + EMBEDDED raster
                                                     images only, no rasterization
-                                                    (classify/split's lightweight input)
+                                                    (the no-OCR operations' input)
 
 Both also return a metadata dictionary of the PDF's own properties.
 """
@@ -196,9 +196,9 @@ def load_pdf_content_from_bytes(
 ) -> tuple[list[ContentPage], dict[str, Any]]:
     """Load native text + embedded images per page — no page rendering.
 
-    The cheap path for operations that read a document without needing layout
-    (classify, split): text comes from the text layer, images are the actual
-    pictures inside the PDF rather than rasterized pages.
+    The cheap path for operations that read a document without needing
+    layout: text comes from the text layer, images are the actual pictures
+    inside the PDF rather than rasterized pages.
     """
     pdf = _open_pdf(pdf_bytes)
     try:

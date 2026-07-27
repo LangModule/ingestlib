@@ -8,7 +8,8 @@ import from here and never know which backend answered:
 
 Every backend exposes identical signatures, so dispatch is a per-call config
 read — no client is built until a call actually happens. Switching
-embedding_provider changes the vector space: re-ingest (or --backfill) after.
+embedding_provider changes the vector space: re-ingest afterward
+(skip_existing=False).
 Image embeddings exist only on bedrock. Rerank keeps its explicit provider
 suffixes (aws_rerank / jina_rerank); retrieve() picks via config.yaml's
 `reranker` key.

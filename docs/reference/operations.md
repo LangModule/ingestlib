@@ -1,13 +1,13 @@
 # Operations API
 
-The three pipeline stages. Each has a sync form and an async `a`-prefixed
+The four operations. Each has a sync form and an async `a`-prefixed
 form — use the async form inside a running event loop. `parse` is the only
-operation that needs the OCR server; `classify` and `split` accept either a
-`ParseResult` or a raw file path.
+operation that needs the OCR server; `classify`, `split`, and `extract`
+accept either a `ParseResult` or a raw file path.
 
 ```python
-from ingestlib.operations import parse, classify, split
-from ingestlib.operations import aparse, aclassify, asplit
+from ingestlib.operations import parse, classify, split, extract
+from ingestlib.operations import aparse, aclassify, asplit, aextract
 ```
 
 ## parse
@@ -27,3 +27,9 @@ from ingestlib.operations import aparse, aclassify, asplit
 ::: ingestlib.operations.split.splitter.asplit
 
 ::: ingestlib.operations.split.splitter.split
+
+## extract
+
+::: ingestlib.operations.extract.extractor.aextract
+
+::: ingestlib.operations.extract.extractor.extract

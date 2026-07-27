@@ -18,9 +18,11 @@ the official standalone shape) | `opensearch` | `weaviate`, plus `all`
 for contributors running `make test-all`. Ports and credentials match
 what `.env.example` documents; data persists in named volumes
 (`down -v` wipes it). Every profile is verified against its connector's
-full e2e suite. Two hard-won details live in the file so you never hit
-them: pg18 images changed their volume mount point, and mongodb's
-atlas-local needs both data AND configdb mounted or restarts crash-loop.
+full e2e suite. Three hard-won details live in the file so you never hit
+them: pg18 images changed their volume mount point, mongodb's atlas-local
+needs both data AND configdb mounted or restarts crash-loop, and weaviate
+needs a pinned CLUSTER_HOSTNAME or a recreated container can't reopen its
+volume.
 
 The AWS files below cover the managed side. In the two JSON policies,
 replace the placeholders before attaching:

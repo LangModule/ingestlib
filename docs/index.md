@@ -60,6 +60,7 @@ parsing quality — is what ingestlib is built around.
 | **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, charts converted to data tables, figures as PNG crops with AI descriptions — every block traceable to a bounding box |
 | **Classify** | A document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your own categories — with confidence and ranked alternatives |
 | **Split** | Sections (pages grouped by role) containing natural chunks: boundaries follow the content, tables never split, every chunk carries a `[category › section › heading]` breadcrumb |
+| **Extract** | Your Pydantic schema filled from the document — one instance or every instance in a batch — each field citing its page and regions, grounded against the source text, with honest confidence |
 | **Ingest** | The whole pipeline in one call — every stage persisted to the artifact store, vectors upserted, documents deduplicated by content checksum |
 | **Retrieve** | Question → hybrid search (dense + lexical) → rerank → hits with scores, citations, and a prompt-ready context block |
 

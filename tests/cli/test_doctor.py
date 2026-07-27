@@ -51,7 +51,7 @@ def test_ocr_server_down_is_a_warning_not_a_failure(patched):
     ))
     status, detail = doctor.check_ocr_server()
     assert status == "warn"
-    assert "classify, split, and retrieve" in detail
+    assert "classify, split, extract, and retrieve" in detail
 
 
 def test_llm_check_fails_with_the_ollama_hint_on_a_dead_port(patched):

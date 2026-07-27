@@ -152,6 +152,11 @@ def test_load_on_unknown_doc_id_names_the_fix(local_store):
     """A doc_id that was never stored must not surface a raw path error —
     the message names the missing artifact, the call that produces it, and
     list_documents()."""
+    from pydantic import BaseModel
+
+    class _Schema(BaseModel):
+        field: str
+
     with pytest.raises(FileNotFoundError, match="parse.*list_documents"):
         artifacts.load_parse("f" * 64)
     with pytest.raises(FileNotFoundError, match="classify.*list_documents"):
@@ -160,6 +165,40 @@ def test_load_on_unknown_doc_id_names_the_fix(local_store):
         artifacts.load_split("f" * 64)
     with pytest.raises(FileNotFoundError, match="ingest.*list_documents"):
         artifacts.load_ingest_manifest("f" * 64)
+    with pytest.raises(FileNotFoundError, match="_Schema.*list_documents"):
+        artifacts.load_extract("f" * 64, _Schema)
+
+
+def test_extract_round_trip_revalidates_values(local_store):
+    """save_extract/load_extract on the real local backend — values come back
+    as instances of the caller's schema, provenance intact."""
+    from pydantic import BaseModel
+
+    from ingestlib.operations.extract import ExtractedItem, ExtractResult, FieldValue
+
+    class Receipt(BaseModel):
+        merchant: str
+        total: float
+
+    result = ExtractResult(
+        items=[ExtractedItem(
+            value=Receipt(merchant="BART", total=20.0),
+            fields={"total": FieldValue(confidence=0.9, region_ids={10: [3]},
+                                        pages=[10], grounded=True)},
+            pages=[10],
+        )],
+        schema_name="Receipt",
+        mode="many",
+        pages_used=16,
+    )
+    artifacts.save_extract(_DOC_ID, result)
+
+    loaded = artifacts.load_extract(_DOC_ID, Receipt)
+    item = loaded.items[0]
+    assert isinstance(item.value, Receipt) and item.value.total == 20.0
+    assert item.fields["total"].region_ids == {10: [3]}
+    assert item.fields["total"].grounded is True
+    assert loaded.schema_name == "Receipt" and loaded.pages_used == 16
 
 
 def test_load_classify_before_classify_is_the_same_clear_error(local_store):

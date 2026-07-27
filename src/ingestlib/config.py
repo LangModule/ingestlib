@@ -207,8 +207,8 @@ def _find_config_path() -> Path:
             return candidate
     raise FileNotFoundError(
         f"{_CONFIG_FILENAME} not found in {cwd} or any parent directory — "
-        f"copy config.example.yaml from https://github.com/LangModule/ingestlib "
-        f"into your project, or set {_CONFIG_ENV_VAR}=/path/to/config.yaml"
+        f"run `ingestlib init` here to scaffold one (--local for the "
+        f"zero-cloud preset), or set {_CONFIG_ENV_VAR}=/path/to/config.yaml"
     )
 
 

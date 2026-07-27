@@ -16,8 +16,8 @@ One index holds both retrieval signals:
     payload           — full chunk provenance, returned verbatim on hits
 
 The index is created with zero replicas: the artifact store is the source of
-truth and backfill rebuilds the index, so durability rides on artifacts, not
-on replica copies — and a single-node domain stays green.
+truth and re-ingesting rebuilds the index, so durability rides on artifacts,
+not on replica copies — and a single-node domain stays green.
 """
 import re
 import threading

@@ -8,7 +8,8 @@ Two loading shapes per format:
                                                   → (list[ContentPage], metadata)
 
 The rendered shape feeds the parse pipeline; the content shape is the cheap
-path for operations that read documents without layout (classify, split).
+path for operations that read documents without layout (classify, split,
+extract).
 """
 from ingestlib.operations.parse.loaders.image import (
     load_image,

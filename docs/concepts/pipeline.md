@@ -1,7 +1,9 @@
 # The pipeline
 
-ingestlib is three **operations** composed by two **services**. Each
-operation works standalone; the services chain them and add persistence.
+ingestlib is four **operations** and two **services**. Each operation
+works standalone; the services chain the first three and add persistence.
+The fourth, `extract()`, is a standalone reader — it pulls structured
+data out of a document and is not part of the ingest chain.
 
 ```text
                      ┌───────────────── services ─────────────────┐
@@ -54,9 +56,26 @@ Each chunk records its pages and the parse region ids it covers, and
 carries a `[category › section › heading]` breadcrumb in the text that
 gets embedded.
 
+## Extract — your schema, grounded
+
+`extract()` fills a Pydantic schema you define from the document — one
+instance for the whole document (`mode="one"`), or every instance it can
+find (`mode="many"`: all the receipts in an expense bundle). It is the
+operation that returns *data* rather than document structure, and its
+results are verified, not just generated:
+
+- Every field cites the **page and parse regions** it was read from
+- Each value is **grounded** — checked against the cited source text
+- Confidence is honest: uncited or ungrounded fields are capped, and
+  citations pointing at regions that don't exist are dropped
+
+Feed it a `ParseResult` for region-level citations on scans; feed it a
+raw path and it reads the native text layer with page-level citations
+and no OCR server. See [Extract structured data](../how-to/extract.md).
+
 ## Ingest — the pipeline with persistence
 
-`ingest()` chains the three operations, embeds every chunk, and upserts
+`ingest()` chains parse, classify, and split, embeds every chunk, and upserts
 into the configured vector store — persisting each stage's output to the
 artifact store as it goes. Content-checksum dedup makes it safe to point
 at the same folder twice. A progress callback (`on_stage`) reports each
@@ -78,17 +97,17 @@ everything it needs is on the stored chunk payloads.
 The services are convenience, not lock-in:
 
 ```python
-from ingestlib.operations import parse, classify, split
+from ingestlib.operations import parse, classify, split, extract
 
 result = parse("report.pdf")               # or load_parse(doc_id) from artifacts
 label  = classify(result)                  # reuses the parse — no OCR
 chunks = split(result, category=label.category)
+fields = extract(result, schema=MySchema)  # reuses the parse — cited fields
 ```
 
-`classify("report.pdf")` and `split("report.pdf")` also accept raw paths
-directly — they read native text without OCR, and raise a clear error
-telling you to `parse()` first when a document has no text layer (scans,
-images).
+`classify`, `split`, and `extract` also accept raw paths directly — they
+read native text without OCR, and raise a clear error telling you to
+`parse()` first when a document has no text layer (scans, images).
 
 ---
 

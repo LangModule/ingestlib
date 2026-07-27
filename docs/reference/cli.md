@@ -37,7 +37,7 @@ uv run ingestlib doctor
 | Python version | `fail` below 3.12 |
 | Config discovery + parse | `fail` — and doctor stops; nothing else can run |
 | LibreOffice | `warn` — DOCX/PPTX need it; PDF/images don't |
-| OCR server | `warn` — parse/ingest need it; classify/split/retrieve don't |
+| OCR server | `warn` — parse/ingest need it; classify/split/extract/retrieve don't |
 | LLM provider | `fail` — real chat call |
 | Embedding provider | `fail` — real embedding; prints the dimension |
 | Reranker | `fail` (`skip` when `reranker: none`) |

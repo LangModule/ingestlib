@@ -32,6 +32,13 @@ file gets a new `doc_id` with no link to v1 — and v1's chunks stay in the
 store until you delete them. Folder-sync and replace-aware ingestion are
 on the roadmap.
 
+**Extract's `grounded` flag is text verification, not truth.** It means
+the value was found in the cited source text (with numeric normalization,
+so `383285.0` matches a printed `383,285`) — it cannot tell you the
+document itself is correct, and a derived or reworded value can be right
+yet `grounded=False`. Treat ungrounded fields as "verify before use," not
+"wrong."
+
 **Local models trail cloud models on dense charts.** The Ollama reference
 stack handles the pipeline's judgment tasks well; complex multi-series
 charts are where Nova/GPT-5 still win. Test on your own corpus.
@@ -52,5 +59,5 @@ write — marks completion.
 
 The near-term list, in order: document lifecycle (replace + folder sync,
 and a backfill fast path that re-embeds straight from stored artifacts),
-schema-driven **Extract** as the fourth operation, XLSX. Watch
+XLSX. Watch
 [GitHub](https://github.com/LangModule/ingestlib) for progress.

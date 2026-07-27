@@ -120,6 +120,39 @@ def test_classify_and_split_round_trip(saved_doc):
     assert loaded.chunks[0].region_ids == {1: [0]}
 
 
+def test_extract_round_trip_revalidates_values(saved_doc):
+    """save_extract/load_extract against real S3 — values come back as
+    instances of the caller's schema, provenance intact (mirrors the local
+    backend's coverage)."""
+    from pydantic import BaseModel
+
+    from ingestlib.operations.extract import ExtractedItem, ExtractResult, FieldValue
+    from ingestlib.storage import artifacts
+
+    class Receipt(BaseModel):
+        merchant: str
+        total: float
+
+    result = ExtractResult(
+        items=[ExtractedItem(
+            value=Receipt(merchant="BART", total=20.0),
+            fields={"total": FieldValue(confidence=0.9, region_ids={10: [3]},
+                                        pages=[10], grounded=True)},
+            pages=[10],
+        )],
+        schema_name="Receipt",
+        mode="many",
+        pages_used=16,
+    )
+    artifacts.save_extract(saved_doc, result)
+
+    loaded = artifacts.load_extract(saved_doc, Receipt)
+    item = loaded.items[0]
+    assert isinstance(item.value, Receipt) and item.value.total == 20.0
+    assert item.fields["total"].region_ids == {10: [3]}
+    assert item.fields["total"].grounded is True
+
+
 def test_delete_document_removes_everything():
     from ingestlib.storage import artifacts
 

@@ -40,6 +40,18 @@ async def test_split_inside_a_loop_names_asplit():
         split("whatever.pdf")
 
 
+async def test_extract_inside_a_loop_names_aextract():
+    from pydantic import BaseModel
+
+    from ingestlib.operations import extract
+
+    class _Schema(BaseModel):
+        field: str
+
+    with pytest.raises(RuntimeError, match="await aextract"):
+        extract("whatever.pdf", schema=_Schema)
+
+
 async def test_ingest_inside_a_loop_names_aingest():
     from ingestlib.services import ingest
 
