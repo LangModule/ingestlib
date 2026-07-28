@@ -164,6 +164,18 @@ class SplitConfig:
 
 
 @dataclass(frozen=True)
+class MCPConfig:
+    """MCP server settings (`ingestlib mcp`). read_only hides the write/
+    destructive tools; host/port apply to the streamable-http transport;
+    token (from MCP_TOKEN env) is the bearer required for http — stdio needs
+    none."""
+    read_only: bool             # True → only the read tools (search/extract/classify/list_documents/doctor)
+    host: str                   # streamable-http bind address (default 127.0.0.1 — local only)
+    port: int                   # streamable-http port
+    token: str                  # from MCP_TOKEN env; required to start the http transport
+
+
+@dataclass(frozen=True)
 class IngestConfig:
     vector_store: str           # services' default connector (default sqlite — zero setup)
     reranker: str               # retrieve()'s reranker: jina | aws | none
@@ -188,6 +200,7 @@ class IngestConfig:
     milvus: MilvusConfig
     opensearch: OpensearchConfig
     weaviate: WeaviateConfig
+    mcp: MCPConfig
 
 
 def _find_config_path() -> Path:
@@ -397,6 +410,14 @@ def _load_config() -> IngestConfig:
         collection_name=weaviate_data.get("collection_name", "Ingestlib"),
     )
 
+    mcp_data = data.get("mcp", {})
+    mcp_config = MCPConfig(
+        read_only=bool(mcp_data.get("read_only", False)),
+        host=mcp_data.get("host", "127.0.0.1"),
+        port=int(mcp_data.get("port", 8000)),
+        token=os.environ.get("MCP_TOKEN", ""),
+    )
+
     return IngestConfig(
         vector_store=vector_store,
         reranker=reranker,
@@ -421,6 +442,7 @@ def _load_config() -> IngestConfig:
         milvus=milvus_config,
         opensearch=opensearch_config,
         weaviate=weaviate_config,
+        mcp=mcp_config,
     )
 
 
@@ -440,6 +462,11 @@ def get_config() -> IngestConfig:
 def get_aws_config() -> AWSConfig:
     """AWS profile/region/account settings."""
     return get_config().aws
+
+
+def get_mcp_config() -> MCPConfig:
+    """MCP server settings (read_only, host, port, token)."""
+    return get_config().mcp
 
 
 def get_bedrock_config() -> BedrockConfig:

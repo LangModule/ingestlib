@@ -12,8 +12,10 @@ does. Trust in the citations depends on being straight about this.
   conversion; it's on the roadmap.
 - **Ingestion is the product; retrieval is a reference.** `retrieve()` is
   a solid hybrid-search + rerank implementation, deliberately not a
-  query-pipeline framework (no multi-query, no agents). Everything your
-  own reader needs rides on the stored chunk payloads.
+  query-side framework (no multi-query, no agentic reasoning loops of its
+  own). Bring your own reader — or point an agent at the
+  [MCP server](../how-to/mcp-server.md); everything either needs rides on
+  the stored chunk payloads.
 
 ## Honest edges
 
@@ -47,7 +49,8 @@ charts are where Nova/GPT-5 still win. Test on your own corpus.
 
 **Very large documents are memory-hungry.** Parse holds page renders in
 memory for the duration of a document; multi-hundred-page PDFs work but
-haven't been optimized. Streaming/checkpointed parsing is roadmap work.
+aren't optimized for memory. Keep single documents to a sane page count,
+or split very large files upstream.
 
 ## Deduplication semantics
 
@@ -59,7 +62,8 @@ write — marks completion.
 
 ## Roadmap
 
-Document lifecycle shipped in v1.1 — replace-aware ingestion, folder
-[`sync()`](../how-to/manage-corpus.md), and [`backfill()`](../how-to/manage-corpus.md#rebuild-the-vector-store-backfill).
-Near-term next: 100-page hardening (streaming/checkpointed parse) and XLSX
-input. Watch [GitHub](https://github.com/LangModule/ingestlib) for progress.
+Recently shipped: an [MCP server](../how-to/mcp-server.md) to serve the
+corpus to agents (v1.2); document lifecycle — replace-aware ingestion, folder
+[`sync()`](../how-to/manage-corpus.md), and [`backfill()`](../how-to/manage-corpus.md#rebuild-the-vector-store-backfill) (v1.1).
+Near-term next: XLSX input (tables-first, not a PDF conversion). Watch
+[GitHub](https://github.com/LangModule/ingestlib) for progress.

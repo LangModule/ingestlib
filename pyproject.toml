@@ -1,7 +1,7 @@
 [project]
 name = "ingestlib"
-version = "1.1.0"
-description = "Self-hosted document intelligence for RAG — parse, classify, split, and extract from PDF/DOCX/PPTX and images: searchable, cited, retrieval-ready chunks and schema-driven extraction"
+version = "1.2.0"
+description = "Self-hosted document intelligence for RAG — parse, classify, split, and extract from PDF/DOCX/PPTX and images into searchable, cited chunks, with an MCP server to serve your corpus to agents"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -12,12 +12,17 @@ authors = [
 ]
 keywords = [
     "rag",
+    "self-hosted",
     "document-intelligence",
     "document-parsing",
     "ocr",
     "chunking",
     "hybrid-search",
     "retrieval",
+    "structured-extraction",
+    "vector-database",
+    "embeddings",
+    "mcp",
 ]
 classifiers = [
     "Development Status :: 5 - Production/Stable",
@@ -61,7 +66,8 @@ mongodb = ["pymongo>=4.10"]
 milvus = ["pymilvus>=2.6"]
 opensearch = ["opensearch-py>=2.8"]
 weaviate = ["weaviate-client>=4.9"]
-all = ["ingestlib[pinecone,qdrant,pgvector,mongodb,milvus,opensearch,weaviate]"]
+mcp = ["mcp>=1.28"]
+all = ["ingestlib[pinecone,qdrant,pgvector,mongodb,milvus,opensearch,weaviate,mcp]"]
 
 [project.scripts]
 ingestlib = "ingestlib.cli:main"
@@ -97,6 +103,7 @@ connectors = [
     "pymilvus>=2.6",
     "opensearch-py>=2.8",
     "weaviate-client>=4.9",
+    "mcp>=1.28",
 ]
 docs = [
     "mkdocs-material>=9.5",

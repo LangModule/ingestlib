@@ -192,6 +192,23 @@ Documents carry a logical identity (`namespace` + source path), so lifecycle
 knows a re-ingest from a brand-new file. Full guide:
 [Manage a corpus](https://langmodule.github.io/ingestlib/how-to/manage-corpus/).
 
+## Serve it to agents (MCP)
+
+`ingestlib mcp` exposes the whole loop — search, extract, ingest, sync, remove,
+backfill — as [MCP](https://modelcontextprotocol.io) tools, so Claude Desktop,
+Cursor, or any agent can drive your **self-hosted** corpus with citations,
+nothing leaving your machine.
+
+```bash
+pip install "ingestlib[mcp]"
+ingestlib mcp                                # stdio (local clients)
+ingestlib mcp --transport http --port 8000   # remote; needs MCP_TOKEN (bearer auth)
+```
+
+Read tools (`search`/`extract`/`classify`/`list`/`doctor`) are always on; the
+write tools hide under `--read-only`. Guide:
+[Serve to agents (MCP)](https://langmodule.github.io/ingestlib/how-to/mcp-server/).
+
 ## Using the operations directly
 
 Every operation also works standalone:
@@ -366,7 +383,8 @@ src/ingestlib/
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
 ├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Ollama Qwen · Jina) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · mcp
+├── mcp/            MCP server (ingestlib[mcp]) — expose the pipeline to agents
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env + rules.yaml → typed configs
 ```
@@ -406,7 +424,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~530 tests, ~3min; e2e groups skip)
+make test                  # fast suite (~550 tests, ~3min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
@@ -425,6 +443,7 @@ make test-weaviate         # vector connector e2e (needs Weaviate at WEAVIATE_UR
 make test-services         # full product e2e     (needs the entire stack)
 make test-cli              # CLI: init/doctor + corpus commands (no gate)
 make test-lifecycle        # remove/sync/backfill + replace-aware ingest (no gate)
+make test-mcp              # MCP server: tools, read_only, http auth (no gate)
 make test-all              # everything
 make eval                  # retrieval quality eval (see below)
 make docs                  # live-preview the documentation site
@@ -475,11 +494,11 @@ retrieval playground where every answer points to its source on the page.
 
 ## Roadmap
 
-- 100-page hardening: streaming / checkpointed parse for large documents
 - XLSX input (tables-first, not a PDF conversion)
 
-Recently shipped: document lifecycle — replace-aware ingestion, folder `sync()`,
-`backfill()`, and the corpus CLI (v1.1).
+Recently shipped: an **MCP server** to serve the corpus to agents (v1.2);
+document lifecycle — replace-aware ingestion, folder `sync()`, `backfill()`,
+and the corpus CLI (v1.1).
 
 ## License
 

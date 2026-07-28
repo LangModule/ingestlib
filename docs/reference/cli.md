@@ -14,6 +14,7 @@ Installed with the package as the `ingestlib` command
 | `remove` | erase a document (by path or doc_id) |
 | `backfill` | rebuild the vector store from stored artifacts |
 | `search` | cited retrieval from the shell |
+| `mcp` | serve the corpus to agents over MCP (needs `ingestlib[mcp]`) |
 
 `init` and `doctor` set up and verify a stack; the rest manage the documents in
 it — the corpus-management guide is [Manage a corpus](../how-to/manage-corpus.md).
@@ -156,3 +157,26 @@ ingestlib search "invoice INV-20114" --no-rerank
 ```
 
 Prints ranked hits with score, citation, heading, and a snippet.
+
+## `ingestlib mcp`
+
+Serve the corpus to MCP agents (Claude Desktop, Cursor, …) as tools —
+`search`, `extract`, `ingest`, `sync`, `remove`, `backfill`, `classify`,
+`list_documents`, `doctor`. Needs the extra: `pip install "ingestlib[mcp]"`.
+Full guide: [Serve to agents (MCP)](../how-to/mcp-server.md).
+
+```bash
+ingestlib mcp                                   # stdio (local clients)
+ingestlib mcp --transport http --port 8000      # remote; needs MCP_TOKEN
+ingestlib mcp --read-only                       # only the read tools
+```
+
+| Flag | Effect |
+|---|---|
+| `--transport` | `stdio` (default, local) or `http` (streamable, remote) |
+| `--host` | http bind address (default `127.0.0.1`) |
+| `--port` | http port (default `8000`) |
+| `--read-only` | hide the write tools (ingest/remove/sync/backfill) |
+
+The **http** transport requires `MCP_TOKEN` in `.env` (bearer auth) and binds
+localhost unless you pass `--host`. stdio needs no token.

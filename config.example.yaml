@@ -82,3 +82,11 @@ paddle_vl:
 #   index_name: ingestlib
 # weaviate:
 #   collection_name: Ingestlib           # Weaviate capitalizes collection names
+
+# MCP server (`ingestlib mcp`) — expose the pipeline as tools to agents.
+# stdio needs nothing; the streamable-http transport binds host:port and
+# requires MCP_TOKEN (.env). read_only hides ingest/remove/sync/backfill.
+# mcp:
+#   read_only: false
+#   host: 127.0.0.1                      # local-only by default; change to expose
+#   port: 8000

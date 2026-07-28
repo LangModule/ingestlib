@@ -9,7 +9,8 @@ src/ingestlib/
 ├── operations/     parse · classify · split · extract — the tools (each standalone)
 ├── storage/        artifacts (S3 | local) · VectorStore contract · 8 connectors
 ├── foundations/    llm (Bedrock · OpenAI · Ollama · Jina rerank) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · mcp
+├── mcp/            MCP server (ingestlib[mcp]) — the tools/services exposed to agents
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env + rules.yaml → typed, frozen configs
 ```

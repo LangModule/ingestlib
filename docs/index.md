@@ -64,6 +64,7 @@ parsing quality — is what ingestlib is built around.
 | **Ingest** | The whole pipeline in one call — every stage persisted to the artifact store, vectors upserted, documents deduplicated by content checksum |
 | **Retrieve** | Question → hybrid search (dense + lexical) → rerank → hits with scores, citations, and a prompt-ready context block |
 | **Manage** | Re-ingest replaces the old version, `sync()` reconciles a folder (add/replace/move/prune), `backfill()` rebuilds the index — from the library or the `ingestlib` CLI |
+| **Serve** | `ingestlib mcp` exposes the whole loop as MCP tools — point Claude Desktop / Cursor at your self-hosted corpus (`ingestlib[mcp]`) |
 
 ## Your stack, your choices
 

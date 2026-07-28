@@ -1,4 +1,4 @@
-.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-cli test-lifecycle eval
+.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-cli test-lifecycle test-mcp eval
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -11,6 +11,10 @@ test-cli:
 # lifecycle services (remove/sync/backfill) + replace-aware ingest — no gate
 test-lifecycle:
 	uv run pytest tests/services/lifecycle/ tests/services/ingest/test_replace.py
+
+# MCP server — tools, read_only gating, http auth, CLI entrypoint — no gate
+test-mcp:
+	uv run pytest tests/mcp/
 
 # entire suite including every opt-in group (needs VL server running + Bedrock access)
 test-all:

@@ -9,6 +9,7 @@
     ingestlib remove TARGET   erase a document (by path or doc_id)
     ingestlib backfill        rebuild the vector store from stored artifacts
     ingestlib search "..."    cited retrieval from the shell
+    ingestlib mcp             serve the corpus to agents over MCP
 """
 import argparse
 
@@ -85,6 +86,20 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_namespace(search_parser)
 
+    mcp_parser = sub.add_parser(
+        "mcp", help="serve the corpus to agents over MCP (needs ingestlib[mcp])"
+    )
+    mcp_parser.add_argument(
+        "--transport", choices=("stdio", "http"), default="stdio",
+        help="stdio for local clients (default); http (streamable) for remote — needs MCP_TOKEN",
+    )
+    mcp_parser.add_argument("--host", default=None, help="http bind address (default 127.0.0.1)")
+    mcp_parser.add_argument("--port", type=int, default=None, help="http port (default 8000)")
+    mcp_parser.add_argument(
+        "--read-only", action="store_true",
+        help="expose only read tools (hide ingest/remove/sync/backfill)",
+    )
+
     args = parser.parse_args(argv)
     try:
         return _dispatch(args)
@@ -142,4 +157,10 @@ def _dispatch(args: argparse.Namespace) -> int:
             args.question, top_k=args.top_k, namespace=args.namespace,
             rerank=not args.no_rerank,
         )
+    if args.command == "mcp":
+        from ingestlib.mcp import serve
+
+        serve(transport=args.transport, host=args.host, port=args.port,
+              read_only=args.read_only or None)
+        return 0
     raise ValueError(f"unknown command {args.command!r}")
