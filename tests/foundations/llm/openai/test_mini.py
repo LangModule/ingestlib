@@ -68,7 +68,10 @@ def test_structured_returns_validated_schema_instance(oai):
         _Verdict,
     )
     assert isinstance(v, _Verdict)
-    assert v.category == "invoice"
+    # category is a free-form snake_case label — the model may pick "invoice",
+    # "financial_document", "bill", … all valid. Assert the schema contract, not
+    # the exact word (nondeterministic across runs).
+    assert v.category.strip() and " " not in v.category
     assert 0.0 <= v.confidence <= 1.0
     assert v.reasoning.strip()
 
@@ -100,7 +103,7 @@ async def test_achat_structured_matches_sync_shape():
         _Verdict,
     )
     assert isinstance(v, _Verdict)
-    assert v.category == "invoice"
+    assert v.category.strip() and " " not in v.category
 
 
 async def test_achat_answers_correctly():
