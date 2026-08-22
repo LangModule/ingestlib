@@ -1,6 +1,7 @@
 """Data models returned by retrieve(): Hit and RetrievalResult."""
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
+from ingestlib.sources.base import SourceResult
 from ingestlib.storage.base import RetrievedChunk
 
 
@@ -26,19 +27,31 @@ class Hit(BaseModel):
 
 
 class RetrievalResult(BaseModel):
-    """Ranked hits for one question, ready for prompt building."""
+    """Ranked results for one question, ready for prompt building.
+
+    hits    — document chunks (the default, sources-free retrieve)
+    results — normalized items when retrieve(sources=[...]) fanned out over
+              documents AND/OR databases; each carries its own source + provenance
+    """
 
     model_config = ConfigDict(frozen=True)
 
     question: str
     hits: list[Hit] = Field(default_factory=list)
+    results: list[SourceResult] = Field(default_factory=list)
 
     @computed_field
     @property
     def context(self) -> str:
-        """Numbered, cited chunks — paste-ready as LLM context."""
-        blocks = [
+        """Numbered, cited context — paste-ready as LLM context. Renders the
+        mixed-source `results` when a sources= fan-out produced them, else the
+        document `hits`."""
+        if self.results:
+            return "\n\n".join(
+                f"[{i}] ({r.source}) {r.content}"
+                for i, r in enumerate(self.results, start=1)
+            )
+        return "\n\n".join(
             f"[{i}] ({h.citation})\n{h.chunk.markdown or h.chunk.text}"
             for i, h in enumerate(self.hits, start=1)
-        ]
-        return "\n\n".join(blocks)
+        )

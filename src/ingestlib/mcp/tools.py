@@ -29,16 +29,30 @@ async def search(
     namespace: str = "",
     filters: dict[str, Any] | None = None,
     rerank: bool = True,
+    sources: list[str] | None = None,
 ) -> dict[str, Any]:
-    """Search the corpus for a question and return ranked, cited chunks.
+    """Search for a question and return ranked, cited results.
 
-    Hybrid dense + lexical retrieval with reranking. Each hit carries its
-    citation (doc · page · section) so answers can point to the source.
-    filters accepts equality constraints on document_id/category/section/kind.
+    Documents by default: hybrid dense + lexical retrieval with reranking; each
+    hit carries its citation (doc · page · section). filters accepts equality
+    constraints on document_id/category/section/kind.
+
+    sources: names from sources.yaml (documents and/or SQL databases). When
+    given, retrieval fans out over them and returns normalized `results` — each
+    with source, source_type, and provenance (SQL results carry the exact SQL).
     """
     result = await aretrieve(
-        question, top_k=top_k, namespace=namespace, filters=filters, rerank=rerank
+        question, top_k=top_k, namespace=namespace, filters=filters,
+        rerank=rerank, sources=sources,
     )
+    if sources:
+        results = [
+            {"rank": i, "source": r.source, "source_type": r.source_type,
+             "content": _clip(r.content), "provenance": r.provenance}
+            for i, r in enumerate(result.results, start=1)
+        ]
+        return {"question": question, "result_count": len(results),
+                "results": results, "context": result.context[:_CONTEXT_CAP]}
     hits = [
         {
             "rank": i,

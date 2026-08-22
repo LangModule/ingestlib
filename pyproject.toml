@@ -1,7 +1,7 @@
 [project]
 name = "ingestlib"
-version = "1.2.0"
-description = "Self-hosted document intelligence for RAG — parse, classify, split, and extract from PDF/DOCX/PPTX and images into searchable, cited chunks, with an MCP server to serve your corpus to agents"
+version = "1.3.0"
+description = "Self-hosted document intelligence for RAG — parse, classify, split, and extract from PDF/DOCX/PPTX and images into searchable, cited chunks; query documents and your SQL databases in natural language; serve it all to agents over MCP"
 readme = "README.md"
 license = "MIT"
 license-files = ["LICENSE"]
@@ -19,6 +19,8 @@ keywords = [
     "chunking",
     "hybrid-search",
     "retrieval",
+    "text-to-sql",
+    "nl2sql",
     "structured-extraction",
     "vector-database",
     "embeddings",
@@ -67,7 +69,12 @@ milvus = ["pymilvus>=2.6"]
 opensearch = ["opensearch-py>=2.8"]
 weaviate = ["weaviate-client>=4.9"]
 mcp = ["mcp>=1.28"]
-all = ["ingestlib[pinecone,qdrant,pgvector,mongodb,milvus,opensearch,weaviate,mcp]"]
+sql = ["sqlalchemy>=2.0"]
+postgres = ["ingestlib[sql]", "psycopg[binary]>=3.2"]
+mysql = ["ingestlib[sql]", "pymysql>=1.1"]
+duckdb = ["ingestlib[sql]", "duckdb>=1.1", "duckdb-engine>=0.13"]
+snowflake = ["ingestlib[sql]", "snowflake-sqlalchemy>=1.6"]
+all = ["ingestlib[pinecone,qdrant,pgvector,mongodb,milvus,opensearch,weaviate,mcp,postgres,mysql,duckdb,snowflake]"]
 
 [project.scripts]
 ingestlib = "ingestlib.cli:main"
@@ -104,6 +111,11 @@ connectors = [
     "opensearch-py>=2.8",
     "weaviate-client>=4.9",
     "mcp>=1.28",
+    "sqlalchemy>=2.0",
+    "pymysql>=1.1",
+    "duckdb>=1.1",
+    "duckdb-engine>=0.13",
+    "snowflake-sqlalchemy>=1.6",
 ]
 docs = [
     "mkdocs-material>=9.5",

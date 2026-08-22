@@ -1,6 +1,6 @@
 # Architecture
 
-Four layers, strict downward dependencies — nothing lower knows what sits
+Layered, strict downward dependencies — nothing lower knows what sits
 above it.
 
 ```text
@@ -8,11 +8,12 @@ src/ingestlib/
 ├── services/       ingest · retrieve · lifecycle (remove · sync · backfill) — the product
 ├── operations/     parse · classify · split · extract — the tools (each standalone)
 ├── storage/        artifacts (S3 | local) · VectorStore contract · 8 connectors
+├── sources/        structured retrieval — SQL databases & the corpus as queryable Sources
 ├── foundations/    llm (Bedrock · OpenAI · Ollama · Jina rerank) · ocr (PaddleOCR-VL)
 ├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · mcp
 ├── mcp/            MCP server (ingestlib[mcp]) — the tools/services exposed to agents
 ├── utils/          logger · files · sync · aws
-└── config.py       config.yaml + .env + rules.yaml → typed, frozen configs
+└── config.py       config.yaml + .env + rules.yaml + sources.yaml → typed, frozen configs
 ```
 
 ## The load-bearing decisions
@@ -40,6 +41,14 @@ straight from these artifacts, no re-parse.
 region ids they cover, chunk boundaries can't cut through a region, and
 the full payload rides on the vector. The citation chain
 (hit → regions → bboxes → page render) needs no extra database.
+
+**Generated SQL is bounded, never trusted.** Structured retrieval lets the
+LLM write read-only SQL over your databases, but behind a permission boundary
+whose floor is a read-only database role — so a wrong query is a wrong *read*,
+never a write. A statement allowlist, an injected `LIMIT`, and a timeout are
+defense in depth on top; verified queries let you pin reviewed SQL for answers
+that must be exact. The `sources/` layer reuses `foundations/llm` (generate,
+param-fill, semantic match) — no new model, the same dispatch as everything else.
 
 **Errors carry their fix.** Every backend boundary translates its classic
 failures — wrong AWS profile, missing model access, dead Ollama, exhausted

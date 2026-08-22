@@ -17,7 +17,7 @@ pip install "ingestlib[mcp]"
 
 | Tool | Does | Modifies corpus |
 |---|---|---|
-| `search` | hybrid retrieval + rerank → cited chunks | — |
+| `search` | hybrid retrieval + rerank → cited chunks; with `sources`, also queries your SQL databases | — |
 | `extract` | fill a JSON-Schema you provide, with provenance | — |
 | `classify` | document type + confidence | — |
 | `list_documents` | what's stored (id, path, namespace, pages, category) | — |
@@ -92,6 +92,14 @@ extraction:
 
 Each returned field reports its pages, whether it was `grounded` in the source,
 and an honest confidence — same guarantees as [`extract()`](extract.md).
+
+## Query databases over MCP
+
+`search` takes the same `sources` argument as `retrieve()`, so an agent can
+query the SQL databases you declared in `sources.yaml` — read-only, with each
+result carrying the exact SQL in its provenance. Because
+[structured retrieval](structured-retrieval.md) is read-only, `search` stays a
+read tool, available even under `--read-only`.
 
 ## Configuration
 

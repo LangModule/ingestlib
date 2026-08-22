@@ -101,6 +101,54 @@ def test_unknown_store_fails_cleanly(patched):
     assert "chroma" in detail
 
 
+def test_sources_check_skips_without_sources_yaml(patched):
+    """No sources.yaml → structured retrieval simply isn't configured (skip),
+    not a failure."""
+    from ingestlib.config import SourcesConfig
+
+    patched(sources=SourcesConfig(sources={}))
+    status, detail = doctor.check_sources()
+    assert status == "skip" and "no sources.yaml" in detail
+
+
+def test_sources_check_ok_when_all_reachable(patched, monkeypatch):
+    from ingestlib.config import SourceSpec, SourcesConfig
+    from ingestlib.sources import registry
+
+    patched(sources=SourcesConfig(sources={
+        "db": SourceSpec(name="db", type="sqlite", dsn="sqlite:///x"),
+    }))
+
+    class _OK:
+        name = "db"
+
+        async def health(self):
+            return "ok", "reachable"
+
+    monkeypatch.setattr(registry, "resolve_sources", lambda names: [_OK()])
+    status, detail = doctor.check_sources()
+    assert status == "ok" and "1 " in detail
+
+
+def test_sources_check_fails_when_one_is_down(patched, monkeypatch):
+    from ingestlib.config import SourceSpec, SourcesConfig
+    from ingestlib.sources import registry
+
+    patched(sources=SourcesConfig(sources={
+        "db": SourceSpec(name="db", type="postgres", dsn="${MISSING}"),
+    }))
+
+    class _Down:
+        name = "db"
+
+        async def health(self):
+            return "fail", "source db: unreachable"
+
+    monkeypatch.setattr(registry, "resolve_sources", lambda names: [_Down()])
+    status, detail = doctor.check_sources()
+    assert status == "fail" and "unreachable" in detail
+
+
 def test_run_doctor_quiets_info_logs_unless_env_set(monkeypatch, tmp_path):
     """The ✓/✗ report must not be interleaved with the library's INFO chatter."""
     import logging

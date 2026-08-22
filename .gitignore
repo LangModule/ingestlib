@@ -227,6 +227,7 @@ CLAUDE.md
 # Personal settings — copy config.example.yaml and fill in your values
 config.yaml
 rules.yaml
+sources.yaml
 
 # Eval score snapshots — local measurement history
 evals/results/

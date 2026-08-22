@@ -1,0 +1,35 @@
+# ingestlib structured-retrieval sources — query your databases alongside
+# your documents via retrieve(sources=[...]). Optional: create sources.yaml
+# only to use structured retrieval; it lives beside config.yaml, like
+# rules.yaml. Connection URLs are secrets — set them in .env and reference
+# them here as ${VAR}. Each database needs its pip extra, e.g.
+# pip install "ingestlib[postgres]".
+#
+# Everything below is a commented example — there are no default sources.
+# Uncomment and edit for your own databases.
+
+# ── A SQL database — a connection plus a permission boundary ─────────────
+# The model GENERATES read-only SQL inside this boundary; nothing can write —
+# the DB role is read-only and `allow` caps which statement types may run.
+# prescriptions:
+#   type: postgres                  # postgres | mysql | sqlite | duckdb | snowflake
+#   dsn: ${RX_DB_DSN}               # a READ-ONLY connection URL, set in .env
+#   description: "Prescription fulfillment — status, ready times, patients, drugs, refills."
+#   allow: [select]                 # statement types the model may generate (default: read-only)
+#   row_limit: 1000                 # cap rows returned
+#   timeout: 10                     # seconds before a query is killed
+#   tables:                         # optional schema hints — the accuracy lever
+#     rx: "one row per prescription — rx_id, patient_id, drug_name, status, ready_at, refills_left"
+#     patients: "prescription owners — patient_id, name, dob, plan_id"
+#   # Optional accuracy override — a matching question runs YOUR reviewed SQL
+#   # instead of a generated one, for answers that must be exact:
+#   verified:
+#     rx_status:
+#       description: "Fulfillment status and ready time for a prescription"
+#       sql: "SELECT status, ready_at FROM rx WHERE rx_id = :rx_id"
+#       params: [rx_id]
+
+# ── A document source — your existing ingestlib corpus ───────────────────
+# package_inserts:
+#   type: documents                 # reuses parse → chunk → embed → retrieve
+#   namespace: package_inserts      # which corpus partition to search

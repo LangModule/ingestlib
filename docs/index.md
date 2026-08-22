@@ -63,6 +63,7 @@ parsing quality — is what ingestlib is built around.
 | **Extract** | Your Pydantic schema filled from the document — one instance or every instance in a batch — each field citing its page and regions, grounded against the source text, with honest confidence |
 | **Ingest** | The whole pipeline in one call — every stage persisted to the artifact store, vectors upserted, documents deduplicated by content checksum |
 | **Retrieve** | Question → hybrid search (dense + lexical) → rerank → hits with scores, citations, and a prompt-ready context block |
+| **Query databases** | The same `retrieve()` call also answers from your SQL databases — natural language → read-only generated SQL behind a permission boundary (read-only role + allowlist + limits), with verified-query overrides, merged with document results |
 | **Manage** | Re-ingest replaces the old version, `sync()` reconciles a folder (add/replace/move/prune), `backfill()` rebuilds the index — from the library or the `ingestlib` CLI |
 | **Serve** | `ingestlib mcp` exposes the whole loop as MCP tools — point Claude Desktop / Cursor at your self-hosted corpus (`ingestlib[mcp]`) |
 

@@ -186,6 +186,34 @@ def _ping_store(name: str) -> None:
         raise ValueError(f"unknown vector_store {name!r}")
 
 
+def check_sources() -> Check:
+    from ingestlib.config import get_sources_config
+
+    specs = get_sources_config().sources
+    if not specs:
+        return "skip", "no sources.yaml — structured retrieval not configured"
+
+    import asyncio
+
+    from ingestlib.sources.registry import resolve_sources
+
+    try:
+        sources = resolve_sources(list(specs))
+    except Exception as exc:
+        return "fail", f"sources: {exc}"
+    failures = []
+    for src in sources:
+        try:
+            status, detail = asyncio.run(src.health())
+        except Exception as exc:
+            status, detail = "fail", str(exc)
+        if status != "ok":
+            failures.append(detail)
+    if failures:
+        return "fail", "; ".join(failures)
+    return "ok", f"{len(specs)} structured/document source(s) reachable"
+
+
 def _print(status: str, detail: str) -> None:
     first, *rest = detail.splitlines()
     print(f"  {_MARKS[status]} {first}")
@@ -233,6 +261,7 @@ def run_doctor() -> int:
         check_reranker,
         check_artifact_store,
         check_vector_store,
+        check_sources,
     ):
         status, detail = check()
         _print(status, detail)

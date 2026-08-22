@@ -91,6 +91,31 @@ async def test_search_returns_bounded_cited_hits(monkeypatch):
     assert captured["top_k"] == 3 and captured["namespace"] == "ns"
 
 
+async def test_search_sources_returns_normalized_results(monkeypatch):
+    from ingestlib.services.retrieve.models import RetrievalResult
+    from ingestlib.sources.base import SourceResult
+
+    captured = {}
+
+    async def fake(question, **kw):
+        captured.update(kw)
+        return RetrievalResult(question=question, results=[
+            SourceResult(content="rx_id | status\n1 | ready", source="rx",
+                         source_type="structured",
+                         provenance={"sql": "SELECT rx_id, status FROM rx", "verified": False}),
+        ])
+
+    monkeypatch.setattr(tools, "aretrieve", fake)
+    out = await tools.search("which are ready?", sources=["rx"])
+
+    assert captured["sources"] == ["rx"]
+    assert "hits" not in out and out["result_count"] == 1
+    r = out["results"][0]
+    assert r["source"] == "rx" and r["source_type"] == "structured"
+    assert r["provenance"]["sql"] == "SELECT rx_id, status FROM rx"
+    assert out["context"].startswith("[1] (rx)")
+
+
 async def test_ingest_maps_result_and_checks_file(monkeypatch, tmp_path):
     from ingestlib.services.ingest.models import IngestResult
 

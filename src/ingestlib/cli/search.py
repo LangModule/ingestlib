@@ -2,7 +2,8 @@
 
 Closes the loop the CLI leaves open: after `ingest`/`sync` succeed, the
 natural next question is "can I find things?" — and this answers it without
-a Python session. A thin wrapper over retrieve().
+a Python session. A thin wrapper over retrieve(). With `--sources` it queries
+declared sources (documents and/or SQL databases from sources.yaml) instead.
 """
 from ingestlib.utils.logger import get_logger
 
@@ -11,7 +12,12 @@ logger = get_logger(__name__)
 
 
 def run_search(
-    question: str, *, top_k: int = 5, namespace: str = "", rerank: bool = True
+    question: str,
+    *,
+    top_k: int = 5,
+    namespace: str = "",
+    rerank: bool = True,
+    sources: list[str] | None = None,
 ) -> int:
     import os
 
@@ -22,7 +28,22 @@ def run_search(
 
     from ingestlib.services import retrieve
 
-    result = retrieve(question, top_k=top_k, namespace=namespace, rerank=rerank)
+    result = retrieve(
+        question, top_k=top_k, namespace=namespace, rerank=rerank, sources=sources
+    )
+
+    # sources= path: normalized results (documents and/or SQL rows)
+    if sources:
+        if not result.results:
+            print("no results from the given source(s)")
+            return 0
+        for i, r in enumerate(result.results, start=1):
+            print(f"[{i}] {r.source} ({r.source_type})")
+            for line in r.content.splitlines()[:6]:
+                print(f"     {line[:160]}")
+        return 0
+
+    # default path: document hits
     if not result.hits:
         print("no hits — is anything ingested into this store/namespace? "
               "(try `ingestlib list`)")

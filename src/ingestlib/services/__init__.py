@@ -23,7 +23,13 @@ from ingestlib.services.lifecycle import (
     remove,
     sync,
 )
-from ingestlib.services.retrieve import Hit, RetrievalResult, aretrieve, retrieve
+from ingestlib.services.retrieve import (
+    Hit,
+    RetrievalResult,
+    SourceResult,
+    aretrieve,
+    retrieve,
+)
 
 __all__ = [
     "ingest",
@@ -34,6 +40,7 @@ __all__ = [
     "aretrieve",
     "RetrievalResult",
     "Hit",
+    "SourceResult",
     "remove",
     "aremove",
     "RemoveResult",

@@ -44,6 +44,8 @@ serializable with `.model_dump()` / reconstructable with
 
 ::: ingestlib.services.retrieve.models.Hit
 
+::: ingestlib.sources.base.SourceResult
+
 ## Lifecycle
 
 ::: ingestlib.services.lifecycle.models.RemoveResult

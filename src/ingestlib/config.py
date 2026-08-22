@@ -20,8 +20,9 @@ file path.
 import os
 import sys
 import threading
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Any
 
 import yaml
 from dotenv import load_dotenv
@@ -30,6 +31,7 @@ from dotenv import load_dotenv
 _CONFIG_ENV_VAR = "INGESTLIB_CONFIG"
 _CONFIG_FILENAME = "config.yaml"
 _RULES_FILENAME = "rules.yaml"
+_SOURCES_FILENAME = "sources.yaml"
 
 _lock = threading.Lock()
 _dotenv_keys: set[str] = set()  # env keys injected from .env — un-set by reset_config()
@@ -176,6 +178,34 @@ class MCPConfig:
 
 
 @dataclass(frozen=True)
+class SourceSpec:
+    """One structured/document source from sources.yaml (see sources.example.yaml).
+
+    A SQL source is a connection + a permission boundary: `type` picks the
+    dialect, `dsn` is the READ-ONLY connection URL (resolved from a ${VAR} in
+    .env), `allow` caps the statement types the model may generate, and
+    row_limit/timeout bound every query. `tables` are plain-English schema hints
+    (the accuracy lever); `verified` are optional guaranteed-correct queries. A
+    document source (type="documents") just names a corpus `namespace`."""
+    name: str
+    type: str                                   # postgres|mysql|sqlite|duckdb|snowflake|documents
+    dsn: str = ""                               # READ-ONLY connection URL (from a ${VAR} in .env)
+    description: str = ""
+    allow: tuple[str, ...] = ("select",)        # statement types the model may generate
+    row_limit: int = 1000
+    timeout: int = 30
+    tables: dict[str, str] = field(default_factory=dict)      # {table: plain-English hint}
+    verified: dict[str, Any] = field(default_factory=dict)    # {name: {description, sql, params}}
+    namespace: str = ""                         # document sources only
+
+
+@dataclass(frozen=True)
+class SourcesConfig:
+    """All declared sources, name → spec (empty when there is no sources.yaml)."""
+    sources: dict[str, SourceSpec] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class IngestConfig:
     vector_store: str           # services' default connector (default sqlite — zero setup)
     reranker: str               # retrieve()'s reranker: jina | aws | none
@@ -201,6 +231,7 @@ class IngestConfig:
     opensearch: OpensearchConfig
     weaviate: WeaviateConfig
     mcp: MCPConfig
+    sources: SourcesConfig
 
 
 def _find_config_path() -> Path:
@@ -418,6 +449,28 @@ def _load_config() -> IngestConfig:
         token=os.environ.get("MCP_TOKEN", ""),
     )
 
+    # Structured-retrieval sources live in a sources.yaml sidecar beside
+    # config.yaml (like rules.yaml). DSNs are ${VAR} refs into the .env above.
+    sources_path = config_path.parent / _SOURCES_FILENAME
+    sources_specs: dict[str, SourceSpec] = {}
+    if sources_path.is_file():
+        with open(sources_path, "r") as f:
+            for name, spec in (yaml.safe_load(f) or {}).items():
+                spec = spec or {}
+                sources_specs[name] = SourceSpec(
+                    name=name,
+                    type=str(spec.get("type", "")),
+                    dsn=os.path.expandvars(str(spec.get("dsn", ""))),
+                    description=str(spec.get("description", "")),
+                    allow=tuple(str(a).lower() for a in (spec.get("allow") or ["select"])),
+                    row_limit=int(spec.get("row_limit", 1000)),
+                    timeout=int(spec.get("timeout", 30)),
+                    tables={str(k): str(v) for k, v in (spec.get("tables") or {}).items()},
+                    verified=dict(spec.get("verified") or {}),
+                    namespace=str(spec.get("namespace", "")),
+                )
+    sources_config = SourcesConfig(sources=sources_specs)
+
     return IngestConfig(
         vector_store=vector_store,
         reranker=reranker,
@@ -443,6 +496,7 @@ def _load_config() -> IngestConfig:
         opensearch=opensearch_config,
         weaviate=weaviate_config,
         mcp=mcp_config,
+        sources=sources_config,
     )
 
 
@@ -467,6 +521,11 @@ def get_aws_config() -> AWSConfig:
 def get_mcp_config() -> MCPConfig:
     """MCP server settings (read_only, host, port, token)."""
     return get_config().mcp
+
+
+def get_sources_config() -> SourcesConfig:
+    """Declared structured/document sources (name → SourceSpec) from sources.yaml."""
+    return get_config().sources
 
 
 def get_bedrock_config() -> BedrockConfig:
@@ -565,6 +624,8 @@ _CLIENT_RESETS = (
     ("ingestlib.storage.milvus.client", "reset_milvus_client"),
     ("ingestlib.storage.opensearch.client", "reset_opensearch_client"),
     ("ingestlib.storage.weaviate.client", "reset_weaviate_client"),
+    ("ingestlib.sources.registry", "reset_registry"),
+    ("ingestlib.sources.sql.engine", "reset_engines"),
 )
 
 

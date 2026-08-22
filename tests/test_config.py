@@ -257,3 +257,73 @@ def test_reset_config_clears_openai_model_caches(scratch_config, monkeypatch):
     reset_config()
     assert oa_mini._model_cache == {}, "reset must drop cached chat models"
     assert oa_embedding._embedder_cache == {}, "reset must drop cached embedders"
+
+
+# --- structured-retrieval sources (sources.yaml sidecar) ---
+
+def test_sources_yaml_parsed_into_specs(scratch_config):
+    _write(scratch_config, _AWS_ONLY, "RX_DB_DSN=postgresql+psycopg://ro:pw@localhost:5432/rx\n")
+    (scratch_config / "sources.yaml").write_text(
+        "warehouse:\n"
+        "  type: postgres\n"
+        "  dsn: ${RX_DB_DSN}\n"
+        "  description: the analytics warehouse\n"
+        "  allow: [select, with]\n"
+        "  row_limit: 200\n"
+        "  timeout: 15\n"
+        "  tables:\n"
+        "    rx: one row per fill\n"
+        "  verified:\n"
+        "    ready:\n"
+        "      description: ready fills\n"
+        "      sql: SELECT 1\n"
+        "corpus:\n"
+        "  type: documents\n"
+        "  namespace: tenant-a\n"
+    )
+    specs = get_config().sources.sources
+    assert set(specs) == {"warehouse", "corpus"}
+    w = specs["warehouse"]
+    assert w.type == "postgres"
+    assert w.dsn == "postgresql+psycopg://ro:pw@localhost:5432/rx"  # ${VAR} expanded
+    assert w.allow == ("select", "with")                           # lowercased tuple
+    assert w.row_limit == 200 and w.timeout == 15
+    assert w.tables == {"rx": "one row per fill"}
+    assert w.verified["ready"]["sql"] == "SELECT 1"
+    assert specs["corpus"].type == "documents" and specs["corpus"].namespace == "tenant-a"
+
+
+def test_sources_defaults_applied(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    (scratch_config / "sources.yaml").write_text(
+        "db:\n  type: sqlite\n  dsn: sqlite:///x.db\n"
+    )
+    spec = get_config().sources.sources["db"]
+    assert spec.allow == ("select",)                # default allowlist
+    assert spec.row_limit == 1000 and spec.timeout == 30
+    assert spec.tables == {} and spec.verified == {}
+
+
+def test_no_sources_yaml_means_empty(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    assert get_config().sources.sources == {}
+
+
+def test_unresolved_dsn_var_is_left_verbatim_for_a_clear_runtime_error(scratch_config):
+    """An undefined ${VAR} stays as-is so engine.get_engine raises its 'set the
+    connection URL' hint — not a confusing empty-DSN failure."""
+    _write(scratch_config, _AWS_ONLY)  # no RX_DB_DSN exported
+    (scratch_config / "sources.yaml").write_text(
+        "db:\n  type: postgres\n  dsn: ${MISSING_DSN}\n"
+    )
+    assert get_config().sources.sources["db"].dsn == "${MISSING_DSN}"
+
+
+def test_reset_config_picks_up_sources_yaml_edits(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    assert get_config().sources.sources == {}
+    (scratch_config / "sources.yaml").write_text(
+        "db:\n  type: sqlite\n  dsn: sqlite:///x.db\n"
+    )
+    reset_config()
+    assert "db" in get_config().sources.sources

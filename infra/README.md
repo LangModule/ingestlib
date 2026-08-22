@@ -5,8 +5,9 @@ the library — sqlite + local artifacts + Ollama need none of it.
 
 ## docker-compose.yml
 
-Local servers for the server-backed vector stores, one profile per
-backend — start exactly the one your config.yaml selects:
+Local servers for the server-backed vector stores and the structured-
+retrieval SQL sources, one profile per backend — start exactly the one
+you need:
 
 ```bash
 docker compose -f infra/docker-compose.yml --profile qdrant up -d
@@ -14,15 +15,19 @@ docker compose -f infra/docker-compose.yml --profile qdrant down
 ```
 
 Profiles: `qdrant` | `pgvector` | `mongodb` | `milvus` (three services —
-the official standalone shape) | `opensearch` | `weaviate`, plus `all`
-for contributors running `make test-all`. Ports and credentials match
-what `.env.example` documents; data persists in named volumes
-(`down -v` wipes it). Every profile is verified against its connector's
-full e2e suite. Three hard-won details live in the file so you never hit
-them: pg18 images changed their volume mount point, mongodb's atlas-local
-needs both data AND configdb mounted or restarts crash-loop, and weaviate
-needs a pinned CLUSTER_HOSTNAME or a recreated container can't reopen its
-volume.
+the official standalone shape) | `opensearch` | `weaviate`, plus `mysql`
+for the structured-retrieval SQL source, and `all` for contributors
+running `make test-all`. Ports and credentials match what `.env.example`
+documents; data persists in named volumes (`down -v` wipes it). Every
+vector-store profile is verified against its connector's full e2e suite.
+Three hard-won details live in the file so you never hit them: pg18 images
+changed their volume mount point, mongodb's atlas-local needs both data
+AND configdb mounted or restarts crash-loop, and weaviate needs a pinned
+CLUSTER_HOSTNAME or a recreated container can't reopen its volume.
+
+`mysql` is the one SQL-source server (not a vector store) — the other
+structured-retrieval backends need no container here: sqlite and duckdb
+are serverless, and the postgres source reuses the `pgvector` container.
 
 The AWS files below cover the managed side. In the two JSON policies,
 replace the placeholders before attaching:

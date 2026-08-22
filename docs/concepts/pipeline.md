@@ -91,6 +91,10 @@ also run a lexical search and merge), optionally reranks the candidate
 pool with a cross-encoder, and returns `Hit`s with scores, citations, and
 a prompt-ready `context` block.
 
+With `sources=[...]`, the same call also answers from your SQL databases —
+generated read-only SQL behind a permission boundary, merged with document
+results ([Query databases](../how-to/structured-retrieval.md)).
+
 Retrieval here is a solid reference implementation — the ingestion side is
 where ingestlib invests. Bring your own query pipeline if you have one;
 everything it needs is on the stored chunk payloads.

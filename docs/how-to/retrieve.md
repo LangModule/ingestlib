@@ -72,6 +72,21 @@ retrieve("question", rerank=False)        # vector order, no reranker call
 If the reranker errors mid-query, retrieve logs a warning and returns
 vector order — a flaky reranker never breaks retrieval.
 
+## Query databases too
+
+`retrieve()` can also answer from your **SQL databases** alongside the corpus,
+in the same call. Declare the databases in a `sources.yaml` sidecar and pass
+their names:
+
+```python
+retrieve("how many prescriptions are ready?", sources=["prescriptions"])
+# result.results — normalized rows, each with the exact SQL in provenance
+```
+
+The model generates read-only SQL inside a permission boundary (a read-only
+role, a statement allowlist, LIMIT, timeout), with verified-query overrides for
+answers that must be exact. Full guide: [Query databases (SQL)](structured-retrieval.md).
+
 ## Bring your own store instance
 
 Both services accept an explicit connector, bypassing config selection:
@@ -95,5 +110,5 @@ retrieve("question", store=QdrantStore())
 
 ---
 
-Next: [Build cited answers](cited-answers.md) — from hits to an answer
-that points at pages.
+Next: [Query databases (SQL)](structured-retrieval.md) — answer from your
+databases alongside the corpus, in the same call.

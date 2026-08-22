@@ -89,6 +89,7 @@ nav:
           - Ingest documents: how-to/ingest.md
           - Manage a corpus: how-to/manage-corpus.md
           - Retrieve & filter: how-to/retrieve.md
+          - Query databases (SQL): how-to/structured-retrieval.md
           - Build cited answers: how-to/cited-answers.md
           - Serve to agents (MCP): how-to/mcp-server.md
       - Setup:

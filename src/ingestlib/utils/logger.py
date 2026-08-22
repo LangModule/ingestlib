@@ -33,6 +33,7 @@ _THIRD_PARTY_LOGGERS: tuple[str, ...] = (
     "botocore",
     "opensearch",  # logs every request at INFO
     "pymilvus",
+    "sqlalchemy",  # engine echo chatter, if ever enabled
 )
 
 _LEVEL_COLORS = {

@@ -8,9 +8,12 @@ time — never at import.
 | `config.yaml` | **Choices** — providers, stores, model ids | No |
 | `.env` | **Secrets** — API keys, connection URLs | Yes — never commit |
 | `rules.yaml` | **Content rules** — your categories & section vocabulary | No; optional |
+| `sources.yaml` | **Structured-retrieval sources** — SQL databases & corpora to query | No; optional |
 
-`ingestlib init` scaffolds the first two; `rules.yaml` is yours to add when
-you want [your own categories](../how-to/content-rules.md).
+`ingestlib init` scaffolds the first two; `rules.yaml` and `sources.yaml` are
+yours to add when you want [your own categories](../how-to/content-rules.md) or
+[query databases](../how-to/structured-retrieval.md). Both sidecars are read
+from beside the discovered `config.yaml`, and both use `.env` for any secrets.
 
 ## Discovery
 
@@ -19,9 +22,9 @@ Configuration is located when the first call needs it:
 1. `INGESTLIB_CONFIG=/path/to/config.yaml` — explicit, wins always
 2. Otherwise the working directory is searched, then its parents
 
-`.env` and `rules.yaml` are read from beside the discovered `config.yaml`.
-This is why `ingestlib init` writes into your current directory, and why a
-library import never fails on a missing config — only a call can.
+`.env`, `rules.yaml`, and `sources.yaml` are read from beside the discovered
+`config.yaml`. This is why `ingestlib init` writes into your current directory,
+and why a library import never fails on a missing config — only a call can.
 
 ## Only your choices live in the file
 

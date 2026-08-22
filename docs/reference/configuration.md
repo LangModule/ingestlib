@@ -9,7 +9,8 @@ default shown here — the file only needs your choices
 1. `INGESTLIB_CONFIG=/path/to/config.yaml` environment variable
 2. Otherwise: the working directory, then its parents
 
-`.env` and `rules.yaml` are read from beside the discovered `config.yaml`.
+`.env`, `rules.yaml`, and `sources.yaml` are read from beside the discovered
+`config.yaml`.
 
 ## Top-level choices
 
@@ -101,6 +102,7 @@ are read.
 | `MILVUS_URL` · `MILVUS_TOKEN` | `vector_store: milvus` (token: Zilliz Cloud) |
 | `OPENSEARCH_URL` | `vector_store: opensearch` — Amazon domains SigV4-sign via `aws.profile` |
 | `WEAVIATE_URL` · `WEAVIATE_API_KEY` | `vector_store: weaviate` (key: cloud only) |
+| *(any name)* | a SQL source's connection URL, referenced from `sources.yaml` as `${VAR}` — use a READ-ONLY role ([structured retrieval](../how-to/structured-retrieval.md)) |
 
 Non-secret environment controls:
 
@@ -128,3 +130,35 @@ split:
   categories:                 # up to 50 {section: description}
     financial_statements: "Balance sheets, income statements, cash flows"
 ```
+
+## `sources.yaml` — structured retrieval (optional)
+
+Lives beside config.yaml; declares the SQL databases and document corpora
+`retrieve(sources=[...])` can query. Create it only to use
+[structured retrieval](../how-to/structured-retrieval.md); the full annotated
+reference is
+[`sources.example.yaml`](https://github.com/LangModule/ingestlib/blob/main/sources.example.yaml).
+Connection URLs are secrets — set them in `.env` and reference them as `${VAR}`.
+
+```yaml
+<name>:                       # the name you pass to retrieve(sources=[...])
+  type: postgres              # postgres | mysql | sqlite | duckdb | snowflake | documents
+  dsn: ${RX_DB_DSN}           # SQL only — a READ-ONLY connection URL from .env
+  description: "…"            # what the database holds (steers generation)
+  allow: [select]             # statement types the model may generate (default: [select])
+  row_limit: 1000             # cap rows returned (default 1000)
+  timeout: 30                 # seconds before a query is killed (default 30)
+  tables:                     # optional {table: plain-English hint} — the accuracy lever
+    rx: "one row per prescription — rx_id, status, ready_at"
+  verified:                   # optional reviewed queries, run on a semantic match
+    rx_status:
+      description: "Fulfillment status for a prescription"
+      sql: "SELECT status, ready_at FROM rx WHERE rx_id = :rx_id"
+      params: [rx_id]
+  namespace: "…"              # documents only — which corpus partition to search
+```
+
+Each SQL backend needs its
+[pip extra](../get-started/installation.md#1-install-the-package):
+`ingestlib[postgres]` · `[mysql]` · `[duckdb]` · `[snowflake]` (sqlite needs
+none).

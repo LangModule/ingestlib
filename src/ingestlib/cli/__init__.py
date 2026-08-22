@@ -84,6 +84,10 @@ def main(argv: list[str] | None = None) -> int:
     search_parser.add_argument(
         "--no-rerank", action="store_true", help="skip the reranker (vector order)"
     )
+    search_parser.add_argument(
+        "--sources", default="",
+        help="comma-separated sources.yaml names to query (documents and/or SQL databases)",
+    )
     _add_namespace(search_parser)
 
     mcp_parser = sub.add_parser(
@@ -156,6 +160,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         return run_search(
             args.question, top_k=args.top_k, namespace=args.namespace,
             rerank=not args.no_rerank,
+            sources=[s.strip() for s in args.sources.split(",") if s.strip()] or None,
         )
     if args.command == "mcp":
         from ingestlib.mcp import serve

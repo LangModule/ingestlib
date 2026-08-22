@@ -1,15 +1,16 @@
-# Local servers for ingestlib's vector-store connectors — one profile per
-# backend, so you start exactly the one your config.yaml selects:
+# Local servers for ingestlib's vector-store connectors and structured-retrieval
+# SQL sources — one profile per backend, so you start exactly the one you need:
 #
 #   docker compose -f infra/docker-compose.yml --profile qdrant up -d
 #   docker compose -f infra/docker-compose.yml --profile qdrant down
 #
-# Profiles: qdrant | pgvector | mongodb | milvus | opensearch | weaviate,
+# Profiles: qdrant | pgvector | mongodb | milvus | opensearch | weaviate | mysql,
 # plus `all` (contributors running `make test-all`). Ports and credentials
 # match the formats .env.example documents. Data persists in named volumes;
 # `down -v` wipes it.
 #
-# Not here by nature: sqlite (no server) and pinecone (cloud-only).
+# Not here by nature: sqlite and duckdb (no server) and pinecone (cloud-only).
+# The postgres SQL source reuses the pgvector container (it's plain Postgres).
 
 name: ingestlib
 
@@ -126,6 +127,22 @@ services:
       - weaviate-data:/var/lib/weaviate
     # .env: WEAVIATE_URL=http://localhost:8080
 
+  # Structured-retrieval SQL source (not a vector store) — kept last, apart from
+  # the vector stores above. sqlite/duckdb are serverless and the postgres SQL
+  # source reuses the pgvector container, so mysql is the only SQL backend that
+  # needs its own server for the gated e2e.
+  mysql:
+    image: mysql:8
+    profiles: ["mysql", "all"]
+    environment:
+      MYSQL_ROOT_PASSWORD: pw
+      MYSQL_DATABASE: ingestlib
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql-data:/var/lib/mysql
+    # test DSN: mysql+pymysql://root:pw@localhost:3306/ingestlib
+
 volumes:
   qdrant-data:
   pgvector-data:
@@ -136,3 +153,4 @@ volumes:
   milvus-data:
   opensearch-data:
   weaviate-data:
+  mysql-data:

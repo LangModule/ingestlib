@@ -60,6 +60,16 @@ searching.
 | `not a readable PDF — the file appears corrupt or truncated` | Re-export or re-download the file. |
 | `x has no extractable text … Run parse() first` | You called `classify()`/`split()`/`extract()` directly on a scan or image — they read native text. Parse it (OCR), then pass the `ParseResult`. |
 
+## Structured retrieval (SQL)
+
+| You see | It means / do this |
+|---|---|
+| `SQL source DSN is unset — its ${VAR} did not resolve; set the connection URL in .env` | The `${VAR}` in `sources.yaml`'s `dsn:` isn't defined in `.env`. Set it — to a **read-only** connection URL ([guide](structured-retrieval.md#the-permission-model)). |
+| `unknown source 'x' — declare it in sources.yaml` | The name passed to `retrieve(sources=[...])` isn't in `sources.yaml`; the message lists the configured ones. |
+| `unknown SQL source type 'x' — one of […]` | `sources.yaml`'s `type:` must be `postgres`/`mysql`/`sqlite`/`duckdb`/`snowflake`/`documents`. |
+| `Can't load plugin` / `No module named 'psycopg'` (or `pymysql`, …) | The SQL backend's driver isn't installed — `pip install "ingestlib[postgres]"` (or `[mysql]`/`[duckdb]`/`[snowflake]`). |
+| `statement type 'delete' is not allowed for this source` | A generated or verified query used a statement outside `allow` — the guardrail did its job. Widen `allow` only if you mean to (and never past what the read-only role permits). |
+
 ## Runtime
 
 | You see | It means / do this |

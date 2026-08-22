@@ -20,6 +20,11 @@ from ingestlib.services import aingest, aretrieve
 
 ::: ingestlib.services.retrieve.retriever.retrieve
 
+With `sources=[...]` (names from `sources.yaml`), retrieve fans out over the
+document corpus and/or SQL databases and returns normalized
+[`SourceResult`](models.md#retrieve)s in `result.results` — see
+[Query databases (SQL)](../how-to/structured-retrieval.md).
+
 ## Lifecycle
 
 Manage the corpus as files change — replace, remove, sync, backfill. See

@@ -59,6 +59,7 @@ uv run ingestlib doctor
 | Reranker | `fail` (`skip` when `reranker: none`) |
 | Artifact store | `fail` — S3 credentials + bucket, or local-folder writability |
 | Vector store | `fail` — liveness probe; never creates indexes or schema |
+| Structured sources | `fail` — a `SELECT 1` per declared source (`skip` when there's no `sources.yaml`) |
 
 Marks: `✓` ok · `!` warning · `✗` failure · `-` skipped.
 
@@ -154,9 +155,17 @@ session.
 ingestlib search "what were the risks?"
 ingestlib search "revenue growth" --top-k 10
 ingestlib search "invoice INV-20114" --no-rerank
+ingestlib search "how many are ready?" --sources prescriptions,rx_db
 ```
 
 Prints ranked hits with score, citation, heading, and a snippet.
+
+| Flag | Effect |
+|---|---|
+| `--top-k` | how many hits (default 5) |
+| `--no-rerank` | skip the reranker (vector order) |
+| `--sources` | comma-separated `sources.yaml` names to query (documents and/or SQL databases) — prints normalized results instead of document hits ([structured retrieval](../how-to/structured-retrieval.md)) |
+| `--namespace` | scope to one corpus partition |
 
 ## `ingestlib mcp`
 

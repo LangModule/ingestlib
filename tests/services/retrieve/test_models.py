@@ -24,3 +24,28 @@ def test_context_is_numbered_and_cited():
 
 def test_empty_result_has_empty_context():
     assert RetrievalResult(question="q").context == ""
+
+
+def test_context_renders_source_results_when_present():
+    from ingestlib.sources.base import SourceResult
+
+    r = RetrievalResult(question="q", results=[
+        SourceResult(content="rows here", source="rx", source_type="structured"),
+        SourceResult(content="doc text", source="corpus", source_type="documents"),
+    ])
+    ctx = r.context
+    assert "[1] (rx) rows here" in ctx
+    assert "[2] (corpus) doc text" in ctx
+
+
+def test_results_take_precedence_over_hits_in_context():
+    """A sources= fan-out fills `results`; those render, not any stray hits."""
+    from ingestlib.sources.base import SourceResult
+
+    r = RetrievalResult(
+        question="q",
+        results=[SourceResult(content="ROW", source="s", source_type="structured")],
+        hits=[_hit(1, "CHUNK")],
+    )
+    ctx = r.context
+    assert "ROW" in ctx and "CHUNK" not in ctx

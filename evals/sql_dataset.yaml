@@ -1,0 +1,73 @@
+# Text2SQL eval ground truth over Snowflake's built-in TPC-H sample data
+# (SNOWFLAKE_SAMPLE_DATA.TPCH_SF1) — a rich, join-heavy schema with fully
+# deterministic answers, the same family of schema the Spider/BIRD benchmarks use.
+#
+# Ground truth is (question, expect) — the value(s) that MUST appear in the
+# executed query's result. A question is a hit when SqlSource.answer() runs a
+# query (generated or verified) whose rows contain the expected value:
+#   - numeric expect  → an exact cell match (so "5" never matches "25")
+#   - text expect     → case-insensitive substring of a cell
+#   - a list of expects → ANY one appearing counts (for "list the …" questions)
+#
+# Mix by design: plain counts (easy), joins across REGION/NATION (medium), and
+# filtered joins (the accuracy stressor). Some questions have a verified query
+# behind them (see run_sql_eval.py) so the report shows the verified vs generated
+# split — the generated-only match rate is the honest production number.
+#
+# This is a measurement harness, not a test: generation accuracy drifts with the
+# model and the schema hints — a report tells you, a red CI run would just block you.
+
+source: snowflake_tpch
+
+questions:
+  # --- plain aggregates: generation should nail these ---
+  - id: region-count
+    question: how many regions are there?
+    expect: "5"
+
+  - id: nation-count
+    question: how many nations are there in total?
+    expect: "25"
+
+  - id: customer-count
+    question: how many customers are in the database?
+    expect: "150000"
+
+  - id: supplier-count
+    question: how many suppliers are there?
+    expect: "10000"
+
+  - id: part-count
+    question: how many parts are listed in the catalog?
+    expect: "200000"
+
+  - id: order-count
+    question: how many orders have been placed in total?
+    expect: "1500000"
+
+  # --- distinct-value lookups ---
+  - id: region-names
+    question: list the distinct region names
+    expect: ["ASIA", "EUROPE", "AMERICA", "AFRICA", "MIDDLE EAST"]
+
+  - id: order-priorities
+    question: what are the distinct order priority levels?
+    expect: ["1-URGENT", "5-LOW", "3-MEDIUM"]
+
+  # --- joins across REGION and NATION: tests join generation ---
+  - id: nations-in-asia
+    question: how many nations belong to the ASIA region?
+    expect: "5"
+
+  - id: nations-in-america
+    question: which nations are in the AMERICA region?
+    expect: ["UNITED STATES", "CANADA", "BRAZIL", "ARGENTINA", "PERU"]
+
+  - id: nations-in-europe
+    question: which countries make up the EUROPE region?
+    expect: ["GERMANY", "FRANCE", "UNITED KINGDOM", "RUSSIA", "ROMANIA"]
+
+  # --- filtered join: the accuracy stressor ---
+  - id: region-of-japan
+    question: which region is the nation JAPAN part of?
+    expect: "ASIA"

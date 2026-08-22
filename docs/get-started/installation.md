@@ -36,6 +36,10 @@ uv add "ingestlib[qdrant]"     # or pinecone · pgvector · mongodb · milvus
                                #    · opensearch · weaviate · all
 ```
 
+[Structured retrieval](../how-to/structured-retrieval.md) (querying SQL
+databases via `retrieve()`) has its own extras — `postgres` · `mysql` ·
+`duckdb` · `snowflake` (sqlite needs none). Add them only if you use it.
+
 ## 2. LibreOffice (DOCX/PPTX only)
 
 Office documents are converted to PDF before parsing, which needs

@@ -29,6 +29,7 @@ guides for every stage, the full configuration reference, and the API docs.
 | **Extract** | **Your Pydantic schema, filled from the document** — one instance (`mode="one"`) or every instance in a batch (`mode="many"`, e.g. all receipts in a scanned expense bundle). Every field carries **verified provenance**: page + region citations checked against the parse, values grounded in the cited source text, and honest confidence — uncited or ungrounded answers are capped, hallucinated citations dropped |
 | **Ingest** | The whole pipeline in one call, every stage persisted to the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
 | **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
+| **Query databases** | The same `retrieve()` call also answers from your **SQL databases** — natural language → read-only generated SQL behind a permission boundary (read-only role + statement allowlist + LIMIT + timeout), with **verified-query** overrides for answers that must be exact. Postgres, MySQL, SQLite, DuckDB, Snowflake — merged with document results |
 
 Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognition,
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
@@ -191,6 +192,32 @@ ingestlib search "what were the risks?"    # cited retrieval from the shell
 Documents carry a logical identity (`namespace` + source path), so lifecycle
 knows a re-ingest from a brand-new file. Full guide:
 [Manage a corpus](https://langmodule.github.io/ingestlib/how-to/manage-corpus/).
+
+## Query your databases
+
+`retrieve()` can also answer from your **SQL databases**, alongside the
+document corpus, in the same call. Declare the databases in a `sources.yaml`
+sidecar (beside config.yaml, like rules.yaml — see
+[`sources.example.yaml`](./sources.example.yaml)) and pass their names:
+
+```python
+from ingestlib.services import retrieve
+
+# documents AND databases behind one question
+result = retrieve("how many prescriptions are ready?", sources=["prescriptions"])
+for r in result.results:
+    print(r.source_type, r.content, r.provenance["sql"])   # the exact query that ran
+```
+
+The model generates **read-only** SQL from your schema + `tables` hints, bounded
+by a permission boundary whose floor is a read-only database role — so a wrong
+query is a wrong *read*, never a write. A statement allowlist, an injected
+`LIMIT`, and a timeout are defense in depth; **verified queries** let you pin
+reviewed SQL for answers that must be exact. Each SQL backend needs its pip
+extra (`ingestlib[postgres]` · `[mysql]` · `[duckdb]` · `[snowflake]`; sqlite
+needs none). From the shell: `ingestlib search "…" --sources prescriptions`.
+Full guide:
+[Query databases (SQL)](https://langmodule.github.io/ingestlib/how-to/structured-retrieval/).
 
 ## Serve it to agents (MCP)
 
@@ -441,6 +468,7 @@ make test-milvus           # vector connector e2e (needs Milvus at MILVUS_URL)
 make test-opensearch       # vector connector e2e (needs OpenSearch at OPENSEARCH_URL)
 make test-weaviate         # vector connector e2e (needs Weaviate at WEAVIATE_URL)
 make test-services         # full product e2e     (needs the entire stack)
+make test-sources          # structured retrieval — SQL sources (deterministic; e2e gated)
 make test-cli              # CLI: init/doctor + corpus commands (no gate)
 make test-lifecycle        # remove/sync/backfill + replace-aware ingest (no gate)
 make test-mcp              # MCP server: tools, read_only, http auth (no gate)
@@ -496,9 +524,11 @@ retrieval playground where every answer points to its source on the page.
 
 - XLSX input (tables-first, not a PDF conversion)
 
-Recently shipped: an **MCP server** to serve the corpus to agents (v1.2);
-document lifecycle — replace-aware ingestion, folder `sync()`, `backfill()`,
-and the corpus CLI (v1.1).
+Recently shipped: **structured retrieval** — query your SQL databases alongside
+documents through one `retrieve()` call, behind a read-only permission boundary
+(v1.3); an **MCP server** to serve the corpus to agents (v1.2); document
+lifecycle — replace-aware ingestion, folder `sync()`, `backfill()`, and the
+corpus CLI (v1.1).
 
 ## License
 

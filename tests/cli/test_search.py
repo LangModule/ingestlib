@@ -97,3 +97,41 @@ def test_debug_env_reraises_for_a_real_traceback(monkeypatch):
 
     with pytest.raises(RuntimeError, match="boom"):
         main(["search", "q"])
+
+
+# --- --sources: normalized results from documents and/or SQL databases ---
+
+def test_search_sources_prints_normalized_rows(monkeypatch, capsys):
+    from ingestlib.services.retrieve.models import RetrievalResult
+    from ingestlib.sources.base import SourceResult
+
+    captured = {}
+
+    def fake_retrieve(question, *, top_k=5, namespace="", rerank=True, sources=None, **kw):
+        captured["sources"] = sources
+        return RetrievalResult(question=question, results=[
+            SourceResult(content="rx_id | status\n1 | ready", source="rx",
+                         source_type="structured"),
+        ])
+
+    import ingestlib.services as services
+    monkeypatch.setattr(services, "retrieve", fake_retrieve)
+
+    assert main(["search", "ready?", "--sources", "rx, corpus"]) == 0
+    out = capsys.readouterr().out
+    assert captured["sources"] == ["rx", "corpus"]        # comma-split, trimmed
+    assert "[1] rx (structured)" in out
+    assert "rx_id | status" in out
+
+
+def test_search_sources_empty_results_is_a_clean_message(monkeypatch, capsys):
+    from ingestlib.services.retrieve.models import RetrievalResult
+
+    def fake_retrieve(question, **kw):
+        return RetrievalResult(question=question, results=[])
+
+    import ingestlib.services as services
+    monkeypatch.setattr(services, "retrieve", fake_retrieve)
+
+    assert main(["search", "q", "--sources", "rx"]) == 0
+    assert "no results from the given source" in capsys.readouterr().out
