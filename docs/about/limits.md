@@ -49,13 +49,18 @@ yet `grounded=False`. Treat ungrounded fields as "verify before use," not
 **Generated SQL is best-effort; the read-only role is the guarantee.**
 Structured retrieval writes read-only SQL from your schema and `tables` hints —
 strong on a clean, well-described schema, weaker on a sprawling one with
-cryptic columns and heavy joins (the documented reality of text-to-SQL). A
-query that *errors* is retried once; one that runs but returns the *wrong*
-number looks identical to a right one and can't be caught automatically. Two
-things make it safe to point at a real database anyway: a **read-only role**
-(the worst case is a wrong read, never a write) and **verified queries** for
-answers that must be exact. Measure accuracy on your own schema before trusting
-generated numbers — treat them as an analyst draft.
+cryptic columns and heavy joins (the documented reality of text-to-SQL). On a
+wide schema, **schema-RAG** retrieves the relevant tables (with foreign-key
+closure) instead of dumping all of them, which keeps the prompt bounded and cuts
+the ambiguity that misleads joins — but it does not turn an under-described
+schema into a self-explaining one; that is what `tables` hints (hand-written or
+`describe-schema`-generated) are for. A query that *errors* is retried once (with
+a widened schema); one that runs but returns the *wrong* number looks identical
+to a right one and can't be caught automatically. Two things make it safe to
+point at a real database anyway: a **read-only role** (the worst case is a wrong
+read, never a write) and **verified queries** for answers that must be exact.
+Measure accuracy on your own schema (`eval-sql`) before trusting generated
+numbers — treat them as an analyst draft.
 
 **Local models trail cloud models on dense charts.** The Ollama reference
 stack handles the pipeline's judgment tasks well; complex multi-series
@@ -76,7 +81,10 @@ write — marks completion.
 
 ## Roadmap
 
-Recently shipped: [structured retrieval](../how-to/structured-retrieval.md) —
+Recently shipped: [schema-RAG for wide databases](../how-to/structured-retrieval.md#wide-schemas-retrieve-the-schema-dont-dump-it) —
+retrieve the relevant tables (with foreign-key closure) instead of dumping the
+whole schema, plus `describe-schema` auto-documentation and the `eval-sql`
+accuracy harness (v1.4); [structured retrieval](../how-to/structured-retrieval.md) —
 query your SQL databases alongside documents through one `retrieve()` call,
 behind a read-only permission boundary (v1.3); an
 [MCP server](../how-to/mcp-server.md) to serve the corpus to agents (v1.2);

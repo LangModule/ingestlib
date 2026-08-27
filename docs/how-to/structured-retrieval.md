@@ -82,6 +82,65 @@ uv add "ingestlib[postgres]"      # or mysql · duckdb · snowflake · sqlite (n
 each table holds steers generation far more than the column names alone. Write
 them like you'd brief an analyst.
 
+## Wide schemas — retrieve the schema, don't dump it
+
+Dumping every table into the prompt works on a handful of tables. On a wide
+schema it breaks down two ways: the prompt grows without bound, and ambiguous
+columns spread across dozens of tables lead the model to the wrong join. So on a
+wide schema ingestlib **retrieves** only the tables a question needs — embedding
+each table into a "card", ranking them against the question, and adding the
+foreign-key *bridge* tables that make the joins possible (recall-first: a missing
+table is unrecoverable, extra tables are just ignored).
+
+This is automatic and needs no configuration — `schema_rag: auto` (the default)
+dumps the whole schema when it is small and retrieves once it crosses
+`schema_rag_min_tables` (default 10). Force it either way per source:
+
+```yaml
+prescriptions:
+  # ... type, dsn, tables as above ...
+  schema_rag: auto                # auto (default) | on (always retrieve) | off (always dump)
+  schema_rag_top_k: 15            # tables retrieved per question, before FK closure
+  schema_rag_min_tables: 10       # auto: dump all at or below this table count
+```
+
+If a generated query fails because a needed table was missed, the one retry
+**widens** the retrieval automatically before regenerating.
+
+The first query on a wide schema embeds its tables once — a one-time cost, cached
+under `~/.cache/ingestlib/schema/` and reused on every later run (it rebuilds
+automatically when the schema or the embedding model changes). Retrieval needs no
+declared foreign keys either: where a schema declares none, join edges are
+inferred from column and table naming, so closure still connects the tables.
+
+### Cryptic schemas — auto-document the tables
+
+Schema-RAG and generation both lean on the `tables` hints, and on a schema of
+`t_042` / `ss_sold_date_sk` columns you can't write them by hand. Generate a
+starting set from the data itself — ingestlib samples each table and asks the LLM
+for a one-line description:
+
+```bash
+ingestlib describe-schema prescriptions            # prints a tables: block to paste
+ingestlib describe-schema prescriptions --out hints.yaml
+```
+
+It never edits `sources.yaml` — review the descriptions (a wrong hint silently
+misleads generation) and paste them under the source.
+
+### Measure accuracy on your own schema
+
+Generation quality is schema-specific, so measure it where it runs. Put a set of
+`{question, expect}` pairs in `<source>_eval.yaml` beside `sources.yaml` and:
+
+```bash
+ingestlib eval-sql prescriptions                   # match rate, generated-only rate, misses
+```
+
+It reports the overall match rate, the **generated-only** rate (the honest
+production number), and every miss with the SQL that ran — so you know how far to
+trust a generated answer before you rely on it.
+
 ## Verified queries — for answers that must be exact
 
 Generation is best-effort. For the questions you can't afford to get wrong,
@@ -138,8 +197,11 @@ source) once `sources.yaml` exists.
 - **Generated SQL is only as good as the model and your hints.** On a clean,
   well-described schema it is strong; on a sprawling schema with cryptic
   columns and heavy joins, accuracy drops — the documented reality of
-  text-to-SQL. Use `tables` hints, and reach for `verified:` on the queries
-  that must be right.
+  text-to-SQL. Schema-RAG keeps a *wide* schema tractable (it retrieves the
+  relevant tables instead of dumping all of them), but it does not make an
+  under-described schema self-explaining — write `tables` hints (or generate
+  them with `describe-schema`), measure with `eval-sql`, and reach for
+  `verified:` on the queries that must be right.
 - **A wrong query that *errors* is retried once** (the error is fed back to the
   model); a query that runs but returns the *wrong* number looks identical to a
   right one — no loop catches that. Treat generated answers as an analyst

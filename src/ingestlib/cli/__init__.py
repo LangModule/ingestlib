@@ -9,6 +9,8 @@
     ingestlib remove TARGET   erase a document (by path or doc_id)
     ingestlib backfill        rebuild the vector store from stored artifacts
     ingestlib search "..."    cited retrieval from the shell
+    ingestlib describe-schema NAME   auto-document a SQL source's tables
+    ingestlib eval-sql NAME   measure text2SQL accuracy on your own schema
     ingestlib mcp             serve the corpus to agents over MCP
 """
 import argparse
@@ -90,6 +92,23 @@ def main(argv: list[str] | None = None) -> int:
     )
     _add_namespace(search_parser)
 
+    describe_parser = sub.add_parser(
+        "describe-schema", help="auto-document a SQL source's tables (LLM-generated hints)"
+    )
+    describe_parser.add_argument("source", help="a SQL source name from sources.yaml")
+    describe_parser.add_argument(
+        "--out", default=None, help="write the tables: block to this file (default: stdout)"
+    )
+
+    eval_parser = sub.add_parser(
+        "eval-sql", help="measure text2SQL accuracy on a source against a question set"
+    )
+    eval_parser.add_argument("source", help="a SQL source name from sources.yaml")
+    eval_parser.add_argument(
+        "--dataset", default=None,
+        help="YAML of question/expected pairs (default: <source>_eval.yaml beside sources.yaml)",
+    )
+
     mcp_parser = sub.add_parser(
         "mcp", help="serve the corpus to agents over MCP (needs ingestlib[mcp])"
     )
@@ -162,6 +181,14 @@ def _dispatch(args: argparse.Namespace) -> int:
             rerank=not args.no_rerank,
             sources=[s.strip() for s in args.sources.split(",") if s.strip()] or None,
         )
+    if args.command == "describe-schema":
+        from ingestlib.cli.describe import run_describe_schema
+
+        return run_describe_schema(args.source, out=args.out)
+    if args.command == "eval-sql":
+        from ingestlib.cli.eval_sql import run_eval_sql
+
+        return run_eval_sql(args.source, dataset=args.dataset)
     if args.command == "mcp":
         from ingestlib.mcp import serve
 

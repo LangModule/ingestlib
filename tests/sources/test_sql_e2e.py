@@ -92,16 +92,23 @@ async def test_duckdb_generation(tmp_path):
 
 
 @pytest.mark.skipif(
-    os.environ.get("RUN_PGVECTOR_E2E") != "1" or not os.environ.get("PGVECTOR_URL"),
+    os.environ.get("RUN_PGVECTOR_E2E") != "1",
     reason="postgres path is opt-in: RUN_PGVECTOR_E2E=1 + PGVECTOR_URL "
            "(reuse the pgvector container)",
 )
 async def test_postgres_generation():
+    from ingestlib.config import get_config
     from ingestlib.sources.sql.engine import reset_engines
     from ingestlib.sources.sql.source import SqlSource
 
+    # PGVECTOR_URL comes from .env, not the shell — an earlier reset_config() in the
+    # suite un-sets dotenv keys, so re-load before reading (mirrors the snowflake e2e).
+    get_config()
+    url = os.environ.get("PGVECTOR_URL")
+    if not url:
+        pytest.skip("PGVECTOR_URL not set in .env")
     # the pgvector connector uses psycopg v3; point SQLAlchemy at the same driver
-    dsn = os.environ["PGVECTOR_URL"].replace("postgresql://", "postgresql+psycopg://", 1)
+    dsn = url.replace("postgresql://", "postgresql+psycopg://", 1)
     _seed(dsn)
     reset_engines()
     try:

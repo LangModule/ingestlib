@@ -155,7 +155,92 @@ def test_render_empty_and_header(rx_spec):
 
 
 async def test_schema_introspection_includes_tables_and_hints(rx_spec):
-    schema = await SqlSource(rx_spec())._schema()
+    # One table → auto mode dumps the whole (M-Schema) schema, no embedding needed.
+    schema = await SqlSource(rx_spec())._schema("how many prescriptions are ready")
     assert "TABLE rx" in schema
     assert "rx_id" in schema and "status" in schema
     assert "status is ready|pending" in schema        # the tables hint carried through
+
+
+# ---- schema-RAG mode switch + widen-on-error (retrieval logic itself is in test_schema.py) ----
+
+async def test_schema_rag_off_never_retrieves(rx_spec, monkeypatch):
+    """schema_rag=off dumps the whole schema and must not call the retriever."""
+    from ingestlib.sources.sql.schema import SchemaIndex
+
+    async def boom(self, *a, **kw):
+        raise AssertionError("retrieve() must not run when schema_rag=off")
+
+    monkeypatch.setattr(SchemaIndex, "retrieve", boom)
+    schema = await SqlSource(rx_spec(schema_rag="off"))._schema("anything")
+    assert "TABLE rx" in schema
+
+
+async def test_schema_rag_auto_small_schema_dumps_without_embedding(rx_spec, monkeypatch):
+    """Below the table threshold, auto mode dumps all and never embeds."""
+    import ingestlib.sources.sql.schema as schema_mod
+
+    async def boom(*a, **kw):
+        raise AssertionError("a small schema must not be embedded")
+
+    monkeypatch.setattr(schema_mod, "aembed_text", boom)
+    schema = await SqlSource(rx_spec(schema_rag="auto", schema_rag_min_tables=5))._schema("q")
+    assert "TABLE rx" in schema
+
+
+async def test_widen_multiplies_top_k_on_retry(rx_spec, monkeypatch):
+    """The self-correct retry widens the retrieval — top_k × _WIDEN_FACTOR."""
+    from ingestlib.sources.sql.schema import SchemaIndex
+
+    seen = {}
+
+    async def fake_retrieve(self, question, *, top_k):
+        seen["top_k"] = top_k
+        return {"rx"}
+
+    monkeypatch.setattr(SchemaIndex, "retrieve", fake_retrieve)
+    src = SqlSource(rx_spec(schema_rag="on", schema_rag_top_k=5))
+    await src._schema("q", widen=False)
+    assert seen["top_k"] == 5
+    await src._schema("q", widen=True)
+    assert seen["top_k"] == 5 * source_mod._WIDEN_FACTOR
+
+
+def test_verified_threshold_follows_embedding_provider(monkeypatch):
+    """Asymmetric (bedrock) embeddings need a low floor; symmetric (openai/ollama)
+    embeddings score higher, so the floor is raised to avoid over-matching."""
+    import ingestlib.config as config_mod
+
+    def _provider(name):
+        cfg = type("C", (), {"embedding_provider": name})
+        monkeypatch.setattr(config_mod, "get_config", lambda: cfg)
+
+    _provider("bedrock")
+    assert source_mod._verified_threshold() == source_mod._VERIFIED_THRESHOLD_ASYMMETRIC
+    _provider("openai")
+    assert source_mod._verified_threshold() == source_mod._VERIFIED_THRESHOLD_SYMMETRIC
+    _provider("ollama")
+    assert source_mod._verified_threshold() == source_mod._VERIFIED_THRESHOLD_SYMMETRIC
+
+
+async def test_self_correct_retry_widens_schema(rx_spec, monkeypatch):
+    """A generated query that errors once is regenerated with a widened schema,
+    then succeeds — proving answer() threads widen=True into the retry."""
+    stub_aembed(monkeypatch)
+    widens = []
+
+    real_schema = SqlSource._schema
+
+    async def spy(self, question, *, widen=False):
+        widens.append(widen)
+        return await real_schema(self, question, widen=widen)
+
+    monkeypatch.setattr(SqlSource, "_schema", spy)
+    # first SQL hits a bogus table (errors), second is valid
+    stub_achat(monkeypatch, sql_queue=[
+        "SELECT count(*) FROM no_such_table",
+        "SELECT count(*) FROM rx WHERE status = 'ready'",
+    ])
+    [result] = await SqlSource(rx_spec()).answer("how many are ready")
+    assert result.raw["rows"] == [(2,)]
+    assert widens == [False, True]                    # generate, then widened retry

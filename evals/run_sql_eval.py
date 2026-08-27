@@ -28,6 +28,7 @@ from pathlib import Path
 
 import yaml
 
+from ingestlib.cli.eval_sql import print_report, run, summarize
 from ingestlib.config import SourceSpec, get_config
 from ingestlib.sources.sql.engine import reset_engines
 from ingestlib.sources.sql.source import SqlSource
@@ -101,85 +102,6 @@ def load_dataset() -> tuple[str, list[dict]]:
     if dupes:
         raise SystemExit(f"sql_dataset.yaml has duplicate ids: {dupes}")
     return source, questions
-
-
-def _cells(rows: list[tuple]) -> list[str]:
-    """Every value in the result, stringified and stripped — the haystack."""
-    return [str(v).strip() for row in rows for v in row if v is not None]
-
-
-def matched(expect, rows: list[tuple]) -> bool:
-    """A hit when any expected value is present: numbers match a cell exactly (so
-    '5' never matches '25'); text matches a cell case-insensitively as substring."""
-    wants = expect if isinstance(expect, list) else [expect]
-    cells = _cells(rows)
-    lowered = [c.lower() for c in cells]
-    for want in wants:
-        want = str(want).strip()
-        if want.replace(",", "").isdigit():
-            if want in cells or want.replace(",", "") in [c.replace(",", "") for c in cells]:
-                return True
-        elif any(want.lower() in c for c in lowered):
-            return True
-    return False
-
-
-async def run(source: SqlSource, dataset: list[dict]) -> list[dict]:
-    rows_out = []
-    for q in dataset:
-        entry = {"id": q["id"], "question": q["question"], "expect": q["expect"]}
-        try:
-            [result] = await source.answer(q["question"])
-            entry["ran"] = True
-            entry["path"] = "verified" if result.provenance.get("verified") else "generated"
-            entry["sql"] = result.provenance.get("sql", "")
-            entry["hit"] = matched(q["expect"], result.raw["rows"])
-        except Exception as exc:  # a query that never ran (guard reject, DB error, ...)
-            entry.update(ran=False, path="error", sql="", hit=False, error=str(exc)[:200])
-        rows_out.append(entry)
-        mark = "✓" if entry["hit"] else ("·" if entry["ran"] else "✗")
-        print(f"  {mark} [{entry['path']:<9}] {q['id']}")
-    return rows_out
-
-
-def summarize(rows: list[dict]) -> dict:
-    n = len(rows)
-    gen = [r for r in rows if r["path"] == "generated"]
-    ver = [r for r in rows if r["path"] == "verified"]
-    return {
-        "questions": n,
-        "ran_rate": sum(r["ran"] for r in rows) / n,
-        "match_rate": sum(r["hit"] for r in rows) / n,
-        "match_rate_generated": (sum(r["hit"] for r in gen) / len(gen)) if gen else None,
-        "match_rate_verified": (sum(r["hit"] for r in ver) / len(ver)) if ver else None,
-        "generated_count": len(gen),
-        "verified_count": len(ver),
-        "error_count": sum(1 for r in rows if r["path"] == "error"),
-    }
-
-
-def print_report(summary: dict, rows: list[dict]) -> None:
-    print("\n" + "=" * 60)
-    print(f"{'questions':<28}{summary['questions']}")
-    print(f"{'ran (no error)':<28}{summary['ran_rate']:.0%}")
-    print(f"{'match rate (overall)':<28}{summary['match_rate']:.0%}")
-    g = summary["match_rate_generated"]
-    if g is not None:
-        print(f"{'match rate (GENERATED only)':<28}"
-              f"{g:.0%}  ← the production number ({summary['generated_count']} q)")
-    v = summary["match_rate_verified"]
-    if v is not None:
-        print(f"{'match rate (verified only)':<28}{v:.0%}  ({summary['verified_count']} q)")
-    print("=" * 60)
-
-    print("\nmisses & generated SQL (· ran but wrong, ✗ never ran):")
-    for r in rows:
-        if not r["hit"]:
-            print(f"  {r['id']} [{r['path']}] expect={r['expect']!r}")
-            if r.get("sql"):
-                print(f"      {r['sql'][:150]}")
-            if r.get("error"):
-                print(f"      ERROR: {r['error']}")
 
 
 async def main() -> None:

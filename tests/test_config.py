@@ -302,6 +302,17 @@ def test_sources_defaults_applied(scratch_config):
     assert spec.allow == ("select",)                # default allowlist
     assert spec.row_limit == 1000 and spec.timeout == 30
     assert spec.tables == {} and spec.verified == {}
+    assert spec.schema_rag == "auto"                # schema-RAG defaults
+    assert spec.schema_rag_top_k == 15 and spec.schema_rag_min_tables == 10
+
+
+def test_sources_invalid_schema_rag_raises(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    (scratch_config / "sources.yaml").write_text(
+        "db:\n  type: sqlite\n  dsn: sqlite:///x.db\n  schema_rag: of\n"  # typo for 'off'
+    )
+    with pytest.raises(ValueError, match="schema_rag must be"):
+        get_config()
 
 
 def test_no_sources_yaml_means_empty(scratch_config):

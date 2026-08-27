@@ -19,17 +19,35 @@ from ingestlib.foundations.llm import achat_structured, aembed_text
 from ingestlib.sources.base import Source, SourceResult
 from ingestlib.sources.sql import engine
 from ingestlib.sources.sql.safety import guard, with_limit
+from ingestlib.sources.sql.schema import SchemaIndex
 from ingestlib.utils.logger import get_logger
 
 
-# Cosine to accept a verified-query match. The question embeds as a query
-# (GENERIC_RETRIEVAL) and the verified description as a document (GENERIC_INDEX),
-# so scores run on the asymmetric scale: on Bedrock Nova an exact-text match
-# lands ~0.48 and a confusable but wrong question ~0.24, so 0.35 sits cleanly in
-# the gap. (Symmetric embedding scores higher but separates the confusable case
-# far worse — 0.65 real vs 0.61 wrong — so the asymmetric pairing is deliberate.)
-_VERIFIED_THRESHOLD = 0.35
 _RENDER_ROW_CAP = 50        # rows rendered into the prompt-ready content string
+_WIDEN_FACTOR = 4           # on a self-correct retry, retrieve this many× more tables
+
+# Cosine to accept a verified-query match — calibrated PER embedding provider,
+# because the score scale depends on whether the embeddings are asymmetric. The
+# question embeds as a query (GENERIC_RETRIEVAL) and the verified description as a
+# document (GENERIC_INDEX):
+#   - Bedrock HONORS the purpose → asymmetric scale: exact match ~0.48, confusable
+#     but wrong ~0.24 → 0.35 sits cleanly in the gap.
+#   - OpenAI / Ollama IGNORE the purpose → symmetric scale: scores run higher and
+#     the confusable gap is tighter. Measured on text-embedding-3: should-match
+#     ≥0.68, confusable-but-wrong ≤0.55 → 0.62 sits in the gap (0.35 there over-fires,
+#     wrongly matching "how many nations" to a "how many regions" verified query).
+# A single constant can't serve both, so the threshold follows the provider.
+_VERIFIED_THRESHOLD_ASYMMETRIC = 0.35   # bedrock (purpose-aware embeddings)
+_VERIFIED_THRESHOLD_SYMMETRIC = 0.62    # openai / ollama (purpose ignored)
+
+
+def _verified_threshold() -> float:
+    """The verified-match cosine floor for the configured embedding provider."""
+    from ingestlib.config import get_config
+
+    if get_config().embedding_provider == "bedrock":
+        return _VERIFIED_THRESHOLD_ASYMMETRIC
+    return _VERIFIED_THRESHOLD_SYMMETRIC
 
 
 class _GeneratedSQL(BaseModel):
@@ -44,7 +62,7 @@ class SqlSource(Source):
         self.name = spec.name
         self._spec = spec
         self._logger = get_logger(f"ingestlib.sources.sql.{spec.name}")
-        self._schema_cache: str | None = None
+        self._index: SchemaIndex | None = None
         self._verified_embeddings: dict[str, list[float]] | None = None
 
     # ---- public contract ----
@@ -65,8 +83,11 @@ class SqlSource(Source):
             if is_verified:
                 raise
             self._logger.warning("generated SQL failed, self-correcting once: %s", exc)
-            sql = with_limit(guard(await self._generate(question, prior_sql=sql, error=str(exc)),
-                                   allow=spec.allow), spec.row_limit)
+            # Widen the schema on the retry: a missing table/column is the common
+            # cause, and retrieval may simply have omitted it (the unrecoverable
+            # failure mode). Pulling in more tables is the recall safety net.
+            retry = await self._generate(question, prior_sql=sql, error=str(exc), widen=True)
+            sql = with_limit(guard(retry, allow=spec.allow), spec.row_limit)
             columns, rows = await self._execute(sql, {})
             params = {}
 
@@ -97,24 +118,40 @@ class SqlSource(Source):
 
     # ---- generation ----
 
-    async def _schema(self) -> str:
-        if self._schema_cache is None:
-            self._schema_cache = await asyncio.to_thread(self._introspect)
-        return self._schema_cache
+    def _schema_index(self) -> SchemaIndex:
+        if self._index is None:
+            spec = self._spec
+            self._index = SchemaIndex(
+                spec.dsn, table_hints=spec.tables,
+                cache_dir=_schema_cache_dir(), cache_tag=_embedding_tag(),
+            )
+        return self._index
 
-    def _introspect(self) -> str:
-        from sqlalchemy import inspect
+    async def _schema(self, question: str, *, widen: bool = False) -> str:
+        """The schema block for generation. On a small schema (or schema_rag=off)
+        the whole thing is dumped; on a wide one only the tables relevant to the
+        question, plus their foreign-key bridges, are retrieved (schema-RAG). See
+        sources/sql/schema.py. Falls back to the full dump if retrieval is empty."""
+        spec = self._spec
+        index = self._schema_index()
+        await index.ensure_cards()
+        if spec.schema_rag == "off" or (
+            spec.schema_rag == "auto" and index.table_count <= spec.schema_rag_min_tables
+        ):
+            return index.serialize_all()
+        top_k = spec.schema_rag_top_k * (_WIDEN_FACTOR if widen else 1)
+        tables = await index.retrieve(question, top_k=top_k)
+        if not tables:
+            return index.serialize_all()
+        self._logger.info(
+            "schema-RAG: %d/%d tables for question", len(tables), index.table_count
+        )
+        return index.serialize(tables)
 
-        insp = inspect(engine.get_engine(self._spec.dsn))
-        lines = []
-        for table in insp.get_table_names():
-            cols = ", ".join(f"{c['name']} {c['type']}" for c in insp.get_columns(table))
-            hint = self._spec.tables.get(table, "")
-            lines.append(f"TABLE {table} ({cols})" + (f"  -- {hint}" if hint else ""))
-        return "\n".join(lines) or "(no tables)"
-
-    async def _generate(self, question: str, *, prior_sql: str = "", error: str = "") -> str:
-        schema = await self._schema()
+    async def _generate(
+        self, question: str, *, prior_sql: str = "", error: str = "", widen: bool = False
+    ) -> str:
+        schema = await self._schema(question, widen=widen)
         allow = ", ".join(self._spec.allow).upper()
         desc = f"\nThis database holds: {self._spec.description}" if self._spec.description else ""
         prompt = (
@@ -142,7 +179,7 @@ class SqlSource(Source):
             score = _cosine(q, emb)
             if score > best_score:
                 best_name, best_score = name, score
-        if best_name is None or best_score < _VERIFIED_THRESHOLD:
+        if best_name is None or best_score < _verified_threshold():
             return None
         self._logger.info("verified-query match: %s (%.2f)", best_name, best_score)
         return {"name": best_name, **verified[best_name]}
@@ -190,3 +227,30 @@ def _cosine(a: list[float], b: list[float]) -> float:
     na = math.sqrt(sum(x * x for x in a))
     nb = math.sqrt(sum(y * y for y in b))
     return dot / (na * nb) if na and nb else 0.0
+
+
+def _schema_cache_dir() -> str | None:
+    """Where the schema-RAG index persists — a user cache dir, so a wide schema is
+    embedded once ever, not per process. Best-effort; None disables persistence."""
+    try:
+        from pathlib import Path
+
+        return str(Path.home() / ".cache" / "ingestlib" / "schema")
+    except Exception:
+        return None
+
+
+def _embedding_tag() -> str:
+    """The embedding model's identity — provider AND model id — so the persisted
+    index invalidates if either changes. Model matters as much as provider: a
+    different model means a different vector space (often a different dimension),
+    which would make cached vectors meaningless (and _cosine would silently
+    compare truncated vectors)."""
+    try:
+        from ingestlib.config import get_config
+
+        cfg = get_config()
+        model = getattr(getattr(cfg, cfg.embedding_provider, None), "embedding_model_id", "")
+        return f"{cfg.embedding_provider}:{model}"
+    except Exception:
+        return ""

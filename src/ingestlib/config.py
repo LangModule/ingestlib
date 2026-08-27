@@ -186,7 +186,14 @@ class SourceSpec:
     .env), `allow` caps the statement types the model may generate, and
     row_limit/timeout bound every query. `tables` are plain-English schema hints
     (the accuracy lever); `verified` are optional guaranteed-correct queries. A
-    document source (type="documents") just names a corpus `namespace`."""
+    document source (type="documents") just names a corpus `namespace`.
+
+    schema_rag controls how the schema is fed to the generator on wide databases.
+    "auto" (default) dumps the whole schema when it is small — below
+    schema_rag_min_tables tables, where dumping is cheap and, for a strong model,
+    better — and otherwise retrieves only the schema_rag_top_k most relevant tables
+    (plus their foreign-key bridges) per question. "off" always dumps; "on" always
+    retrieves. See sources/sql/schema.py."""
     name: str
     type: str                                   # postgres|mysql|sqlite|duckdb|snowflake|documents
     dsn: str = ""                               # READ-ONLY connection URL (from a ${VAR} in .env)
@@ -197,6 +204,9 @@ class SourceSpec:
     tables: dict[str, str] = field(default_factory=dict)      # {table: plain-English hint}
     verified: dict[str, Any] = field(default_factory=dict)    # {name: {description, sql, params}}
     namespace: str = ""                         # document sources only
+    schema_rag: str = "auto"                    # auto | on | off — retrieve subset vs dump all
+    schema_rag_top_k: int = 15                  # tables retrieved per question (before FK closure)
+    schema_rag_min_tables: int = 10             # auto: dump all at or below this table count
 
 
 @dataclass(frozen=True)
@@ -457,6 +467,12 @@ def _load_config() -> IngestConfig:
         with open(sources_path, "r") as f:
             for name, spec in (yaml.safe_load(f) or {}).items():
                 spec = spec or {}
+                schema_rag = str(spec.get("schema_rag", "auto")).lower()
+                if schema_rag not in ("auto", "on", "off"):
+                    raise ValueError(
+                        f"source {name!r}: schema_rag must be 'auto', 'on', or 'off' "
+                        f"(got {schema_rag!r})"
+                    )
                 sources_specs[name] = SourceSpec(
                     name=name,
                     type=str(spec.get("type", "")),
@@ -468,6 +484,9 @@ def _load_config() -> IngestConfig:
                     tables={str(k): str(v) for k, v in (spec.get("tables") or {}).items()},
                     verified=dict(spec.get("verified") or {}),
                     namespace=str(spec.get("namespace", "")),
+                    schema_rag=schema_rag,
+                    schema_rag_top_k=int(spec.get("schema_rag_top_k", 15)),
+                    schema_rag_min_tables=int(spec.get("schema_rag_min_tables", 10)),
                 )
     sources_config = SourcesConfig(sources=sources_specs)
 

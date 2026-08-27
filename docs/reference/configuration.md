@@ -150,6 +150,9 @@ Connection URLs are secrets — set them in `.env` and reference them as `${VAR}
   timeout: 30                 # seconds before a query is killed (default 30)
   tables:                     # optional {table: plain-English hint} — the accuracy lever
     rx: "one row per prescription — rx_id, status, ready_at"
+  schema_rag: auto            # wide schemas: auto (default) | on | off — retrieve subset vs dump
+  schema_rag_top_k: 15        # tables retrieved per question, before FK closure (default 15)
+  schema_rag_min_tables: 10   # auto: dump all at or below this table count (default 10)
   verified:                   # optional reviewed queries, run on a semantic match
     rx_status:
       description: "Fulfillment status for a prescription"
@@ -157,6 +160,13 @@ Connection URLs are secrets — set them in `.env` and reference them as `${VAR}
       params: [rx_id]
   namespace: "…"              # documents only — which corpus partition to search
 ```
+
+On a schema wider than `schema_rag_min_tables`, ingestlib retrieves only the
+tables a question needs (plus their foreign-key bridges) instead of dumping the
+whole schema into the prompt — see
+[wide schemas](../how-to/structured-retrieval.md#wide-schemas-retrieve-the-schema-dont-dump-it).
+`describe-schema` generates `tables` hints for a cryptic schema; `eval-sql`
+measures generation accuracy on your own schema.
 
 Each SQL backend needs its
 [pip extra](../get-started/installation.md#1-install-the-package):

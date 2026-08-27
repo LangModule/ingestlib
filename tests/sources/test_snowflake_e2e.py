@@ -77,3 +77,16 @@ async def test_generated_sql_answers_a_schema_question(dsn):
     assert r.raw["rows"], "expected region rows from generated SQL"
     names = {str(v).upper() for row in r.raw["rows"] for v in row}
     assert names & {"ASIA", "EUROPE", "AMERICA", "AFRICA", "MIDDLE EAST"}
+
+
+async def test_schema_rag_forced_on_still_answers(dsn):
+    from ingestlib.sources.sql.source import SqlSource
+
+    # force retrieval (schema_rag=on) on the clean TPC-H schema — introspection +
+    # FK reflection + embedding retrieval must all work on Snowflake without
+    # regressing the answer. min_tables=0 would also trigger it under auto.
+    src = SqlSource(_spec(dsn, schema_rag="on", schema_rag_top_k=4))
+    [r] = await src.answer("list the distinct region names")
+    assert r.provenance["verified"] is False
+    names = {str(v).upper() for row in r.raw["rows"] for v in row}
+    assert names & {"ASIA", "EUROPE", "AMERICA", "AFRICA", "MIDDLE EAST"}

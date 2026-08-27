@@ -213,10 +213,14 @@ The model generates **read-only** SQL from your schema + `tables` hints, bounded
 by a permission boundary whose floor is a read-only database role — so a wrong
 query is a wrong *read*, never a write. A statement allowlist, an injected
 `LIMIT`, and a timeout are defense in depth; **verified queries** let you pin
-reviewed SQL for answers that must be exact. Each SQL backend needs its pip
-extra (`ingestlib[postgres]` · `[mysql]` · `[duckdb]` · `[snowflake]`; sqlite
-needs none). From the shell: `ingestlib search "…" --sources prescriptions`.
-Full guide:
+reviewed SQL for answers that must be exact. On a **wide schema** ingestlib
+retrieves only the tables a question needs — plus their foreign-key bridges —
+instead of dumping every table into the prompt (`schema_rag: auto`). Generate
+hints for a cryptic schema with `ingestlib describe-schema`, and measure
+generation accuracy on your own schema with `ingestlib eval-sql`. Each SQL
+backend needs its pip extra (`ingestlib[postgres]` · `[mysql]` · `[duckdb]` ·
+`[snowflake]`; sqlite needs none). From the shell:
+`ingestlib search "…" --sources prescriptions`. Full guide:
 [Query databases (SQL)](https://langmodule.github.io/ingestlib/how-to/structured-retrieval/).
 
 ## Serve it to agents (MCP)
@@ -409,11 +413,12 @@ src/ingestlib/
 ├── storage/        artifacts (S3 | local) · base (VectorStore contract) · 8 connectors
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
+├── sources/        structured retrieval — SQL databases & the corpus as queryable Sources
 ├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Ollama Qwen · Jina) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · mcp
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · describe-schema · eval-sql · mcp
 ├── mcp/            MCP server (ingestlib[mcp]) — expose the pipeline to agents
 ├── utils/          logger · files · sync · aws
-└── config.py       config.yaml + .env + rules.yaml → typed configs
+└── config.py       config.yaml + .env + rules.yaml + sources.yaml → typed configs
 ```
 
 Strict downward dependencies. The `VectorStore` contract means backends drop
@@ -451,7 +456,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~550 tests, ~3min; e2e groups skip)
+make test                  # fast suite (~650 tests, ~3min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
@@ -524,11 +529,13 @@ retrieval playground where every answer points to its source on the page.
 
 - XLSX input (tables-first, not a PDF conversion)
 
-Recently shipped: **structured retrieval** — query your SQL databases alongside
-documents through one `retrieve()` call, behind a read-only permission boundary
-(v1.3); an **MCP server** to serve the corpus to agents (v1.2); document
-lifecycle — replace-aware ingestion, folder `sync()`, `backfill()`, and the
-corpus CLI (v1.1).
+Recently shipped: **schema-RAG for wide databases** — retrieve the relevant
+tables (with foreign-key closure) instead of dumping the whole schema, plus
+`describe-schema` auto-documentation and the `eval-sql` accuracy harness
+(v1.4); **structured retrieval** — query your SQL databases alongside documents
+through one `retrieve()` call, behind a read-only permission boundary (v1.3); an
+**MCP server** to serve the corpus to agents (v1.2); document lifecycle —
+replace-aware ingestion, folder `sync()`, `backfill()`, and the corpus CLI (v1.1).
 
 ## License
 

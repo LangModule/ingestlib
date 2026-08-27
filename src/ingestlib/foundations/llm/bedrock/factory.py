@@ -3,9 +3,9 @@ import threading
 
 import boto3
 from botocore.config import Config
-from botocore.exceptions import ProfileNotFound
 
 from ingestlib.config import get_aws_config, get_bedrock_config
+from ingestlib.utils.aws import aws_session
 from ingestlib.utils.logger import get_logger
 
 
@@ -28,22 +28,9 @@ def _build_clients() -> None:
         aws.profile, aws.region, bedrock.rerank_region,
     )
 
-    profile = (aws.profile or "").strip()
-    try:
-        _session = (
-            boto3.Session(profile_name=profile, region_name=aws.region)
-            if profile
-            else boto3.Session(region_name=aws.region)
-        )
-    except ProfileNotFound:
-        # Never fall back silently: default credentials could belong to a
-        # DIFFERENT account, and a typo'd profile must not spend against it.
-        available = boto3.Session().available_profiles
-        raise RuntimeError(
-            f"AWS profile {profile!r} (config.yaml aws.profile) not found in "
-            f"~/.aws — available profiles: {available or 'none'}. Fix the name, "
-            f"or leave it empty to use the default credential chain."
-        ) from None
+    # the shared builder fails loudly on a typo'd profile (never falls back to
+    # default credentials, which could belong to a DIFFERENT account)
+    _session = aws_session(aws.profile, aws.region)
 
     retry_cfg = Config(
         retries={"total_max_attempts": 6, "mode": "standard"},

@@ -10,7 +10,7 @@ src/ingestlib/
 ├── storage/        artifacts (S3 | local) · VectorStore contract · 8 connectors
 ├── sources/        structured retrieval — SQL databases & the corpus as queryable Sources
 ├── foundations/    llm (Bedrock · OpenAI · Ollama · Jina rerank) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · mcp
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · describe-schema · eval-sql · mcp
 ├── mcp/            MCP server (ingestlib[mcp]) — the tools/services exposed to agents
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env + rules.yaml + sources.yaml → typed, frozen configs
@@ -47,7 +47,11 @@ LLM write read-only SQL over your databases, but behind a permission boundary
 whose floor is a read-only database role — so a wrong query is a wrong *read*,
 never a write. A statement allowlist, an injected `LIMIT`, and a timeout are
 defense in depth on top; verified queries let you pin reviewed SQL for answers
-that must be exact. The `sources/` layer reuses `foundations/llm` (generate,
+that must be exact. On a wide schema, the same layer retrieves the relevant
+tables (embedding each table into a card, then closing over the foreign-key
+graph so the fed sub-schema is join-complete) rather than dumping every table —
+schema-RAG, reusing the very same embedding surface as the verified match, no
+vector store. The `sources/` layer reuses `foundations/llm` (generate,
 param-fill, semantic match) — no new model, the same dispatch as everything else.
 
 **Errors carry their fix.** Every backend boundary translates its classic

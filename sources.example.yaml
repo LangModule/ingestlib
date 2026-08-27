@@ -21,6 +21,14 @@
 #   tables:                         # optional schema hints — the accuracy lever
 #     rx: "one row per prescription — rx_id, patient_id, drug_name, status, ready_at, refills_left"
 #     patients: "prescription owners — patient_id, name, dob, plan_id"
+#   # Wide schema? Retrieve only the tables a question needs (plus their FK
+#   # bridges) instead of dumping every table into the prompt. auto (default)
+#   # dumps small schemas and retrieves on large ones; on = always retrieve;
+#   # off = always dump. Generate hints for a cryptic schema with
+#   # `ingestlib describe-schema <name>`; measure accuracy with `ingestlib eval-sql <name>`.
+#   schema_rag: auto                # auto | on | off
+#   schema_rag_top_k: 15            # tables retrieved per question (before FK closure)
+#   schema_rag_min_tables: 10       # auto: dump all at or below this table count
 #   # Optional accuracy override — a matching question runs YOUR reviewed SQL
 #   # instead of a generated one, for answers that must be exact:
 #   verified:

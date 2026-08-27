@@ -14,6 +14,8 @@ Installed with the package as the `ingestlib` command
 | `remove` | erase a document (by path or doc_id) |
 | `backfill` | rebuild the vector store from stored artifacts |
 | `search` | cited retrieval from the shell |
+| `describe-schema` | auto-document a SQL source's tables (LLM-generated hints) |
+| `eval-sql` | measure text2SQL accuracy on a source against a question set |
 | `mcp` | serve the corpus to agents over MCP (needs `ingestlib[mcp]`) |
 
 `init` and `doctor` set up and verify a stack; the rest manage the documents in
@@ -166,6 +168,45 @@ Prints ranked hits with score, citation, heading, and a snippet.
 | `--no-rerank` | skip the reranker (vector order) |
 | `--sources` | comma-separated `sources.yaml` names to query (documents and/or SQL databases) — prints normalized results instead of document hits ([structured retrieval](../how-to/structured-retrieval.md)) |
 | `--namespace` | scope to one corpus partition |
+
+## `ingestlib describe-schema`
+
+Auto-document a SQL source's tables for [structured
+retrieval](../how-to/structured-retrieval.md#cryptic-schemas-auto-document-the-tables).
+Samples each table, asks the LLM for a one-line description, and prints a
+ready-to-paste `tables:` block — it never edits `sources.yaml`, so you review
+before trusting (a wrong hint silently misleads generation).
+
+```bash
+ingestlib describe-schema prescriptions             # print to stdout
+ingestlib describe-schema prescriptions --out hints.yaml
+```
+
+| Flag | Effect |
+|---|---|
+| `--out` | write the `tables:` block to a file (default: stdout) |
+
+## `ingestlib eval-sql`
+
+Measure text2SQL accuracy on your own schema — the generate path is
+analyst-assist, so measure how far to trust it. Runs a `{question, expect}`
+set through the real `answer()` path and reports the overall match rate, the
+**generated-only** rate (the honest production number), and every miss with the
+SQL that ran.
+
+```bash
+ingestlib eval-sql prescriptions                    # <source>_eval.yaml beside sources.yaml
+ingestlib eval-sql prescriptions --dataset questions.yaml
+```
+
+| Flag | Effect |
+|---|---|
+| `--dataset` | question/expected YAML (default: `<source>_eval.yaml` beside `sources.yaml`) |
+
+The dataset is a list under `questions:` of `{question, expect}` — `expect` is a
+value or list; a run hits when any expected value appears in the result. See
+[`evals/sql_dataset.yaml`](https://github.com/LangModule/ingestlib/blob/main/evals/sql_dataset.yaml)
+for the format. Like the retrieval eval, it measures — it never asserts.
 
 ## `ingestlib mcp`
 
