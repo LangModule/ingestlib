@@ -1,7 +1,12 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48" fill="none" role="img" aria-label="ingestlib">
-  <!-- document layers funneling into one indexed node -->
-  <rect x="9"  y="8"  width="30" height="5" rx="2.5" fill="#ffffff"/>
-  <rect x="13" y="18" width="22" height="5" rx="2.5" fill="#ffffff" fill-opacity="0.82"/>
-  <rect x="17" y="28" width="14" height="5" rx="2.5" fill="#ffffff" fill-opacity="0.64"/>
-  <circle cx="24" cy="41" r="4.5" fill="#22d3ee"/>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 60 46" fill="none" role="img" aria-label="ingestlib">
+  <!-- a document sheds its content rightward into a trail of vector points -->
+  <rect x="5" y="9" width="20" height="27" rx="3" fill="#ffffff"/>
+  <rect x="9" y="15"   width="12" height="2.6" rx="1.3" fill="#6b6894"/>
+  <rect x="9" y="20.2" width="12" height="2.6" rx="1.3" fill="#6b6894"/>
+  <rect x="9" y="26"   width="8"  height="4.6" rx="1.3" fill="#f59e0b"/>
+  <circle cx="32.5" cy="23"   r="3.2"  fill="#22d3ee"/>
+  <circle cx="40"   cy="18.6" r="2.4"  fill="#22d3ee" fill-opacity="0.85"/>
+  <circle cx="46.5" cy="26.5" r="1.8"  fill="#f59e0b" fill-opacity="0.9"/>
+  <circle cx="52.5" cy="20.5" r="1.25" fill="#22d3ee" fill-opacity="0.6"/>
+  <circle cx="56.5" cy="27"   r="0.9"  fill="#f59e0b" fill-opacity="0.55"/>
 </svg>

@@ -13,7 +13,7 @@ flowchart LR
   P[parse] --> C[classify] --> S[split] --> E[embed] --> U[upsert]
   P -. "source · page images" .-> ART[(artifact store)]
   C -. "structure · labels · chunks" .-> REG[(registry)]
-  S -. .-> REG
+  S -.-> REG
   U -. "one vector per chunk" .-> VEC[(vector store)]
 ```
 
