@@ -197,7 +197,12 @@ def _to_result(
             logger.warning(
                 "model invented category %r — coercing to 'uncategorized'", verdict.category
             )
-            verdict = verdict.model_copy(update={"category": "uncategorized"})
+            verdict = verdict.model_copy(update={
+                "category": "uncategorized",
+                "confidence": 0.0,
+                "reasoning": f"model proposed {verdict.category!r}, which is not an "
+                             "allowed category; recorded as uncategorized",
+            })
     return ClassifyResult(
         category=verdict.category,
         confidence=verdict.confidence,
@@ -241,6 +246,9 @@ async def aclassify(
         sorted(categories) if categories else "open-ended",
     )
 
+    if not chunks:
+        raise ValueError("no pages to classify — the document produced no pages")
+
     if len(chunks) == 1:
         verdict = await _classify_single(chunks[0], categories)
     else:
@@ -254,6 +262,7 @@ async def aclassify(
         except BaseException:
             for task in tasks:  # don't leave sibling chunk calls running
                 task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             raise
         verdict = await _combine(chunk_verdicts, chunks[0], categories)
 

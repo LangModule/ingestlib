@@ -140,18 +140,20 @@ class PineconeStore(VectorStore):
             for chunk, embedding in zip(chunks, embeddings)
         ]
         t0 = time.perf_counter()
+        acked = 0
         for i in range(0, len(vectors), _UPSERT_BATCH):
-            index.upsert(vectors=vectors[i : i + _UPSERT_BATCH], namespace=namespace)
+            resp = index.upsert(vectors=vectors[i : i + _UPSERT_BATCH], namespace=namespace)
+            acked += getattr(resp, "upserted_count", None) or len(vectors[i : i + _UPSERT_BATCH])
         logger.info(
             "upserted %d vector(s) for doc %s in %.1fs",
-            len(vectors), document_id[:12], time.perf_counter() - t0,
+            acked, document_id[:12], time.perf_counter() - t0,
         )
         if self.hybrid:
             self._upsert_sparse(document_id, chunks, category, namespace)
         # a re-parse can yield FEWER chunks — drop the previous ingest's
         # leftovers or they keep surfacing as hits pointing at dead chunks
         self._prune_stale(document_id, {v["id"] for v in vectors}, namespace)
-        return len(vectors)
+        return acked
 
     @staticmethod
     def _prune_stale(document_id: str, keep_ids: set[str], namespace: str) -> None:
@@ -297,6 +299,18 @@ class PineconeStore(VectorStore):
             n = self._delete_by_prefix(cfg.sparse_index_name, document_id, namespace)
             logger.info("deleted %d sparse vector(s) for doc %s", n, document_id[:12])
         return deleted
+
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live dense-vector count for a document (list the index by ID prefix)."""
+        client = get_pinecone_client()
+        cfg = get_pinecone_config()
+        if not client.has_index(cfg.index_name):
+            return 0
+        index = client.Index(cfg.index_name)
+        total = 0
+        for id_batch in index.list(prefix=f"{document_id}:", namespace=namespace):
+            total += len(list(id_batch))
+        return total
 
     @staticmethod
     def _delete_by_prefix(index_name: str, document_id: str, namespace: str) -> int:

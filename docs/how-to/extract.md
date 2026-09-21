@@ -134,16 +134,16 @@ into anything larger.
 
 ## Persist and reload
 
-Extraction results store beside the document's other artifacts, keyed by
-schema name:
+Pass `persist=True` to save the extraction to the registry (the document must
+already be in the corpus), then read it back with `get_document`:
 
 ```python
-from ingestlib.storage import artifacts
+from ingestlib.services import extract, get_document
 
-doc_id = artifacts.save_parse(result)
-artifacts.save_extract(doc_id, report)
+extract(result, schema=Receipt, mode="many", persist=True)   # → registry
 
-loaded = artifacts.load_extract(doc_id, Receipt)   # values revalidate into Receipt
+doc = get_document(result.source_checksum)
+doc.extractions        # [{'schema_name': 'Receipt', 'value': {...}, 'fields': {...}}, …]
 ```
 
 ## Async

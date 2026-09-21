@@ -56,8 +56,8 @@ vectors from model A. After changing `embedding_provider`:
 1. Re-ingest your corpus (`skip_existing=False`), or
 2. Keep separate stores/namespaces per embedding model
 
-The stored ingest manifest records which dimension and store each document
-was ingested with, so a mismatch is diagnosable after the fact.
+The registry records which dimension and store each document was embedded
+with, so a mismatch is diagnosable after the fact.
 
 ## Reranking is chosen separately
 

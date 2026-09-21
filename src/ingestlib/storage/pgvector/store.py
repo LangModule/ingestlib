@@ -253,3 +253,14 @@ class PgvectorStore(VectorStore):
             count = cursor.rowcount
             logger.info("deleted %d chunk(s) for doc %s", count, document_id[:12])
             return count
+
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live vector count for a document (one row per stored vector)."""
+        with connect() as conn:
+            if not schema_exists(conn):
+                return 0
+            (count,) = conn.execute(
+                f"SELECT count(*) FROM {table_name()} WHERE namespace = %s AND document_id = %s",
+                (namespace, document_id),
+            ).fetchone()
+            return int(count)

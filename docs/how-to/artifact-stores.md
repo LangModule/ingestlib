@@ -62,20 +62,20 @@ Your code never branches on the backend:
 ```python
 from ingestlib.storage import artifacts
 
-artifacts.list_documents()
-artifacts.load_parse(doc_id)
-artifacts.read_blob(artifacts.page_image_key(doc_id, 1))   # PNG bytes either way
+artifacts.list_documents()                                 # the registry, as metadata
+artifacts.document_markdown(doc_id)                        # whole-doc markdown (bytes)
+artifacts.read_blob(artifacts.page_image_key(doc_id, 1))   # a page PNG — s3 or local
 artifacts.delete_document(doc_id)
 ```
 
 ## Why artifacts matter
 
-The artifact store is the **source of truth**; the vector store is an
-index over it. Every stage's full output survives here, so nothing about
-your corpus is ever locked inside a vector database — `load_parse`,
-`load_split`, and the page renders reconstruct everything, and
-[`backfill()`](manage-corpus.md#rebuild-the-vector-store-backfill) re-embeds
-straight from these artifacts — no re-parse — to rebuild a vector store.
+The artifact store keeps a document's **bytes** — source, page renders, figure
+crops, whole-doc markdown — while the **registry** keeps everything queryable and
+is the source of truth for structure. Nothing about your corpus is locked inside
+the vector database: the chunks live in the registry, the bytes in the artifact
+store, so [`reindex()`](manage-corpus.md#rebuild-the-vector-store-reindex)
+re-embeds straight from the registry — no re-parse — to rebuild a vector store.
 
 ---
 

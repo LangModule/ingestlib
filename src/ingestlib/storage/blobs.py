@@ -132,7 +132,7 @@ class LocalBlobStore(BlobStore):
     """Artifacts as plain files under artifacts.path — no cloud, no server.
 
     Writes go through a temp file + atomic rename, so a crash mid-write can
-    never leave a truncated result.json behind.
+    never leave a truncated object behind.
     """
 
     def __init__(self) -> None:

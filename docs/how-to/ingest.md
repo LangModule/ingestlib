@@ -29,8 +29,8 @@ against both:
 | `replaced` | this path held an **older** version; it's deleted after the new one goes live |
 | `ingested` | new document |
 
-- A run that **failed partway is retried** — only a completed pipeline (manifest
-  written) counts as done.
+- A run that **failed partway is retried** — only a completed pipeline (recorded
+  as `status="ingested"` in the registry) counts as done.
 - **Editing a file and re-ingesting replaces the old version** — vectors and
   artifacts of the previous version are removed, so retrieval never returns
   stale content. This is automatic; the [corpus guide](manage-corpus.md) covers
@@ -100,7 +100,8 @@ and figures are never split regardless.
 
 ## Delete a document
 
-One call erases it from both stores (vectors first, then artifacts):
+One call erases it from all three stores (vectors, then the blobs, then the
+registry row):
 
 ```python
 from ingestlib.services import remove
@@ -109,7 +110,7 @@ remove("report.pdf")     # by source path, or a doc_id / unique prefix
 ```
 
 See [Manage a corpus](manage-corpus.md#remove-one-document) for the full
-lifecycle — replace, sync, prune, backfill.
+lifecycle — replace, sync, prune, reindex.
 
 ## A folder at a time
 

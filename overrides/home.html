@@ -1,0 +1,30 @@
+{% extends "main.html" %}
+
+{% block tabs %}
+  {{ super() }}
+  <section class="hp-hero">
+    <div class="hero__inner">
+      <span class="hero__eyebrow">Self-hosted · MIT · runs on your stack</span>
+      <h1 class="hero__title">Document intelligence for RAG, on your own infrastructure</h1>
+      <p class="hero__subtitle">
+        Parse, classify, split, and extract from PDF, DOCX, PPTX, and images into
+        searchable, <strong>cited</strong> chunks — then query your documents and SQL
+        databases in one natural-language call, and serve it all to agents over MCP.
+      </p>
+      <div class="hero__actions">
+        <a href="{{ 'get-started/quickstart/' | url }}" class="md-button md-button--primary">Get started</a>
+        <a href="{{ 'get-started/first-pipeline/' | url }}" class="md-button">See the pipeline</a>
+        <a href="https://github.com/LangModule/ingestlib" class="md-button" target="_blank" rel="noopener">Star on GitHub</a>
+      </div>
+      <div class="hero__code">
+        <div class="hero__code-bar"><i></i><i></i><i></i><span>python</span></div>
+<pre><span class="k">from</span> ingestlib.services <span class="k">import</span> ingest, retrieve
+
+<span class="f">ingest</span>(<span class="s">"finance-10k.pdf"</span>)            <span class="c"># parse → classify → split → embed → upsert</span>
+result = <span class="f">retrieve</span>(<span class="s">"what were the total revenues?"</span>)
+
+<span class="f">print</span>(result.context)                <span class="c"># ranked, cited chunks — doc · page · section</span></pre>
+      </div>
+    </div>
+  </section>
+{% endblock %}

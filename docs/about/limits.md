@@ -76,12 +76,15 @@ or split very large files upstream.
 By design, dedup keys on **file content only** — not on rules or settings.
 Ingesting the same bytes with different categories still returns
 `skipped`; pass `skip_existing=False` to re-run. A partially-failed ingest
-is always retried, because only the manifest — the pipeline's final
-write — marks completion.
+is always retried, because only the final registry write
+(`status="ingested"`) marks completion.
 
 ## Roadmap
 
-Recently shipped: [schema-RAG for wide databases](../how-to/structured-retrieval.md#wide-schemas-retrieve-the-schema-dont-dump-it) —
+Recently shipped: the **internal registry** — a Postgres metadata hub that makes
+the whole corpus queryable, with [`reindex`/`recollect`/`verify`](../how-to/manage-corpus.md)
+and event-driven backups (v1.5);
+[schema-RAG for wide databases](../how-to/structured-retrieval.md#wide-schemas-retrieve-the-schema-dont-dump-it) —
 retrieve the relevant tables (with foreign-key closure) instead of dumping the
 whole schema, plus `describe-schema` auto-documentation and the `eval-sql`
 accuracy harness (v1.4); [structured retrieval](../how-to/structured-retrieval.md) —
@@ -89,6 +92,6 @@ query your SQL databases alongside documents through one `retrieve()` call,
 behind a read-only permission boundary (v1.3); an
 [MCP server](../how-to/mcp-server.md) to serve the corpus to agents (v1.2);
 document lifecycle — replace-aware ingestion, folder
-[`sync()`](../how-to/manage-corpus.md), and [`backfill()`](../how-to/manage-corpus.md#rebuild-the-vector-store-backfill) (v1.1).
+[`sync()`](../how-to/manage-corpus.md), and [`reindex()`](../how-to/manage-corpus.md#rebuild-the-vector-store-reindex) (v1.1).
 Near-term next: XLSX input (tables-first, not a PDF conversion). Watch
 [GitHub](https://github.com/LangModule/ingestlib) for progress.

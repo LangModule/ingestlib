@@ -23,7 +23,7 @@ class RetrievedChunk(BaseModel):
     """One query hit — a stored chunk restored with its retrieval score.
 
     Carries everything needed to answer AND cite: content (markdown/text),
-    location (document_id, pages, region_ids → bboxes via the artifact store),
+    location (document_id, pages, region_ids → bboxes via the registry),
     and context (section, heading, category).
     """
 
@@ -60,10 +60,22 @@ class VectorStore(ABC):
     ) -> int:
         """Store one embedding per chunk with full provenance payload.
 
-        Returns the number of vectors written. embeddings[i] belongs to
+        Returns the number of vectors the backend ACKNOWLEDGED writing — the
+        durability signal the ingest ledger checks, so it must reflect what the
+        store confirmed, not len(chunks) assumed. embeddings[i] belongs to
         chunks[i]; use _validate_upsert() to enforce the pairing. `category`
         is the document-type label (from classify) stored on every vector so
         queries can filter by it.
+        """
+
+    @abstractmethod
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """How many vectors the store currently holds for a document.
+
+        The audit half of the durability ledger: `verify` compares this live
+        count against the registry's expected chunk_count to catch vectors that
+        silently went missing (a partial upsert, an out-of-band deletion, a
+        store rebuilt from a stale snapshot).
         """
 
     @abstractmethod

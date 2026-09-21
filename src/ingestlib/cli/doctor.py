@@ -186,6 +186,37 @@ def _ping_store(name: str) -> None:
         raise ValueError(f"unknown vector_store {name!r}")
 
 
+def check_registry() -> Check:
+    from ingestlib.cli.registry import _alembic_config, _current_revision, _target
+    from ingestlib_registry.db import ping
+
+    corpus_note = (
+        "the corpus path (ingest/list/sync/collections) needs it; standalone "
+        "parse/classify/split/extract and basic retrieve run without it"
+    )
+    target = _target()
+    if not ping():
+        return "warn", (
+            f"registry unreachable at {target} — start it and check "
+            f"INGESTLIB_REGISTRY_URL\n({corpus_note})"
+        )
+    current = _current_revision()
+    if current is None:
+        return "warn", (
+            f"registry at {target} not initialized — run: ingestlib registry init\n"
+            f"({corpus_note})"
+        )
+    from alembic.script import ScriptDirectory
+
+    head = ScriptDirectory.from_config(_alembic_config()).get_current_head()
+    if current != head:
+        return "warn", (
+            f"registry at {target} behind head {head} — run: ingestlib registry init\n"
+            f"({corpus_note})"
+        )
+    return "ok", f"registry at {target} — revision {current}"
+
+
 def check_sources() -> Check:
     from ingestlib.config import get_sources_config
 
@@ -261,6 +292,7 @@ def run_doctor() -> int:
         check_reranker,
         check_artifact_store,
         check_vector_store,
+        check_registry,
         check_sources,
     ):
         status, detail = check()

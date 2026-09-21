@@ -1,0 +1,379 @@
+/* ==========================================================================
+   ingestlib documentation — corporate design system
+   Deep indigo + electric cyan · Inter + JetBrains Mono
+   ========================================================================== */
+
+:root {
+  --brand-indigo-400: #818cf8;
+  --brand-indigo-500: #6366f1;
+  --brand-indigo-600: #4f46e5;
+  --brand-indigo-700: #4338ca;
+  --brand-cyan-400:   #22d3ee;
+  --brand-cyan-500:   #06b6d4;
+  --brand-cyan-600:   #0891b2;
+
+  --brand-radius:    14px;
+  --brand-radius-sm: 10px;
+  --brand-shadow:    0 1px 2px rgba(16, 24, 40, .06), 0 10px 26px rgba(16, 24, 40, .07);
+  --brand-shadow-lg: 0 2px 6px rgba(16, 24, 40, .08), 0 24px 48px rgba(16, 24, 40, .12);
+
+  --md-primary-fg-color:        var(--brand-indigo-600);
+  --md-primary-fg-color--light: var(--brand-indigo-400);
+  --md-primary-fg-color--dark:  var(--brand-indigo-700);
+  --md-accent-fg-color:         var(--brand-cyan-500);
+}
+
+/* ---- light scheme ---- */
+[data-md-color-scheme="default"] {
+  --md-typeset-a-color: var(--brand-indigo-600);
+  --md-footer-bg-color: #0b1020;
+}
+
+/* ---- dark (slate) scheme — lift the brand so it reads on the deep ground ---- */
+[data-md-color-scheme="slate"] {
+  --md-hue: 232;
+  --md-primary-fg-color:  var(--brand-indigo-500);
+  --md-accent-fg-color:   var(--brand-cyan-400);
+  --md-typeset-a-color:   #a5b4fc;
+  --md-default-bg-color:  hsla(228, 26%, 9%, 1);
+  --md-code-bg-color:     hsla(228, 24%, 13%, 1);
+  --md-footer-bg-color:   hsla(228, 30%, 6%, 1);
+}
+
+/* ==========================================================================
+   Typography
+   ========================================================================== */
+
+body,
+.md-typeset {
+  font-feature-settings: "kern", "liga", "cv05", "cv08", "ss01";
+  -webkit-font-smoothing: antialiased;
+}
+
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3 {
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+
+.md-typeset h1 { letter-spacing: -0.03em; }
+
+.md-typeset h2 {
+  margin-top: 2.4em;
+  padding-bottom: .3em;
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+}
+
+/* ==========================================================================
+   Header — indigo → cyan gradient, glassy on scroll
+   ========================================================================== */
+
+.md-header {
+  background: linear-gradient(100deg,
+    var(--brand-indigo-700) 0%,
+    var(--brand-indigo-600) 55%,
+    var(--brand-cyan-600) 140%);
+  box-shadow: 0 1px 0 rgba(255, 255, 255, .06), 0 4px 24px rgba(8, 12, 28, .18);
+}
+
+.md-tabs {
+  background: transparent;
+}
+
+.md-header__title { font-weight: 650; letter-spacing: -0.01em; }
+
+/* ==========================================================================
+   Links & inline code
+   ========================================================================== */
+
+.md-typeset a {
+  text-decoration: none;
+  transition: color .15s ease;
+}
+.md-typeset a:hover { color: var(--md-accent-fg-color); }
+
+.md-typeset code {
+  border-radius: 6px;
+  padding: .15em .4em;
+  font-size: .85em;
+}
+
+/* ==========================================================================
+   Code blocks — rounded, bordered, elevated
+   ========================================================================== */
+
+.md-typeset pre > code {
+  border-radius: var(--brand-radius-sm);
+}
+.md-typeset .highlight,
+.md-typeset pre {
+  border-radius: var(--brand-radius-sm);
+}
+.md-typeset pre > code {
+  border: 1px solid var(--md-default-fg-color--lightest);
+}
+.md-typeset .highlighttable .linenos { border-radius: var(--brand-radius-sm) 0 0 var(--brand-radius-sm); }
+
+/* ==========================================================================
+   Grid cards — the signature corporate component (hover-lift + accent rail)
+   ========================================================================== */
+
+.md-typeset .grid.cards > ul > li,
+.md-typeset .grid > .card {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: var(--brand-radius);
+  padding: 1.1rem 1.2rem;
+  box-shadow: var(--brand-shadow);
+  transition: transform .18s ease, box-shadow .18s ease, border-color .18s ease;
+  position: relative;
+  overflow: hidden;
+  background: var(--md-default-bg-color);
+}
+.md-typeset .grid.cards > ul > li::before {
+  content: "";
+  position: absolute;
+  inset: 0 0 auto 0;
+  height: 3px;
+  background: linear-gradient(90deg, var(--brand-indigo-500), var(--brand-cyan-400));
+  opacity: 0;
+  transition: opacity .18s ease;
+}
+.md-typeset .grid.cards > ul > li:hover {
+  transform: translateY(-4px);
+  box-shadow: var(--brand-shadow-lg);
+  border-color: color-mix(in srgb, var(--brand-indigo-500) 40%, transparent);
+}
+.md-typeset .grid.cards > ul > li:hover::before { opacity: 1; }
+.md-typeset .grid.cards > ul > li > :first-child { font-weight: 700; }
+
+/* ==========================================================================
+   Buttons / CTAs
+   ========================================================================== */
+
+.md-typeset .md-button {
+  border-radius: 999px;
+  border-width: 1.5px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  padding: .5em 1.2em;
+  transition: transform .15s ease, box-shadow .15s ease, background-color .15s ease;
+}
+.md-typeset .md-button:hover { transform: translateY(-2px); }
+.md-typeset .md-button--primary {
+  background: linear-gradient(100deg, var(--brand-indigo-600), var(--brand-indigo-500));
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 8px 20px color-mix(in srgb, var(--brand-indigo-600) 35%, transparent);
+}
+.md-typeset .md-button--primary:hover {
+  background: linear-gradient(100deg, var(--brand-indigo-500), var(--brand-cyan-500));
+  color: #fff;
+}
+
+/* ==========================================================================
+   Tables
+   ========================================================================== */
+
+.md-typeset table:not([class]) {
+  border-radius: var(--brand-radius-sm);
+  overflow: hidden;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  box-shadow: var(--brand-shadow);
+}
+.md-typeset table:not([class]) th {
+  background: color-mix(in srgb, var(--brand-indigo-500) 8%, var(--md-default-bg-color));
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* ==========================================================================
+   Admonitions — softer, rounded
+   ========================================================================== */
+
+.md-typeset .admonition,
+.md-typeset details {
+  border-radius: var(--brand-radius-sm);
+  border-width: 1px;
+  box-shadow: var(--brand-shadow);
+}
+
+/* ==========================================================================
+   Footer
+   ========================================================================== */
+
+.md-footer-meta { background: var(--md-footer-bg-color); }
+
+/* ==========================================================================
+   Landing-page hero + feature grid  (used by the Home template / index)
+   ========================================================================== */
+
+.hp-hero {
+  position: relative;
+  padding: 4.5rem 1.5rem 4rem;
+  text-align: center;
+  color: #fff;
+  overflow: hidden;
+  background:
+    radial-gradient(1200px 420px at 50% -12%, color-mix(in srgb, var(--brand-cyan-400) 18%, transparent), transparent 62%),
+    linear-gradient(160deg, var(--brand-indigo-700), var(--brand-indigo-600) 58%, #1e1b4b);
+}
+.hp-hero::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background-image:
+    linear-gradient(rgba(255, 255, 255, .05) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, .05) 1px, transparent 1px);
+  background-size: 34px 34px;
+  -webkit-mask-image: radial-gradient(760px 340px at 50% 0%, #000 28%, transparent 78%);
+          mask-image: radial-gradient(760px 340px at 50% 0%, #000 28%, transparent 78%);
+  pointer-events: none;
+}
+.hero__inner { position: relative; z-index: 1; max-width: 62rem; margin: 0 auto; }
+.hero__eyebrow {
+  display: inline-block;
+  font-size: .72rem;
+  font-weight: 700;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  padding: .3em .9em;
+  border-radius: 999px;
+  color: var(--brand-cyan-400);
+  background: rgba(255, 255, 255, .08);
+  border: 1px solid rgba(255, 255, 255, .14);
+  margin-bottom: 1.1rem;
+}
+.hero__title {
+  font-size: clamp(2.1rem, 5vw, 3.4rem);
+  font-weight: 800;
+  line-height: 1.05;
+  letter-spacing: -0.03em;
+  margin: 0 auto .8rem;
+  max-width: 18ch;
+  background: linear-gradient(180deg, #fff, #c7d2fe);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+.hero__subtitle {
+  font-size: clamp(1rem, 2.2vw, 1.25rem);
+  line-height: 1.55;
+  color: #c7d2fe;
+  max-width: 62ch;
+  margin: 0 auto 1.8rem;
+}
+.hero__actions { display: flex; gap: .8rem; justify-content: center; flex-wrap: wrap; }
+.hero .md-button { backdrop-filter: blur(4px); }
+
+/* feature grid tiles */
+.features {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 1rem;
+  margin: 2rem 0;
+}
+.feature {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: var(--brand-radius);
+  padding: 1.3rem;
+  background: var(--md-default-bg-color);
+  box-shadow: var(--brand-shadow);
+  transition: transform .18s ease, box-shadow .18s ease;
+}
+.feature:hover { transform: translateY(-4px); box-shadow: var(--brand-shadow-lg); }
+.feature__icon {
+  width: 40px; height: 40px;
+  display: grid; place-items: center;
+  border-radius: 11px;
+  margin-bottom: .8rem;
+  color: #fff;
+  background: linear-gradient(135deg, var(--brand-indigo-500), var(--brand-cyan-500));
+}
+.feature__icon svg { width: 22px; height: 22px; fill: currentColor; }
+.feature h3 { margin: 0 0 .3rem; font-size: 1.02rem; }
+.feature p { margin: 0; font-size: .88rem; color: var(--md-default-fg-color--light); }
+
+/* thin gradient rule */
+.brand-rule {
+  height: 3px; border: 0; border-radius: 2px; margin: 2.5rem 0;
+  background: linear-gradient(90deg, var(--brand-indigo-500), var(--brand-cyan-400), transparent);
+}
+
+/* hero code card */
+.hero__code {
+  max-width: 44rem;
+  margin: 2rem auto 0;
+  text-align: left;
+  border-radius: var(--brand-radius);
+  border: 1px solid rgba(255, 255, 255, .14);
+  background: rgba(9, 12, 28, .55);
+  box-shadow: 0 24px 60px rgba(4, 6, 20, .5);
+  backdrop-filter: blur(6px);
+  overflow: hidden;
+}
+.hero__code-bar {
+  display: flex; gap: .4rem; align-items: center;
+  padding: .6rem .9rem;
+  border-bottom: 1px solid rgba(255, 255, 255, .1);
+}
+.hero__code-bar i { width: 11px; height: 11px; border-radius: 50%; background: rgba(255,255,255,.22); }
+.hero__code-bar span { margin-left: .5rem; font-size: .72rem; color: #c7d2fe; letter-spacing: .02em; }
+.hero__code pre {
+  margin: 0; padding: 1.1rem 1.2rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: .82rem; line-height: 1.7; color: #e6ebff;
+  overflow-x: auto;
+}
+.hero__code .k { color: #c4b5fd; }   /* keyword */
+.hero__code .s { color: #6ee7b7; }   /* string  */
+.hero__code .c { color: #7c86a8; }   /* comment */
+.hero__code .f { color: #22d3ee; }   /* call    */
+
+.hp-hero .md-button { backdrop-filter: blur(4px); }
+.hp-hero .md-button:not(.md-button--primary) {
+  color: #fff; border-color: rgba(255, 255, 255, .5);
+}
+.hp-hero .md-button:not(.md-button--primary):hover {
+  background: rgba(255, 255, 255, .1); border-color: #fff;
+}
+
+/* section eyebrow + heading for the landing body */
+.section-eyebrow {
+  text-align: center;
+  font-size: .74rem; font-weight: 700; letter-spacing: .14em;
+  text-transform: uppercase; color: var(--brand-cyan-600);
+  margin: 3rem 0 .2rem;
+}
+[data-md-color-scheme="slate"] .section-eyebrow { color: var(--brand-cyan-400); }
+.section-title { text-align: center; margin: 0 0 1.6rem; letter-spacing: -0.02em; }
+
+/* "vs the alternatives" band */
+.compare {
+  border-radius: var(--brand-radius);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  background:
+    radial-gradient(600px 200px at 100% 0%, color-mix(in srgb, var(--brand-cyan-500) 8%, transparent), transparent 70%),
+    var(--md-default-bg-color);
+  padding: 1.6rem 1.8rem;
+  box-shadow: var(--brand-shadow);
+  margin: 1.5rem 0;
+}
+.compare p:last-child { margin-bottom: 0; }
+
+/* provider logo strip */
+.logos {
+  display: flex; flex-wrap: wrap; gap: .6rem 1.4rem;
+  justify-content: center; align-items: center;
+  margin: 1.2rem auto 0; max-width: 52rem;
+  color: var(--md-default-fg-color--light);
+  font-weight: 600; font-size: .9rem;
+}
+.logos span {
+  padding: .35em .9em; border-radius: 999px;
+  border: 1px solid var(--md-default-fg-color--lightest);
+  background: var(--md-default-bg-color);
+}
+
+/* tighten the home content top (hero already gives breathing room) */
+.md-typeset .hp-lead { text-align: center; font-size: 1.05rem; color: var(--md-default-fg-color--light); max-width: 60ch; margin: 0 auto 1.5rem; }

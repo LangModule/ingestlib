@@ -27,7 +27,7 @@ guides for every stage, the full configuration reference, and the API docs.
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended, or constrained to your rules (per call or preset in `rules.yaml`, with page targeting) — confidence and ranked alternatives included. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, … — LLM-discovered, or **your own categories** via rules) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
 | **Extract** | **Your Pydantic schema, filled from the document** — one instance (`mode="one"`) or every instance in a batch (`mode="many"`, e.g. all receipts in a scanned expense bundle). Every field carries **verified provenance**: page + region citations checked against the parse, values grounded in the cited source text, and honest confidence — uncited or ungrounded answers are capped, hallucinated citations dropped |
-| **Ingest** | The whole pipeline in one call, every stage persisted to the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
+| **Ingest** | The whole pipeline in one call — every stage's queryable output recorded in the internal **registry** (Postgres), its bytes (source, page images, figure crops, whole-doc markdown) in the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
 | **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
 | **Query databases** | The same `retrieve()` call also answers from your **SQL databases** — natural language → read-only generated SQL behind a permission boundary (read-only role + statement allowlist + LIMIT + timeout), with **verified-query** overrides for answers that must be exact. Postgres, MySQL, SQLite, DuckDB, Snowflake — merged with document results |
 
@@ -57,6 +57,11 @@ every LLM call on your own machine. See below.
   (Atlas any tier or 8.2+ self-managed), a Milvus (local docker or Zilliz
   Cloud), an OpenSearch (Amazon domain or local docker), a Weaviate (local
   docker or Weaviate Cloud) — each just one connection URL
+- **Internal registry (Postgres)** — ingestlib's own metadata store, required for
+  the **corpus path** (`ingest`/`retrieve`/lifecycle). Bring it up with the bundled
+  compose file: `docker compose -f infra/docker-compose.yml --profile registry up -d`,
+  then `ingestlib registry init`. Standalone operations (`parse`/`classify`/`split`/
+  `extract` on a single document) need no registry
 - **Jina AI account** for reranking (free tier: 100 RPM) — the default; or set
   `reranker: aws` (Amazon Rerank, same AWS credentials) or `reranker: none`
   in config.yaml and skip Jina entirely
@@ -88,6 +93,14 @@ System dependency — LibreOffice (DOCX/PPTX → PDF conversion):
 ```bash
 brew install --cask libreoffice          # macOS (binary is `soffice`)
 sudo apt install libreoffice-core libreoffice-writer libreoffice-impress   # Linux
+```
+
+Optional — PostgreSQL client tools (`pg_dump`/`pg_restore`), only for
+`ingestlib registry backup`/`restore`:
+
+```bash
+brew install libpq                       # macOS
+sudo apt install postgresql-client       # Linux
 ```
 
 ### 3. Start the OCR inference server
@@ -129,9 +142,9 @@ aws reranker, an Amazon OpenSearch domain) — delete it otherwise and the
 config loader will tell you if something still needs it. **The S3 bucket
 (default `ingestlib-{account_id}`) and the vector indexes/collections are
 created automatically on first use** — no manual setup. Prefer no cloud
-storage at all? `artifact_store: local` keeps every parse, page image, and
-chunk in a plain folder beside your config.yaml — browsable in a file
-manager, and moving a corpus between backends is a copy.
+storage at all? `artifact_store: local` keeps every source file, page render,
+and figure crop in a plain folder beside your config.yaml — browsable in a file
+manager, and moving the artifact store between backends is a plain copy.
 
 Config is discovered at call time, never at import: `INGESTLIB_CONFIG=/path/to/config.yaml`
 wins, otherwise the working directory and its parents are searched — so
@@ -145,7 +158,8 @@ uv run ingestlib doctor
 
 Doctor checks every configured choice with real calls — config discovery,
 LibreOffice, the OCR server, an LLM ping, an embedding (with its dimension),
-the reranker, the artifact store, and the vector store. Every failed line
+the reranker, the artifact store, the vector store, and the registry (reachable
+and migrated). Every failed line
 prints the one-sentence fix (wrong AWS profile → your available profiles,
 missing key → where to get one, model not pulled → the exact `ollama pull`).
 
@@ -169,12 +183,12 @@ Real corpora change. Re-ingesting an edited file **replaces** the old version
 **move**, and `sync()` reconciles a whole folder in one call:
 
 ```python
-from ingestlib.services import ingest, sync, remove, backfill
+from ingestlib.services import ingest, sync, remove, reindex
 
 ingest("report.pdf")                       # edited file → status="replaced"
 sync("corpus/", prune=True)                # add new, replace changed, drop deleted
 remove("old.pdf")                          # erase one doc from both stores
-backfill()                                 # rebuild the vector store from artifacts
+reindex()                                  # rebuild the vector store from the registry
 ```
 
 The same verbs are on the CLI — a corpus is managed from the shell, no Python
@@ -185,7 +199,8 @@ ingestlib ingest report.pdf docs/          # files or folders
 ingestlib sync corpus/ --prune --dry-run   # preview, then drop --dry-run
 ingestlib list                             # every stored document
 ingestlib remove report.pdf                # erase one
-ingestlib backfill                         # rebuild the index (provider switch, new store)
+ingestlib reindex                          # rebuild the index (provider switch, new store)
+ingestlib recollect                        # re-sort the corpus after editing classify rules
 ingestlib search "what were the risks?"    # cited retrieval from the shell
 ```
 
@@ -226,7 +241,7 @@ backend needs its pip extra (`ingestlib[postgres]` · `[mysql]` · `[duckdb]` ·
 ## Serve it to agents (MCP)
 
 `ingestlib mcp` exposes the whole loop — search, extract, ingest, sync, remove,
-backfill — as [MCP](https://modelcontextprotocol.io) tools, so Claude Desktop,
+reindex, recollect, verify, and registry management — as [MCP](https://modelcontextprotocol.io) tools, so Claude Desktop,
 Cursor, or any agent can drive your **self-hosted** corpus with citations,
 nothing leaving your machine.
 
@@ -283,14 +298,16 @@ reads the native text layer with page-level citations and no OCR server.
 Confidence is honest: a field whose citation doesn't check out is capped,
 and a value not found in its cited text is flagged `grounded=False`.
 
-Persistence and vector access are explicit too:
+A stored document reads back explicitly — queryable metadata from the registry,
+bytes from the blob store:
 
 ```python
-from ingestlib.storage import artifacts
+from ingestlib.services import get_document
 
-doc_id = artifacts.save_parse(result)   # artifact store: source, result.json, page PNGs, crops
-artifacts.save_extract(doc_id, report)  # extraction results persist beside the parse
-artifacts.list_documents()              # registry: filename, pages, category, chunks
+doc = get_document(doc_id)              # the stored document, from the registry
+print(doc.category, doc.chunk_count)    # queryable metadata
+doc.markdown()                          # whole-document markdown (blob store)
+[e["schema_name"] for e in doc.extractions]   # any persisted extractions
 ```
 
 ## Classification & split rules
@@ -408,17 +425,19 @@ nothing leaves your machine but the optional Jina rerank call
 
 ```
 src/ingestlib/
-├── services/       ingest · retrieve · lifecycle (remove · sync · backfill) — the product
+├── services/       ingest · retrieve · lifecycle (remove · sync · reindex · recollect) · verify — the product
 ├── operations/     parse · classify · split · extract — the tools (each standalone)
-├── storage/        artifacts (S3 | local) · base (VectorStore contract) · 8 connectors
+├── storage/        registry (Postgres metadata hub) · artifacts (S3 | local, bytes only) · base (VectorStore contract) · 8 connectors
 │                   (pinecone · qdrant · sqlite · pgvector · mongodb · milvus
 │                    · opensearch · weaviate)
 ├── sources/        structured retrieval — SQL databases & the corpus as queryable Sources
 ├── foundations/    llm (Bedrock Nova · OpenAI GPT-5 · Ollama Qwen · Jina) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · describe-schema · eval-sql · mcp
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · show · collections · remove · reindex · recollect · verify · search · describe-schema · eval-sql · registry · mcp
 ├── mcp/            MCP server (ingestlib[mcp]) — expose the pipeline to agents
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env + rules.yaml + sources.yaml → typed configs
+
+src/ingestlib_registry/   the registry's Postgres schema + Alembic migrations (a standalone package ingestlib depends on)
 ```
 
 Strict downward dependencies. The `VectorStore` contract means backends drop
@@ -456,7 +475,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~650 tests, ~3min; e2e groups skip)
+make test                  # fast suite (~630 tests, ~2min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
@@ -475,7 +494,7 @@ make test-weaviate         # vector connector e2e (needs Weaviate at WEAVIATE_UR
 make test-services         # full product e2e     (needs the entire stack)
 make test-sources          # structured retrieval — SQL sources (deterministic; e2e gated)
 make test-cli              # CLI: init/doctor + corpus commands (no gate)
-make test-lifecycle        # remove/sync/backfill + replace-aware ingest (no gate)
+make test-lifecycle        # remove/sync/reindex/recollect + replace-aware ingest (gates on the registry)
 make test-mcp              # MCP server: tools, read_only, http auth (no gate)
 make test-all              # everything
 make eval                  # retrieval quality eval (see below)
@@ -529,13 +548,16 @@ retrieval playground where every answer points to its source on the page.
 
 - XLSX input (tables-first, not a PDF conversion)
 
-Recently shipped: **schema-RAG for wide databases** — retrieve the relevant
-tables (with foreign-key closure) instead of dumping the whole schema, plus
-`describe-schema` auto-documentation and the `eval-sql` accuracy harness
-(v1.4); **structured retrieval** — query your SQL databases alongside documents
-through one `retrieve()` call, behind a read-only permission boundary (v1.3); an
-**MCP server** to serve the corpus to agents (v1.2); document lifecycle —
-replace-aware ingestion, folder `sync()`, `backfill()`, and the corpus CLI (v1.1).
+Recently shipped: the **internal registry** — a Postgres metadata hub that makes
+the whole corpus queryable, with `reindex`/`recollect`/`verify` for rebuilding
+and auditing it and event-driven backups (v1.5); **schema-RAG for wide
+databases** — retrieve the relevant tables (with foreign-key closure) instead of
+dumping the whole schema, plus `describe-schema` auto-documentation and the
+`eval-sql` accuracy harness (v1.4); **structured retrieval** — query your SQL
+databases alongside documents through one `retrieve()` call, behind a read-only
+permission boundary (v1.3); an **MCP server** to serve the corpus to agents
+(v1.2); document lifecycle — replace-aware ingestion, folder `sync()`,
+`reindex()`, and the corpus CLI (v1.1).
 
 ## License
 

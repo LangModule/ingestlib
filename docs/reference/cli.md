@@ -11,8 +11,13 @@ Installed with the package as the `ingestlib` command
 | `ingest` | index files or folders |
 | `sync` | reconcile a folder with the corpus |
 | `list` | show every stored document |
+| `show` | one document's full record (structure, chunks, extractions) |
+| `collections` | the classify collections and their document counts |
 | `remove` | erase a document (by path or doc_id) |
-| `backfill` | rebuild the vector store from stored artifacts |
+| `reindex` | rebuild the vector store from the registry |
+| `recollect` | re-sort the corpus after editing classify rules |
+| `verify` | audit durability (registry vs the vector & blob stores) |
+| `registry` | manage the internal registry DB (init/status/backup/restore) |
 | `search` | cited retrieval from the shell |
 | `describe-schema` | auto-document a SQL source's tables (LLM-generated hints) |
 | `eval-sql` | measure text2SQL accuracy on a source against a question set |
@@ -20,7 +25,7 @@ Installed with the package as the `ingestlib` command
 
 `init` and `doctor` set up and verify a stack; the rest manage the documents in
 it — the corpus-management guide is [Manage a corpus](../how-to/manage-corpus.md).
-Every corpus command takes `--namespace`.
+Most corpus commands take `--namespace`.
 
 ## `ingestlib init`
 
@@ -61,6 +66,7 @@ uv run ingestlib doctor
 | Reranker | `fail` (`skip` when `reranker: none`) |
 | Artifact store | `fail` — S3 credentials + bucket, or local-folder writability |
 | Vector store | `fail` — liveness probe; never creates indexes or schema |
+| Registry | `fail` — reachable and migrated (`run ingestlib registry init`) |
 | Structured sources | `fail` — a `SELECT 1` per declared source (`skip` when there's no `sources.yaml`) |
 
 Marks: `✓` ok · `!` warning · `✗` failure · `-` skipped.
@@ -125,6 +131,27 @@ ingestlib list
 ingestlib list --namespace tenant-a        # one partition (default: all)
 ```
 
+## `ingestlib show`
+
+Print one document's full record from the registry — identity, category and
+confidence, page/section/chunk counts, and any persisted extractions.
+
+```bash
+ingestlib show report.pdf                  # by source path
+ingestlib show 7b6b95d79149                # or by doc_id (full or a unique prefix)
+```
+
+## `ingestlib collections`
+
+List the classify collections and their document counts — the routing bins your
+`rules.yaml` categories create, flagged for an attached extract schema /
+auto-extract.
+
+```bash
+ingestlib collections
+ingestlib collections --namespace tenant-a   # one partition (default: all)
+```
+
 ## `ingestlib remove`
 
 Erase one document from **both** stores (vectors, then artifacts).
@@ -137,16 +164,54 @@ ingestlib remove 7b6b95d79149              # by doc_id (full or a unique prefix)
 Exit `1` when the target matches nothing (or a prefix is ambiguous) — nothing
 is deleted.
 
-## `ingestlib backfill`
+## `ingestlib reindex`
 
-Rebuild the vector store from stored split artifacts — no re-parse. For a
-provider switch, a new store connector, or a wiped index (see
-[backfill](../how-to/manage-corpus.md#rebuild-the-vector-store-backfill)).
+Rebuild the vector store from the registry — no re-parse. For a provider switch,
+a new store connector, or a wiped index (see
+[reindex](../how-to/manage-corpus.md#rebuild-the-vector-store-reindex)).
 
 ```bash
-ingestlib backfill
-ingestlib backfill --namespace tenant-a
+ingestlib reindex
+ingestlib reindex --namespace tenant-a
 ```
+
+## `ingestlib recollect`
+
+Re-sort the corpus after editing your classify rules — re-classifies every stored
+document from the registry (no OCR, no re-parse), updating categories and
+collections in place (see
+[recollect](../how-to/manage-corpus.md#re-sort-after-a-rules-change-recollect)).
+
+```bash
+ingestlib recollect
+ingestlib recollect --namespace tenant-a
+```
+
+## `ingestlib verify`
+
+Audit the corpus against the registry — expected chunk counts vs what the vector
+store actually holds, plus the essential blobs. `--repair` re-embeds vector-drifted
+documents from the registry.
+
+```bash
+ingestlib verify
+ingestlib verify --repair
+```
+
+## `ingestlib registry`
+
+Manage the internal registry DB (Postgres) — ingestlib's metadata hub.
+
+```bash
+ingestlib registry init                # create / upgrade the schema (Alembic)
+ingestlib registry status              # current revision + document count
+ingestlib registry backup              # pg_dump → the artifact store
+ingestlib registry restore <key>       # DESTRUCTIVE: pg_restore --clean from a backup
+```
+
+The registry runs from the bundled compose file —
+`docker compose -f infra/docker-compose.yml --profile registry up -d` — then
+`ingestlib registry init` applies the migrations.
 
 ## `ingestlib search`
 
@@ -210,9 +275,11 @@ for the format. Like the retrieval eval, it measures — it never asserts.
 
 ## `ingestlib mcp`
 
-Serve the corpus to MCP agents (Claude Desktop, Cursor, …) as tools —
-`search`, `extract`, `ingest`, `sync`, `remove`, `backfill`, `classify`,
-`list_documents`, `doctor`. Needs the extra: `pip install "ingestlib[mcp]"`.
+Serve the corpus to MCP agents (Claude Desktop, Cursor, …) as tools — the read
+tools (`search`, `extract`, `classify`, `list_documents`, `get_document`,
+`collections`, `describe_schema`, `verify`, `doctor`, `registry_status`) plus the
+write tools (`ingest`, `sync`, `remove`, `reindex`, `recollect`, and registry
+`init`/`backup`/`restore`). Needs the extra: `pip install "ingestlib[mcp]"`.
 Full guide: [Serve to agents (MCP)](../how-to/mcp-server.md).
 
 ```bash
@@ -226,7 +293,7 @@ ingestlib mcp --read-only                       # only the read tools
 | `--transport` | `stdio` (default, local) or `http` (streamable, remote) |
 | `--host` | http bind address (default `127.0.0.1`) |
 | `--port` | http port (default `8000`) |
-| `--read-only` | hide the write tools (ingest/remove/sync/backfill) |
+| `--read-only` | hide the write tools (ingest/remove/sync/reindex/recollect + registry writes) |
 
 The **http** transport requires `MCP_TOKEN` in `.env` (bearer auth) and binds
 localhost unless you pass `--host`. stdio needs no token.

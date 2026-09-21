@@ -200,7 +200,9 @@ async def aextract(
         schema.__name__, mode, pages_used, len(windows),
     )
 
-    if mode == "one":
+    if not windows:
+        items = []
+    elif mode == "one":
         if len(windows) == 1:
             items = [await _extract_one_window(windows[0], schema, instructions)]
         else:
@@ -216,6 +218,7 @@ async def aextract(
             except BaseException:
                 for task in tasks:
                     task.cancel()
+                await asyncio.gather(*tasks, return_exceptions=True)
                 raise
             items = [_merge_one(per_window, schema)]
     else:
@@ -231,6 +234,7 @@ async def aextract(
         except BaseException:
             for task in tasks:
                 task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
             raise
         items = _dedup_many([item for batch in window_items for item in batch])
 

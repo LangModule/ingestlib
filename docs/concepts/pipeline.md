@@ -4,16 +4,22 @@ ingestlib is four **operations** and two **services**. Each operation
 works standalone; the services chain the first three and add persistence.
 The fourth, `extract()`, is a standalone reader — it pulls structured
 data out of a document and is not part of the ingest chain. Around the two
-services sit the corpus-management helpers — `remove`, `sync`, `backfill` —
-that keep the stores in step with changing files
+services sit the corpus-management helpers — `remove`, `sync`, `reindex`,
+`recollect` — that keep the stores in step with changing files
 ([Manage a corpus](../how-to/manage-corpus.md)).
 
-```text
-                     ┌───────────────── services ─────────────────┐
-                     │                                            │
-  report.pdf ──▶  ingest():  parse ─▶ classify ─▶ split ─▶ embed ─▶ upsert
-                     │                                            │
-  "question"  ──▶ retrieve():  embed ─▶ vector search ─▶ rerank ─▶ cited hits
+```mermaid
+flowchart LR
+  doc([report.pdf]) --> I
+  subgraph I["ingest()"]
+    direction LR
+    parse --> classify --> split --> embed --> upsert
+  end
+  q(["&quot;question&quot;"]) --> R
+  subgraph R["retrieve()"]
+    direction LR
+    e[embed] --> vs[vector search] --> rr[rerank] --> h[cited hits]
+  end
 ```
 
 ## Parse — the only stage that reads pixels
@@ -79,8 +85,9 @@ and no OCR server. See [Extract structured data](../how-to/extract.md).
 ## Ingest — the pipeline with persistence
 
 `ingest()` chains parse, classify, and split, embeds every chunk, and upserts
-into the configured vector store — persisting each stage's output to the
-artifact store as it goes. Content-checksum dedup makes it safe to point
+into the configured vector store — recording each stage's queryable output in
+the **registry** and its bytes in the artifact store as it goes. Content-checksum
+dedup makes it safe to point
 at the same folder twice. A progress callback (`on_stage`) reports each
 stage's start/finish.
 
@@ -106,7 +113,7 @@ The services are convenience, not lock-in:
 ```python
 from ingestlib.operations import parse, classify, split, extract
 
-result = parse("report.pdf")               # or load_parse(doc_id) from artifacts
+result = parse("report.pdf")               # OCR + enrich — the expensive stage
 label  = classify(result)                  # reuses the parse — no OCR
 chunks = split(result, category=label.category)
 fields = extract(result, schema=MySchema)  # reuses the parse — cited fields

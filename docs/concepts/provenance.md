@@ -9,9 +9,8 @@ chain that makes that work.
 ```text
 retrieve() hit
    └─ chunk ──────────────  pages: [4]        region_ids: {4: [2, 3]}
-        └─ parse/result.json (artifact store)
-             └─ page 4, regions 2 & 3 ──────  bounding boxes
-                  └─ parse/pages/page_0004.png  (the rendered page)
+        └─ the registry ───  page 4, regions 2 & 3 → bounding boxes
+             └─ artifact store: parse/pages/page_0004.png  (the rendered page)
 ```
 
 Four links, each stored, none inferred:
@@ -19,12 +18,13 @@ Four links, each stored, none inferred:
 1. **A hit carries its chunk** — with `document_id`, `pages`, and
    `region_ids` (a map of page number → the parse region ids the chunk
    covers).
-2. **`document_id` keys the artifact store** — `load_parse(doc_id)` returns
-   the full parse structure without re-running anything.
+2. **`document_id` keys the registry** — `get_document(doc_id)` returns the
+   whole document (structure from the registry, page bytes on demand) without
+   re-running anything.
 3. **Regions have bounding boxes** — every block parse produced (paragraph,
-   table, chart, figure) has a `region_id` and a bbox on its page.
-4. **Page renders are stored as PNGs** — so a UI can draw the bbox on the
-   actual page image.
+   table, chart, figure) has a `region_id` and a bbox, recorded in the registry.
+4. **Page renders are stored as PNGs** — in the artifact store, so a UI can
+   draw the bbox on the actual page image.
 
 ## Identity: the content checksum
 
@@ -58,13 +58,14 @@ Participants were recruited through community centers in Cairo…
 Everything a click-through viewer needs is two calls away:
 
 ```python
-from ingestlib.storage import artifacts
+from ingestlib.services import get_document
 
-parse = artifacts.load_parse(hit.chunk.document_id)
-page = next(p for p in parse.pages if p.page_num == 4)
-boxes = [r.bbox for r in page.regions if r.region_id in hit.chunk.region_ids[4]]
+doc = get_document(hit.chunk.document_id)
+wanted = hit.chunk.region_ids[4]                     # region ids on page 4
+boxes = [r["bbox"] for r in doc.regions
+         if r["page_num"] == 4 and r["region_id"] in wanted]
 
-png = artifacts.read_blob(artifacts.page_image_key(hit.chunk.document_id, 4))
+png = doc.page_image(4)                              # the rendered page (bytes)
 ```
 
 Draw `boxes` over `png` and the answer highlights its source on the page.
@@ -84,8 +85,8 @@ of every extracted item carries a `FieldValue` with:
   that is uncited or fails grounding has its confidence capped
 
 `ExtractedItem.citation` renders it the same way (`p.10`), and the same
-`load_parse` + `page_image_key` recipe above turns an extracted field
-into a highlighted box on the page.
+`get_document` recipe above turns an extracted field into a highlighted box
+on the page.
 
 ## Why chunks stay traceable
 

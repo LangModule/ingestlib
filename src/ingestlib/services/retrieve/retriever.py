@@ -48,14 +48,24 @@ async def aretrieve(
     rerank: bool = True,
     store: VectorStore | None = None,
     sources: list[str] | None = None,
+    collection: str | None = None,
+    min_confidence: float | None = None,
+    kinds: list[str] | None = None,
 ) -> RetrievalResult:
     """Retrieve the most relevant results for a question (async).
 
-    question — natural-language query
-    top_k    — results to return per source
-    filters  — payload constraints for document search, e.g. {"category": "x"}
-    rerank   — rerank document candidates with config.yaml's `reranker`
-    store    — vector store connector; defaults to config.yaml's `vector_store`
+    question       — natural-language query
+    top_k          — results to return per source
+    filters        — vector-payload constraints, e.g. {"category": "x", "kind": "table"}
+    rerank         — rerank document candidates with config.yaml's `reranker`
+    store          — vector store connector; defaults to config.yaml's `vector_store`
+    collection     — registry-backed filter: keep only hits whose document is in this
+                     collection (consults the registry; None = no collection filter)
+    min_confidence — registry-backed filter: drop hits whose document's classify
+                     confidence is below this (None = no confidence filter)
+    kinds          — keep only chunks of these content kinds (text | table | figure |
+                     mixed) — e.g. ["table", "figure"] for chunks carrying a table or
+                     chart/figure; None = every kind
     sources  — names from sources.yaml to query (documents and/or SQL databases).
                When given, retrieve fans out over them and returns a normalized
                envelope (result.results); omit it for plain document search
@@ -76,7 +86,8 @@ async def aretrieve(
 
     hits = await _retrieve_document_hits(
         question, top_k=top_k, filters=filters, namespace=namespace,
-        rerank=rerank, store=store,
+        rerank=rerank, store=store, collection=collection, min_confidence=min_confidence,
+        kinds=kinds,
     )
     return RetrievalResult(question=question, hits=hits)
 
@@ -89,6 +100,9 @@ async def _retrieve_document_hits(
     namespace: str = "",
     rerank: bool = True,
     store: VectorStore | None = None,
+    collection: str | None = None,
+    min_confidence: float | None = None,
+    kinds: list[str] | None = None,
 ) -> list[Hit]:
     """The dense + rerank document retrieval — returns ranked Hits.
 
@@ -119,8 +133,40 @@ async def _retrieve_document_hits(
         logger.info("retrieve: no hits for %r", question[:60])
         return []
 
+    # content-kind filter: chunk.kind rides in the vector payload, so this needs
+    # no registry round-trip (text | table | figure | mixed)
+    if kinds:
+        wanted = set(kinds)
+        candidates = [c for c in candidates if c.kind in wanted]
+        if not candidates:
+            logger.info("retrieve: kind filter %s removed all hits for %r", sorted(wanted), question[:60])
+            return []
+
+    # registry-backed filters: keep only candidates whose DOCUMENT qualifies
+    # (touched only when a registry filter is requested — basic retrieve stays
+    # vector-store-driven).
+    if collection is not None or min_confidence is not None:
+        from ingestlib.storage import registry
+
+        attrs = await asyncio.to_thread(
+            registry.document_attrs, list({c.document_id for c in candidates})
+        )
+
+        def _qualifies(c: Any) -> bool:
+            a = attrs.get(c.document_id, {})
+            if collection is not None and a.get("collection") != collection:
+                return False
+            if min_confidence is not None and (a.get("classify_confidence") or 0.0) < min_confidence:
+                return False
+            return True
+
+        candidates = [c for c in candidates if _qualifies(c)]
+        if not candidates:
+            logger.info("retrieve: registry filters removed all hits for %r", question[:60])
+            return []
+
     if not use_rerank or len(candidates) == 1:
-        return [Hit(chunk=c, vector_score=c.score) for c in candidates[:top_k]]
+        return await _enrich_hits([Hit(chunk=c, vector_score=c.score) for c in candidates[:top_k]])
 
     documents = [c.markdown or c.text for c in candidates]
     try:
@@ -129,7 +175,7 @@ async def _retrieve_document_hits(
         # retrieval must not die because the reranker hiccuped — degrade to
         # vector order and say so loudly
         logger.warning("rerank failed (%s: %s) — returning vector order", type(exc).__name__, exc)
-        return [Hit(chunk=c, vector_score=c.score) for c in candidates[:top_k]]
+        return await _enrich_hits([Hit(chunk=c, vector_score=c.score) for c in candidates[:top_k]])
     hits = [
         Hit(chunk=candidates[idx], vector_score=candidates[idx].score, rerank_score=score)
         for idx, score in ranking
@@ -138,7 +184,31 @@ async def _retrieve_document_hits(
         "retrieve: %d candidate(s) → %d reranked hit(s) for %r",
         len(candidates), len(hits), question[:60],
     )
-    return hits
+    return await _enrich_hits(hits)
+
+
+async def _enrich_hits(hits: list[Hit]) -> list[Hit]:
+    """Attach each hit's document-level collection + classify confidence from the
+    registry. Best-effort: retrieval degrades to un-enriched hits if the registry
+    is unreachable — the chunk still carries category and full provenance."""
+    if not hits:
+        return hits
+    from ingestlib.storage import registry
+
+    try:
+        attrs = await asyncio.to_thread(
+            registry.document_attrs, list({h.chunk.document_id for h in hits})
+        )
+    except Exception as exc:
+        logger.warning("hit enrichment skipped (registry: %s) — hits un-enriched", exc)
+        return hits
+    return [
+        h.model_copy(update={
+            "collection": (attrs.get(h.chunk.document_id) or {}).get("collection") or "",
+            "confidence": (attrs.get(h.chunk.document_id) or {}).get("classify_confidence"),
+        })
+        for h in hits
+    ]
 
 
 def retrieve(
@@ -150,6 +220,9 @@ def retrieve(
     rerank: bool = True,
     store: VectorStore | None = None,
     sources: list[str] | None = None,
+    collection: str | None = None,
+    min_confidence: float | None = None,
+    kinds: list[str] | None = None,
 ) -> RetrievalResult:
     """Retrieve the most relevant results for a question. Sync wrapper — use
     aretrieve() inside an event loop."""
@@ -157,6 +230,7 @@ def retrieve(
         aretrieve(
             question, top_k=top_k, filters=filters, namespace=namespace,
             rerank=rerank, store=store, sources=sources,
+            collection=collection, min_confidence=min_confidence, kinds=kinds,
         ),
         "aretrieve",
     )

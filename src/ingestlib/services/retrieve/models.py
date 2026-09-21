@@ -11,6 +11,8 @@ class Hit(BaseModel):
     vector_score — the store's retrieval score: cosine similarity on dense
                    queries, an RRF rank score on fused hybrid queries
     rerank_score — reranker relevance (None when reranking was off)
+    collection   — the document's collection (from the registry, when reachable)
+    confidence   — the document's classify confidence (from the registry)
     """
 
     model_config = ConfigDict(frozen=True)
@@ -18,6 +20,8 @@ class Hit(BaseModel):
     chunk: RetrievedChunk
     vector_score: float
     rerank_score: float | None = None
+    collection: str = ""
+    confidence: float | None = None
 
     @property
     def citation(self) -> str:

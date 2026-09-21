@@ -32,7 +32,7 @@ retrieve("revenue growth",
 ```
 
 Filterable fields on every store: `document_id`, `category`, `section`,
-`kind` (`text` | `table` | `mixed`). An unknown field raises with the
+`kind` (`text` | `table` | `figure` | `mixed`). An unknown field raises with the
 valid list — filters never fail silently.
 
 Scoping to one document is just a filter:
@@ -40,6 +40,24 @@ Scoping to one document is just a filter:
 ```python
 retrieve("what were the risks?", filters={"document_id": doc_id})
 ```
+
+## More filters — collection, confidence, kind
+
+Three more filters go beyond the payload `filters` above:
+
+```python
+retrieve("revenue",
+         collection="sec_filing",      # only docs in this collection
+         min_confidence=0.7,           # drop low-confidence classifications
+         kinds=["table", "figure"])    # only table/figure chunks
+```
+
+- `collection` / `min_confidence` — document-level, resolved from the **registry**
+- `kinds` — chunk content kind (`text` | `table` | `figure` | `mixed`), from the payload
+
+Hits also arrive enriched with their document's `collection` and `confidence` from
+the registry (best-effort — retrieval still returns un-enriched hits if the
+registry is briefly unreachable).
 
 ## Namespaces
 

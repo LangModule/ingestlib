@@ -54,23 +54,25 @@ result.save_images("out/")      # writes every crop as a PNG file
 Each page keeps its rendered image (`page.image_bytes`, PNG) — the canvas
 for drawing citation highlights.
 
-## Persist and reload
+## Reuse a parse
 
-Parsing is the expensive stage — store the result once, reuse it forever:
+Parsing is the expensive stage, so reuse the `ParseResult` object — feed it
+straight to the other operations (below), no re-parse. Once a document is
+**ingested**, its structure lives in the registry and reads back with
+`get_document`:
 
 ```python
-from ingestlib.storage import artifacts
+from ingestlib.services import get_document
 
-doc_id = artifacts.save_parse(result)          # everything, keyed by checksum
-
-light = artifacts.load_parse(doc_id)                       # structure only
-full  = artifacts.load_parse(doc_id, include_images=True)  # + page renders & crops
+doc = get_document(doc_id)          # a stored (ingested) document, from the registry
+doc.pages, doc.regions, doc.chunks  # parsed structure, as plain dicts
+doc.markdown()                      # whole-document markdown (from the artifact store)
+doc.page_image(1)                   # a page render on demand (PNG bytes)
 ```
 
-The light form loads with `image_bytes=None` on pages and empty bytes on
-figure crops — cheap when you only need text and structure. `ingest()`
-does this save automatically; loading an unknown `doc_id` raises a clear
-error pointing you at `artifacts.list_documents()`.
+`get_document` reads structure from the registry; bytes (page renders,
+whole-doc markdown) are fetched lazily from the artifact store. An unknown or
+tombstoned `doc_id` returns `None`.
 
 ## Feed the other operations
 

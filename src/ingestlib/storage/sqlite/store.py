@@ -276,6 +276,17 @@ class SqliteStore(VectorStore):
             logger.info("deleted %d chunk(s) for doc %s", count, document_id[:12])
             return count
 
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live vector count for a document (the row store is the source of truth)."""
+        with connection() as conn:
+            if not schema_exists(conn):
+                return 0
+            (count,) = conn.execute(
+                "SELECT count(*) FROM chunks WHERE namespace = ? AND document_id = ?",
+                (namespace, document_id),
+            ).fetchone()
+            return int(count)
+
     @staticmethod
     def _load(
         conn: sqlite3.Connection, ranked: list[tuple[int, float]]

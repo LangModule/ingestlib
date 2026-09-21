@@ -5,8 +5,9 @@ enforces the guarantees the LLM can't be trusted with:
 
   - chunks are built from whole blocks → tables/figures never split (atomic
     by construction; captions were already folded into their visual)
-  - a heading never ends a chunk — it binds to the content below it (the
-    ceiling walk preserves this too, budget permitting)
+  - a heading never ends a non-final chunk — it binds to the content below it
+    (nothing binds a section's last block; the ceiling walk preserves this too,
+    budget permitting)
   - chunks over max_tokens get ONE more LLM call proposing budget-aware
     sub-boundaries (so the cut lands where the topic pauses, and each
     sub-chunk gets its own heading); the greedy block-boundary walk still
@@ -15,7 +16,8 @@ enforces the guarantees the LLM can't be trusted with:
   - micro-chunks merge into their neighbor (before the ceiling pass — a hard
     budget cut can still leave a small tail chunk)
 
-Small sections skip the LLM call entirely — they are one natural chunk.
+Sections at or below _SINGLE_CHUNK_TOKENS skip the boundary-discovery call — one
+chunk, unless a smaller max_chunk_tokens puts them over budget and forces a sub-split.
 """
 import asyncio
 
@@ -98,7 +100,7 @@ def _spans_to_groups(
 def _enforce_heading_binding(
     groups: list[tuple[list[int], str]], blocks: list[Block]
 ) -> list[tuple[list[int], str]]:
-    """A chunk must not end with a heading block — move it to the next chunk."""
+    """A non-final chunk must not end with a heading block — move it to the next chunk."""
     for i in range(len(groups) - 1):
         indexes, heading = groups[i]
         while indexes and blocks[indexes[-1]].kind == "heading":

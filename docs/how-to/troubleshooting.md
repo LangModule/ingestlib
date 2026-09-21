@@ -21,6 +21,14 @@ searching.
 | `unknown vector_store 'x' — choose one of […]` | Typo'd choice; the message lists every valid option. |
 | `the qdrant connector needs its SDK … pip install "ingestlib[qdrant]"` | Server-backed stores are [pip extras](../get-started/installation.md#1-install-the-package) — run exactly the command the error prints. |
 
+## Registry
+
+| You see | It means / do this |
+|---|---|
+| `registry unreachable at … — start it` | The Postgres registry isn't running. Bring it up: `docker compose -f infra/docker-compose.yml --profile registry up -d`, or point `INGESTLIB_REGISTRY_URL` at your own Postgres. |
+| `registry at … not initialized — run: ingestlib registry init` | The database is reachable but has no schema. Run `ingestlib registry init` to apply the migrations. |
+| `registry at … behind head … — run: ingestlib registry init` | The schema is an older revision than this ingestlib expects — `ingestlib registry init` upgrades it. |
+
 ## AWS & Bedrock
 
 | You see | It means / do this |
@@ -75,7 +83,7 @@ searching.
 | You see | It means / do this |
 |---|---|
 | `you are inside a running event loop (a notebook?) — call 'await aingest(...)'` | Use the async form ([details](async-and-logging.md#notebooks)). |
-| `no parse artifact stored for doc_id '…' — run parse() … list_documents()` | That checksum was never ingested into *this* artifact store — `artifacts.list_documents()` shows what is. |
+| `no split data in the registry for doc_id '…' — run split() (or ingest())` | That document isn't fully ingested in *this* corpus (e.g. `reindex` skips it) — `ingestlib list` shows what is. |
 | `this Python was built without SQLite extension support…` | macOS system Python can't load sqlite-vec — use a python.org, homebrew, or uv-managed interpreter. |
 | `retrieve()` returns no hits | Not an error — see [the checklist](retrieve.md#no-hits). |
 

@@ -42,6 +42,14 @@ artifact_store: s3
 paddle_vl:
   backend: mlx-vlm-server
   server_url: http://localhost:8111/
+
+# Automatic registry backups into the artifact store, triggered on ingest.
+# Uncomment and set a threshold (both ORed; 0 = off) to enable.
+# registry:
+#   backup:
+#     enabled: true
+#     after_docs: 100      # back up after 100 new documents since the last backup
+#     after_days: 7        # ...or after 7 days, whichever comes first
 """
 
 _DEFAULT_ENV = """\
@@ -73,6 +81,14 @@ reranker: none                # vector order as-is; jina/aws need accounts
 paddle_vl:
   backend: mlx-vlm-server
   server_url: http://localhost:8111/
+
+# Automatic registry backups into the artifact store, triggered on ingest.
+# Uncomment and set a threshold (both ORed; 0 = off) to enable.
+# registry:
+#   backup:
+#     enabled: true
+#     after_docs: 100      # back up after 100 new documents since the last backup
+#     after_days: 7        # ...or after 7 days, whichever comes first
 """
 
 _NEXT_STEPS_DEFAULT = """\
@@ -82,7 +98,11 @@ Next steps:
   2. Edit .env — fill the keys your choices need (Jina for the reranker)
   3. Start the OCR server (needed for parse/ingest only):
        python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
-  4. Verify the stack:
+  4. Start the registry and create its schema (the corpus path — ingest/
+     search/list — needs it; standalone parse/classify/split/extract don't):
+       docker compose -f infra/docker-compose.yml --profile registry up -d
+       ingestlib registry init
+  5. Verify the stack:
        ingestlib doctor
 """
 
@@ -93,7 +113,11 @@ Next steps:
        ollama pull qwen3-embedding:0.6b
   2. Start the OCR server (needed for parse/ingest only):
        python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
-  3. Verify the stack:
+  3. Start the registry and create its schema (the corpus path — ingest/
+     search/list — needs it; standalone parse/classify/split/extract don't):
+       docker compose -f infra/docker-compose.yml --profile registry up -d
+       ingestlib registry init
+  4. Verify the stack:
        ingestlib doctor
 
 No API keys and no .env needed — nothing leaves your machine.

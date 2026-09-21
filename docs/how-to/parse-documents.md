@@ -68,10 +68,10 @@ result = await aparse("report.pdf")
 - Parse is the expensive stage: OCR per page plus LLM enrichment for
   charts/figures plus a review pass — roughly $0.002/page in LLM spend on
   the default stack.
-- The same file never parses twice in the pipeline: `ingest()` persists
-  the result and dedups by content checksum. When calling `parse()`
-  directly, persist it yourself with `artifacts.save_parse(result)` to get
-  the same reuse.
+- The same file never parses twice in the pipeline: `ingest()` dedups by
+  content checksum. Calling `parse()` directly, reuse the returned
+  `ParseResult` object — feed it straight to `classify`/`split`/`extract`,
+  no re-parse.
 
 ---
 

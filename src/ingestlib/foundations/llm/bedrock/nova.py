@@ -15,8 +15,7 @@ from ingestlib.foundations.llm.bedrock.factory import (
     get_model,
     get_runtime_client,
 )
-# Shared types re-exported for compatibility — their home is llm/types.py.
-from ingestlib.foundations.llm.types import (  # noqa: F401
+from ingestlib.foundations.llm.types import (
     DEFAULT_MAX_TOKENS,
     DEFAULT_REASONING_EFFORT,
     DEFAULT_THINKING_MAX_TOKENS,

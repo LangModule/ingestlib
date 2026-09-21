@@ -14,12 +14,13 @@ docker compose -f infra/docker-compose.yml --profile qdrant up -d
 docker compose -f infra/docker-compose.yml --profile qdrant down
 ```
 
-Profiles: `qdrant` | `pgvector` | `mongodb` | `milvus` (three services —
-the official standalone shape) | `opensearch` | `weaviate`, plus `mysql`
-for the structured-retrieval SQL source, and `all` for contributors
-running `make test-all`. Ports and credentials match what `.env.example`
-documents; data persists in named volumes (`down -v` wipes it). Every
-vector-store profile is verified against its connector's full e2e suite.
+Profiles — INTERNAL: `registry` (ingestlib's own DB, described below). USER
+data: `qdrant` | `pgvector` | `mongodb` | `milvus` (three services — the
+official standalone shape) | `opensearch` | `weaviate`, plus `mysql` for the
+structured-retrieval SQL source; and `all` for contributors running
+`make test-all`. Ports and credentials match what `.env.example` documents;
+data persists in named volumes (`down -v` wipes it). Every vector-store profile
+is verified against its connector's full e2e suite.
 Three hard-won details live in the file so you never hit them: pg18 images
 changed their volume mount point, mongodb's atlas-local needs both data
 AND configdb mounted or restarts crash-loop, and weaviate needs a pinned
@@ -29,20 +30,31 @@ CLUSTER_HOSTNAME or a recreated container can't reopen its volume.
 structured-retrieval backends need no container here: sqlite and duckdb
 are serverless, and the postgres source reuses the `pgvector` container.
 
-The AWS files below cover the managed side. In the two JSON policies,
-replace the placeholders before attaching:
+`registry` is the one INTERNAL server — ingestlib's own metadata DB, not a
+user data store. Plain Postgres on host port 5433 (5432 is pgvector). ingestlib
+reads and writes it as the `ingestlib` owner role (the compose sets
+`POSTGRES_USER=ingestlib`). On first boot the container also runs
+`registry/init.sql`, which provisions a SELECT-only role `ingestlib_ro` for a
+person or tool to query the registry read-only — connect with
+`postgresql://ingestlib_ro:ro_pw@localhost:5433/ingestlib`.
+
+`ingestlib registry init` creates the tables (Alembic migrations), on the
+bundled Postgres or on your own — wherever `INGESTLIB_REGISTRY_URL` points. It
+does NOT create the read-only role; that lives only in `registry/init.sql`. On
+your own Postgres, run `registry/init.sql` there once yourself to provision
+`ingestlib_ro` (the script is idempotent).
+
+## iam-policy.json
+
+The least-privilege policy the pipeline runs under on the default AWS stack
+(Bedrock + S3) — the permission contract, not infra we provision. Everything
+else on AWS (your own OpenSearch domain, VPC, etc.) is yours to bring and
+secure. Attach it to the IAM user or role whose profile config.yaml names,
+after replacing the placeholders:
 
 - `ACCOUNT_ID` — your 12-digit AWS account id
 - `BUCKET_NAME` — your artifact bucket (the library default is
   `ingestlib-{account_id}`, matching config.yaml's `s3.bucket` default)
-
-opensearch.yaml needs no editing — it takes its values as CloudFormation
-parameters.
-
-## iam-policy.json
-
-The least-privilege policy the pipeline runs under. Attach it to the IAM
-user or role whose profile config.yaml names.
 
 Statements:
 
@@ -59,24 +71,3 @@ Statements:
 
 Not using Bedrock (openai/ollama providers) with s3 artifacts? Keep only
 the two S3 statements.
-
-## opensearch.yaml
-
-CloudFormation template for the cheapest k-NN-capable OpenSearch domain —
-the quickest way to run the OpenSearch connector against a real managed
-domain. One r8g.medium.search data node, 1-AZ, no standby, 10 GiB gp3,
-public endpoint with fine-grained access control mapped to the IAM
-principal you pass as `MasterUserArn`. Roughly $0.10 per hour while it
-exists. Deploy, endpoint, and delete commands are in the template header.
-
-There is no stop/start for OpenSearch domains, so delete the stack
-whenever work pauses and recreate it when you resume — re-ingesting your
-corpus rebuilds the index in the fresh domain.
-
-## iam-deploy-policy.json
-
-Extra permissions for the IAM user that deploys opensearch.yaml:
-CloudFormation control scoped to the ingestlib-opensearch stack, the two
-template operations that take no resource scoping, and OpenSearch domain
-administration scoped to domains named `ingestlib*`. The pipeline itself
-never needs these — attach them only to run the stack commands.

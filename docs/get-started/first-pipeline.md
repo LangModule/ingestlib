@@ -8,11 +8,13 @@ artifacts are the mental model for everything else in these docs.
 
 `ingest("report.pdf")` ran this pipeline:
 
-```text
-parse ──▶ classify ──▶ split ──▶ embed ──▶ upsert
-  │           │           │                   │
-  ▼           ▼           ▼                   ▼
-        the artifact store              the vector store
+```mermaid
+flowchart LR
+  P[parse] --> C[classify] --> S[split] --> E[embed] --> U[upsert]
+  P -. "source · page images" .-> ART[(artifact store)]
+  C -. "structure · labels · chunks" .-> REG[(registry)]
+  S -. .-> REG
+  U -. "one vector per chunk" .-> VEC[(vector store)]
 ```
 
 The `IngestResult` you got back summarizes it:
@@ -40,37 +42,36 @@ drives several behaviors:
 - **A one-byte change is a new document** — content addressing has no
   notion of "version 2 of the same file".
 
-## What's in the artifact store
+## What's in the two stores
 
-Every stage's output was persisted, keyed by `doc_id`. With
-`artifact_store: local` you can browse it in a file manager:
+Every stage's output was persisted under `doc_id`, split across the two stores
+it belongs in. Queryable structure — pages, regions, classification, sections,
+chunks, extractions — lands in the **registry** (Postgres). The **bytes** land
+in the artifact store; with `artifact_store: local` you can browse them in a
+file manager:
 
 ```text
 artifacts/documents/{doc_id}/
 ├── source/report.pdf                 the original bytes
-├── parse/result.json                 every region, bbox, and markdown block
 ├── parse/document.md                 whole-document markdown
 ├── parse/pages/page_0001.png …       full page renders
-├── parse/figures/…png                cropped charts & figures
-├── classify/result.json              category + confidence + reasoning
-├── split/result.json                 sections and chunks, with provenance
-├── split/ingest_manifest.json        what went to the vector store, when
-└── meta.json                         registry entry (filename, pages, counts)
+└── parse/figures/…png                cropped charts & figures
 ```
 
-Load any of it back without re-running anything:
+Read any of it back without re-running anything:
 
 ```python
-from ingestlib.storage import artifacts
+from ingestlib.services import get_document
 
-artifacts.list_documents()               # registry of everything stored
-parse   = artifacts.load_parse(doc_id)   # full ParseResult (structure only)
-chunks  = artifacts.load_split(doc_id).chunks
+doc = get_document(doc_id)          # structure from the registry
+doc.category, doc.chunk_count       # queryable metadata
+doc.chunks                          # the stored chunks, with provenance
+doc.markdown()                      # whole-document markdown (from the artifact store)
+doc.page_image(1)                   # a page render (bytes)
 ```
 
-Dedup means the pipeline never re-runs for an unchanged file — and your
-own tooling can `load_parse` the stored result instead of ever parsing
-again.
+Dedup means the pipeline never re-runs for an unchanged file — and your own
+tooling can `get_document` the stored result instead of ever parsing again.
 
 ## What's in the vector store
 
@@ -88,7 +89,7 @@ hit.chunk.region_ids   # {4: [2, 3]} — page → region ids on that page
 hit.citation           # 'doc 7b6b95d79149 · p.4 · methods'
 ```
 
-Those `region_ids` point back into `parse/result.json`'s bounding boxes —
+Those `region_ids` point back into the registry's stored bounding boxes —
 which is how an answer becomes a highlight on the original page. That
 chain is the subject of [Provenance & citations](../concepts/provenance.md).
 

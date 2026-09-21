@@ -146,6 +146,16 @@ class WeaviateConfig:
 
 
 @dataclass(frozen=True)
+class CollectionRule:
+    """One category's full rule — its classify description plus an optional
+    attached extract schema (JSON Schema) and auto_extract flag. Materialized
+    into the registry's collections table; a plain-string rule = description only."""
+    description: str = ""
+    extract_schema: dict | None = None
+    auto_extract: bool = False
+
+
+@dataclass(frozen=True)
 class ClassifyConfig:
     """Classification preset from rules.yaml (beside config.yaml) — the
     library's "saved config". Domain rules live in their own file so infra
@@ -154,6 +164,7 @@ class ClassifyConfig:
     rules: dict[str, str]       # {label: description} closed set; {} = open-ended
     target_pages: str           # "1,3,5-7" page selection (1-based); "" = all pages
     max_pages: int              # extra cap after selection; 0 = none (100-page hard cap stays)
+    collections: dict[str, "CollectionRule"] = field(default_factory=dict)  # {label: full rule}
 
 
 @dataclass(frozen=True)
@@ -175,6 +186,22 @@ class MCPConfig:
     host: str                   # streamable-http bind address (default 127.0.0.1 — local only)
     port: int                   # streamable-http port
     token: str                  # from MCP_TOKEN env; required to start the http transport
+
+
+@dataclass(frozen=True)
+class RegistryBackupConfig:
+    """Automatic registry backups, triggered on ingest when a threshold trips.
+    Both thresholds are ORed; 0 disables that one. enabled=False skips the check."""
+    enabled: bool = False
+    after_docs: int = 0         # back up after this many new docs since the last backup (0 = off)
+    after_days: int = 0         # back up after this many days since the last backup (0 = off)
+
+
+@dataclass(frozen=True)
+class RegistryConfig:
+    """ingestlib's internal registry DB (Postgres). NOT a user data store."""
+    url: str                    # from INGESTLIB_REGISTRY_URL env; default = the compose `registry`
+    backup: RegistryBackupConfig = field(default_factory=RegistryBackupConfig)
 
 
 @dataclass(frozen=True)
@@ -241,6 +268,7 @@ class IngestConfig:
     opensearch: OpensearchConfig
     weaviate: WeaviateConfig
     mcp: MCPConfig
+    registry: RegistryConfig
     sources: SourcesConfig
 
 
@@ -361,10 +389,25 @@ def _load_config() -> IngestConfig:
         with open(rules_path, "r") as f:
             rules_data = yaml.safe_load(f) or {}
     classify_data = rules_data.get("classify") or {}
+    plain_rules: dict[str, str] = {}
+    collection_rules: dict[str, CollectionRule] = {}
+    for label, value in (classify_data.get("rules") or {}).items():
+        label = str(label)
+        if isinstance(value, dict):  # extended form: description + extract_schema + auto_extract
+            rule = CollectionRule(
+                description=str(value.get("description") or ""),
+                extract_schema=value.get("extract_schema") or None,
+                auto_extract=bool(value.get("auto_extract", False)),
+            )
+        else:  # plain-string form: just the description
+            rule = CollectionRule(description=str(value or ""))
+        plain_rules[label] = rule.description
+        collection_rules[label] = rule
     classify_config = ClassifyConfig(
-        rules={str(k): str(v or "") for k, v in (classify_data.get("rules") or {}).items()},
+        rules=plain_rules,
         target_pages=str(classify_data.get("target_pages") or ""),
         max_pages=int(classify_data.get("max_pages") or 0),
+        collections=collection_rules,
     )
     split_data = rules_data.get("split") or {}
     split_config = SplitConfig(
@@ -459,6 +502,19 @@ def _load_config() -> IngestConfig:
         token=os.environ.get("MCP_TOKEN", ""),
     )
 
+    registry_data = data.get("registry") or {}
+    backup_data = registry_data.get("backup") or {}
+    registry_config = RegistryConfig(
+        url=os.environ.get(
+            "INGESTLIB_REGISTRY_URL", "postgresql://ingestlib:pw@localhost:5433/ingestlib"
+        ),
+        backup=RegistryBackupConfig(
+            enabled=bool(backup_data.get("enabled", False)),
+            after_docs=int(backup_data.get("after_docs") or 0),
+            after_days=int(backup_data.get("after_days") or 0),
+        ),
+    )
+
     # Structured-retrieval sources live in a sources.yaml sidecar beside
     # config.yaml (like rules.yaml). DSNs are ${VAR} refs into the .env above.
     sources_path = config_path.parent / _SOURCES_FILENAME
@@ -515,6 +571,7 @@ def _load_config() -> IngestConfig:
         opensearch=opensearch_config,
         weaviate=weaviate_config,
         mcp=mcp_config,
+        registry=registry_config,
         sources=sources_config,
     )
 
@@ -540,6 +597,11 @@ def get_aws_config() -> AWSConfig:
 def get_mcp_config() -> MCPConfig:
     """MCP server settings (read_only, host, port, token)."""
     return get_config().mcp
+
+
+def get_registry_config() -> RegistryConfig:
+    """ingestlib's internal registry DB (the INGESTLIB_REGISTRY_URL)."""
+    return get_config().registry
 
 
 def get_sources_config() -> SourcesConfig:
@@ -643,6 +705,7 @@ _CLIENT_RESETS = (
     ("ingestlib.storage.milvus.client", "reset_milvus_client"),
     ("ingestlib.storage.opensearch.client", "reset_opensearch_client"),
     ("ingestlib.storage.weaviate.client", "reset_weaviate_client"),
+    ("ingestlib_registry.db", "reset_engine"),  # the internal registry DB engine (INGESTLIB_REGISTRY_URL)
     ("ingestlib.sources.registry", "reset_registry"),
     ("ingestlib.sources.sql.engine", "reset_engines"),
 )

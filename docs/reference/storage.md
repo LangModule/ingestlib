@@ -1,9 +1,28 @@
 # Storage API
 
-## Artifacts
+The corpus lives in two stores that share the `doc_id` (content checksum) as
+their join key: the **registry** (Postgres) holds everything queryable —
+structure, classification, chunks, extractions, lifecycle — and the **artifact
+store** (`s3` | `local`) holds the bytes.
 
-Persist and reload every stage's output, keyed by document checksum, on
-the configured backend (`s3` | `local`).
+## Registry — read a stored document
+
+The registry is authoritative for metadata. Read a whole document back — its
+structure from the registry, its bytes lazily from the artifact store.
+
+```python
+from ingestlib.services import get_document
+```
+
+::: ingestlib.services.document.get_document
+
+::: ingestlib.services.document.StoredDocument
+
+## Artifacts — the bytes
+
+The artifact store holds a document's **bytes only**: the source file, page
+renders, figure crops, and the whole-document markdown. Everything queryable
+lives in the registry.
 
 ```python
 from ingestlib.storage import artifacts
@@ -11,17 +30,15 @@ from ingestlib.storage import artifacts
 
 ::: ingestlib.storage.artifacts.save_parse
 
-::: ingestlib.storage.artifacts.load_parse
-
-::: ingestlib.storage.artifacts.load_classify
-
 ::: ingestlib.storage.artifacts.load_split
 
-::: ingestlib.storage.artifacts.save_extract
+::: ingestlib.storage.artifacts.document_markdown
 
-::: ingestlib.storage.artifacts.load_extract
+::: ingestlib.storage.artifacts.page_image_key
 
-::: ingestlib.storage.artifacts.load_ingest_manifest
+::: ingestlib.storage.artifacts.read_blob
+
+::: ingestlib.storage.artifacts.missing_blobs
 
 ::: ingestlib.storage.artifacts.document_exists
 
@@ -31,9 +48,7 @@ from ingestlib.storage import artifacts
 
 ::: ingestlib.storage.artifacts.get_document_meta
 
-::: ingestlib.storage.artifacts.page_image_key
-
-::: ingestlib.storage.artifacts.read_blob
+::: ingestlib.storage.artifacts.find_by_path
 
 ::: ingestlib.storage.artifacts.delete_document
 

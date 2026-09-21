@@ -163,7 +163,9 @@ class OpensearchStore(VectorStore):
             body={"query": {"bool": {"filter": doc_terms}}},
             refresh=True,
         )
-        bulk(client, [
+        # bulk() raises BulkIndexError on any failure (raise_on_error default),
+        # so `succeeded` equals what the cluster acknowledged indexing.
+        succeeded, _ = bulk(client, [
             {
                 "_op_type": "index",
                 "_index": index,
@@ -175,9 +177,9 @@ class OpensearchStore(VectorStore):
         client.indices.refresh(index=index)  # searchable immediately, no interval wait
         logger.info(
             "upserted %d chunk(s) for doc %s in %.1fs",
-            len(chunks), document_id[:12], time.perf_counter() - t0,
+            succeeded, document_id[:12], time.perf_counter() - t0,
         )
-        return len(chunks)
+        return succeeded
 
     def query(
         self,
@@ -259,3 +261,15 @@ class OpensearchStore(VectorStore):
         count = int(response["deleted"])
         logger.info("deleted %d chunk(s) for doc %s", count, document_id[:12])
         return count
+
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live document count for a document (_count over the doc/namespace filter)."""
+        client = get_opensearch_client()
+        index = get_opensearch_config().index_name
+        if not client.indices.exists(index=index):
+            return 0
+        response = client.count(
+            index=index,
+            body={"query": {"bool": {"filter": _filter_terms(namespace, document_id=document_id)}}},
+        )
+        return int(response["count"])

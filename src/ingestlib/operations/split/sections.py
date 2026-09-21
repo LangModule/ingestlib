@@ -124,6 +124,7 @@ async def label_pages(
     except BaseException:
         for task in tasks:  # don't leave sibling label calls running
             task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         raise
     allowed = {s.name for s in vocabulary}
     if allow_other:

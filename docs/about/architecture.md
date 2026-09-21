@@ -5,15 +5,18 @@ above it.
 
 ```text
 src/ingestlib/
-├── services/       ingest · retrieve · lifecycle (remove · sync · backfill) — the product
+├── services/       ingest · retrieve · lifecycle (remove · sync · reindex · recollect) · verify — the product
 ├── operations/     parse · classify · split · extract — the tools (each standalone)
-├── storage/        artifacts (S3 | local) · VectorStore contract · 8 connectors
+├── storage/        registry (Postgres metadata) · artifacts (S3 | local, bytes) · VectorStore contract · 8 connectors
 ├── sources/        structured retrieval — SQL databases & the corpus as queryable Sources
 ├── foundations/    llm (Bedrock · OpenAI · Ollama · Jina rerank) · ocr (PaddleOCR-VL)
-├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · remove · backfill · search · describe-schema · eval-sql · mcp
+├── cli/            the `ingestlib` command — init · doctor · ingest · sync · list · show · collections · remove · reindex · recollect · verify · registry · search · describe-schema · eval-sql · mcp
 ├── mcp/            MCP server (ingestlib[mcp]) — the tools/services exposed to agents
 ├── utils/          logger · files · sync · aws
 └── config.py       config.yaml + .env + rules.yaml + sources.yaml → typed, frozen configs
+
+src/ingestlib_registry/   the registry's Postgres schema + Alembic migrations
+                          (a standalone package ingestlib depends on, one way)
 ```
 
 ## The load-bearing decisions
@@ -31,11 +34,12 @@ pipelines are written once. Shared guarantees: idempotent upserts, orphan
 pruning on re-ingest, no infrastructure creation on the read path,
 namespace isolation everywhere.
 
-**Artifacts are the source of truth; vectors are an index.** Every stage's
-output persists before the next stage runs, so nothing about a corpus is
-ever locked inside a vector database — parses, chunks, and page renders
-all reload from the artifact store. `backfill()` rebuilds a vector store
-straight from these artifacts, no re-parse.
+**The registry is the source of truth; vectors are a derived index.** The
+Postgres registry records every document's structure, chunks, extractions, and
+lifecycle; the artifact store keeps the bytes (source, page renders, crops,
+whole-doc markdown). So nothing about a corpus is ever locked inside a vector
+database — `reindex()` rebuilds a vector store straight from the registry, no
+re-parse.
 
 **Provenance is structural, not annotated.** Chunks record the parse
 region ids they cover, chunk boundaries can't cut through a region, and

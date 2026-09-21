@@ -46,7 +46,22 @@ that's where the library looks for them.
     [Jina API key](https://jina.ai/api-dashboard) in `.env` (free tier
     works) — or set `reranker: none` and skip it.
 
-## 2. Verify the stack
+## 2. Start the registry
+
+The corpus path (`ingest`/`retrieve`/lifecycle) records its metadata in an
+internal Postgres **registry**. From a source checkout, bring it up with the
+bundled compose file; otherwise point `INGESTLIB_REGISTRY_URL` (in `.env`) at any
+Postgres. Then create its schema:
+
+```bash
+docker compose -f infra/docker-compose.yml --profile registry up -d   # source checkout
+uv run ingestlib registry init                                        # apply migrations
+```
+
+Standalone operations (`parse`/`classify`/`split`/`extract` on a single file)
+need no registry — skip this step if that's all you're doing.
+
+## 3. Verify the stack
 
 ```bash
 uv run ingestlib doctor
@@ -65,6 +80,7 @@ ingestlib doctor
   - reranker none: retrieve() returns vector order
   ✓ artifacts in local folder ./artifacts
   ✓ vector_store sqlite: reachable
+  ✓ registry at localhost:5433 — revision 0007
 
 all checks passed — the configured stack is ready
 ```
@@ -72,7 +88,7 @@ all checks passed — the configured stack is ready
 Every failed line prints the fix: a wrong AWS profile lists your actual
 available profiles, a missing model prints the exact `ollama pull`.
 
-## 3. Ingest a document
+## 4. Ingest a document
 
 ```python
 from ingestlib.services import ingest
@@ -84,12 +100,13 @@ print(result.status, result.category, result.chunks)
 
 One call ran the whole pipeline: parse (OCR + chart reading), classify,
 split into sections and chunks, embed, and upsert into the vector store —
-with every stage's output persisted to the artifact store.
+recording each stage's queryable output in the registry and its bytes in the
+artifact store.
 
 Run it twice and the second call returns `status="skipped"`: documents are
 deduplicated by content checksum.
 
-## 4. Ask a question
+## 5. Ask a question
 
 ```python
 from ingestlib.services import retrieve

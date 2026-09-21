@@ -28,8 +28,8 @@ class FieldValue(BaseModel):
 class ExtractedItem(BaseModel):
     """One validated instance of the caller's schema, with per-field provenance.
 
-    value  — an instance of the schema passed to extract() (a plain dict
-             after an artifact round-trip until revalidated by load_extract)
+    value  — an instance of the schema passed to extract() (serializes to a
+             plain dict; callers revalidate it back into their schema)
     fields — one FieldValue per top-level schema field
     pages  — every page this item drew from
     """

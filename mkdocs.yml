@@ -1,43 +1,91 @@
 site_name: ingestlib
 site_description: >-
   Self-hosted document intelligence for RAG — parse, classify, split, and
-  extract from PDF/DOCX/PPTX and images into searchable, cited chunks,
-  with an MCP server to serve your corpus to agents.
+  extract from PDF/DOCX/PPTX and images into searchable, cited chunks, query
+  your SQL databases in natural language, and serve it all to agents over MCP.
 site_url: https://langmodule.github.io/ingestlib/
 repo_url: https://github.com/LangModule/ingestlib
 repo_name: LangModule/ingestlib
 edit_uri: edit/main/docs/
+copyright: >-
+  Copyright &copy; 2026 LangModule · MIT licensed · self-hosted, on your stack
 
 theme:
   name: material
+  custom_dir: overrides
+  logo: assets/logo.svg
+  favicon: assets/favicon.svg
+  icon:
+    repo: fontawesome/brands/github
+    edit: material/pencil
+    annotation: material/arrow-right-circle
+  font:
+    text: Inter
+    code: JetBrains Mono
   palette:
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: teal
-      accent: teal
+    - media: "(prefers-color-scheme)"
       toggle:
-        icon: material/brightness-4
+        icon: material/brightness-auto
         name: Switch to light mode
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: teal
-      accent: teal
+      primary: indigo
+      accent: indigo
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      accent: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to system preference
   features:
     - navigation.tabs
     - navigation.tabs.sticky
     - navigation.sections
     - navigation.top
+    - navigation.instant
+    - navigation.instant.prefetch
+    - navigation.instant.progress
+    - navigation.tracking
     - navigation.footer
-    - content.code.copy
-    - content.tabs.link
-    - search.suggest
+    - navigation.indexes
     - toc.follow
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.tooltips
+    - search.suggest
+    - search.highlight
+    - search.share
+    - header.autohide
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/LangModule/ingestlib
+      name: ingestlib on GitHub
+    - icon: fontawesome/brands/python
+      link: https://pypi.org/project/ingestlib/
+      name: ingestlib on PyPI
+  generator: false
 
 plugins:
   - search
+  - git-revision-date-localized:
+      type: date
+      enable_creation_date: false
+      fallback_to_build_date: true
+  # Social share cards. Image generation needs the imaging system libs
+  # (cairo/pango), so it is off unless SOCIAL_CARDS=true (set in CI) — local
+  # builds stay green without them.
+  - social:
+      cards: !ENV [SOCIAL_CARDS, false]
   - mkdocstrings:
       handlers:
         python:
@@ -49,22 +97,41 @@ plugins:
             filters: ["!^_"]
             separate_signature: true
             show_signature_annotations: true
+            signature_crossrefs: true
 
 markdown_extensions:
   - admonition
   - attr_list
   - md_in_html
   - tables
+  - footnotes
   - pymdownx.emoji:
       emoji_index: !!python/name:material.extensions.emoji.twemoji
       emoji_generator: !!python/name:material.extensions.emoji.to_svg
   - toc:
       permalink: true
-  - pymdownx.highlight
-  - pymdownx.superfences
+      title: On this page
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.details
   - pymdownx.tabbed:
       alternate_style: true
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.critic
+  - pymdownx.keys
+  - pymdownx.mark
+  - pymdownx.tilde
+  - pymdownx.smartsymbols
 
 nav:
   - Home: index.md

@@ -7,8 +7,7 @@ from typing import Any
 
 from ingestlib.config import get_bedrock_config
 from ingestlib.foundations.llm.bedrock.factory import bedrock_error_hint, get_runtime_client
-# Shared types re-exported for compatibility — their home is llm/types.py.
-from ingestlib.foundations.llm.types import (  # noqa: F401
+from ingestlib.foundations.llm.types import (
     DEFAULT_DIMENSION,
     SUPPORTED_DIMENSIONS,
     EmbeddingDimension,

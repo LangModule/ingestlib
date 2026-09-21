@@ -1,138 +1,152 @@
-.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-sources test-cli test-lifecycle test-mcp eval eval-sql
+.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-sources test-registry test-infra test-cli test-lifecycle test-mcp eval eval-sql
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
 	uv run pytest tests/
 
-# the ingestlib CLI (init/doctor + corpus commands) — no gate
+# the ingestlib CLI (init/doctor + corpus commands). init/doctor run ungated;
+# the corpus commands read the registry, so gate on the compose `registry` service.
 test-cli:
-	uv run pytest tests/cli/
+	RUN_REGISTRY_E2E=1 uv run pytest tests/ingestlib/cli/
 
-# lifecycle services (remove/sync/backfill) + replace-aware ingest — no gate
+# lifecycle services (remove/sync/reindex) + replace-aware ingest — the corpus
+# lifecycle reads the registry, so gate on the compose `registry` service.
 test-lifecycle:
-	uv run pytest tests/services/lifecycle/ tests/services/ingest/test_replace.py
+	RUN_REGISTRY_E2E=1 uv run pytest tests/ingestlib/services/lifecycle/ tests/ingestlib/services/ingest/test_replace.py
 
 # MCP server — tools, read_only gating, http auth, CLI entrypoint — no gate
 test-mcp:
-	uv run pytest tests/mcp/
+	uv run pytest tests/ingestlib/mcp/
 
 # structured retrieval (SQL sources) — deterministic tests run ungated (real
 # SQLite, LLM stubbed); the SQL/Snowflake generate paths are gated e2e:
 # RUN_SQL_E2E=1 (sqlite/duckdb + a live LLM), RUN_SNOWFLAKE_E2E=1 (SNOWFLAKE_DSN)
 test-sources:
-	uv run pytest tests/sources/
+	uv run pytest tests/ingestlib/sources/
+
+# internal registry DB — schema tests run ungated; init/status/cascade/read-only
+# role are gated e2e against the compose `registry` service: RUN_REGISTRY_E2E=1
+test-registry:
+	RUN_REGISTRY_E2E=1 uv run pytest tests/registry/
+
+# infra health — verifies the compose containers themselves (reachable, healthy,
+# right version + capability). Layer C (compose lint) runs ungated; the live
+# layers need the containers up (RUN_INFRA_E2E=1). Add RUN_INFRA_RESTART=1 for
+# the persistence-across-restart test (it restarts the registry container).
+test-infra:
+	RUN_INFRA_E2E=1 uv run pytest tests/infra/
 
 # entire suite including every opt-in group (needs VL server running + Bedrock access;
 # the SQL/Snowflake e2e need a reachable DB — SNOWFLAKE_DSN in .env, and a mysql
 # server for SQL_MYSQL_DSN if you set it)
 test-all:
-	RUN_AWS_RERANK=1 RUN_OLLAMA_E2E=1 RUN_OCR_E2E=1 RUN_PARSE_E2E=1 RUN_CLASSIFY_E2E=1 RUN_SPLIT_E2E=1 RUN_EXTRACT_E2E=1 RUN_S3_E2E=1 RUN_PINECONE_E2E=1 RUN_QDRANT_E2E=1 RUN_PGVECTOR_E2E=1 RUN_MONGODB_E2E=1 RUN_MILVUS_E2E=1 RUN_OPENSEARCH_E2E=1 RUN_WEAVIATE_E2E=1 RUN_SERVICES_E2E=1 RUN_SQL_E2E=1 RUN_SNOWFLAKE_E2E=1 uv run pytest tests/
+	RUN_AWS_RERANK=1 RUN_OLLAMA_E2E=1 RUN_OCR_E2E=1 RUN_PARSE_E2E=1 RUN_CLASSIFY_E2E=1 RUN_SPLIT_E2E=1 RUN_EXTRACT_E2E=1 RUN_S3_E2E=1 RUN_PINECONE_E2E=1 RUN_QDRANT_E2E=1 RUN_PGVECTOR_E2E=1 RUN_MONGODB_E2E=1 RUN_MILVUS_E2E=1 RUN_OPENSEARCH_E2E=1 RUN_WEAVIATE_E2E=1 RUN_SERVICES_E2E=1 RUN_SQL_E2E=1 RUN_SNOWFLAKE_E2E=1 RUN_REGISTRY_E2E=1 RUN_INFRA_E2E=1 uv run pytest tests/
 
 # --- llm layer (mirrors src/ingestlib/foundations/llm/) ---
 
 test-llm:
-	uv run pytest tests/foundations/llm/
+	uv run pytest tests/ingestlib/foundations/llm/
 
 test-nova:
-	uv run pytest tests/foundations/llm/bedrock/nova/
+	uv run pytest tests/ingestlib/foundations/llm/bedrock/nova/
 
 test-embedding:
-	uv run pytest tests/foundations/llm/bedrock/embedding/
+	uv run pytest tests/ingestlib/foundations/llm/bedrock/embedding/
 
 # both providers — AWS-hitting tests skip without RUN_AWS_RERANK=1
 test-rerank:
-	uv run pytest tests/foundations/llm/bedrock/rerank/ tests/foundations/llm/jina/
+	uv run pytest tests/ingestlib/foundations/llm/bedrock/rerank/ tests/ingestlib/foundations/llm/jina/
 
 # opt-in: hits amazon.rerank-v1:0 (2 RPM quota — expect ~1 min of throttle sleeps)
 test-rerank-aws:
-	RUN_AWS_RERANK=1 uv run pytest tests/foundations/llm/bedrock/rerank/
+	RUN_AWS_RERANK=1 uv run pytest tests/ingestlib/foundations/llm/bedrock/rerank/
 
 test-rerank-jina:
-	uv run pytest tests/foundations/llm/jina/
+	uv run pytest tests/ingestlib/foundations/llm/jina/
 
 # skips without OPENAI_API_KEY in .env
 test-openai:
-	uv run pytest tests/foundations/llm/openai/
+	uv run pytest tests/ingestlib/foundations/llm/openai/
 
 # opt-in: needs a local Ollama with qwen3.5:9b + qwen3-embedding:0.6b pulled
 test-ollama:
-	RUN_OLLAMA_E2E=1 uv run pytest tests/foundations/llm/ollama/
+	RUN_OLLAMA_E2E=1 uv run pytest tests/ingestlib/foundations/llm/ollama/
 
 # --- ocr layer (mirrors src/ingestlib/foundations/ocr/) — needs the VL inference server ---
 
 test-ocr:
-	RUN_OCR_E2E=1 uv run pytest tests/foundations/ocr/
+	RUN_OCR_E2E=1 uv run pytest tests/ingestlib/foundations/ocr/
 
 # --- parse operation (mirrors src/ingestlib/operations/parse/) — needs VL server + the LLM provider ---
 
 test-parse:
-	RUN_PARSE_E2E=1 uv run pytest tests/operations/parse/
+	RUN_PARSE_E2E=1 uv run pytest tests/ingestlib/operations/parse/
 
 # --- classify operation (mirrors src/ingestlib/operations/classify/) — needs the LLM provider ---
 
 test-classify:
-	RUN_CLASSIFY_E2E=1 uv run pytest tests/operations/classify/
+	RUN_CLASSIFY_E2E=1 uv run pytest tests/ingestlib/operations/classify/
 
 # --- split operation (mirrors src/ingestlib/operations/split/) — needs the LLM provider ---
 
 test-split:
-	RUN_SPLIT_E2E=1 uv run pytest tests/operations/split/
+	RUN_SPLIT_E2E=1 uv run pytest tests/ingestlib/operations/split/
 
 # --- extract operation (mirrors src/ingestlib/operations/extract/) — needs the LLM provider
 #     (the scanned-document case also needs the VL server) ---
 
 test-extract:
-	RUN_EXTRACT_E2E=1 uv run pytest tests/operations/extract/
+	RUN_EXTRACT_E2E=1 uv run pytest tests/ingestlib/operations/extract/
 
 # --- storage (S3 artifacts) — needs AWS credentials ---
 
 test-s3:
-	RUN_S3_E2E=1 uv run pytest tests/storage/
+	RUN_S3_E2E=1 uv run pytest tests/ingestlib/storage/
 
 # --- pinecone connector — needs PINECONE_API_KEY + the embedding provider ---
 
 test-pinecone:
-	RUN_PINECONE_E2E=1 uv run pytest tests/storage/pinecone/
+	RUN_PINECONE_E2E=1 uv run pytest tests/ingestlib/storage/pinecone/
 
 # --- qdrant connector — needs a Qdrant server at QDRANT_URL + the embedding provider ---
 
 test-qdrant:
-	RUN_QDRANT_E2E=1 uv run pytest tests/storage/qdrant/
+	RUN_QDRANT_E2E=1 uv run pytest tests/ingestlib/storage/qdrant/
 
 # --- sqlite connector — no gate: no server exists, in-process IS the real thing ---
 
 test-sqlite:
-	uv run pytest tests/storage/sqlite/
+	uv run pytest tests/ingestlib/storage/sqlite/
 
 # --- pgvector connector — needs a Postgres at PGVECTOR_URL (synthetic vectors, no embedding provider) ---
 
 test-pgvector:
-	RUN_PGVECTOR_E2E=1 uv run pytest tests/storage/pgvector/
+	RUN_PGVECTOR_E2E=1 uv run pytest tests/ingestlib/storage/pgvector/
 
 # --- mongodb connector — needs a MongoDB at MONGODB_URL with search (synthetic vectors, no embedding provider) ---
 
 test-mongodb:
-	RUN_MONGODB_E2E=1 uv run pytest tests/storage/mongodb/
+	RUN_MONGODB_E2E=1 uv run pytest tests/ingestlib/storage/mongodb/
 
 # --- milvus connector — needs a Milvus at MILVUS_URL (synthetic vectors, no embedding provider) ---
 
 test-milvus:
-	RUN_MILVUS_E2E=1 uv run pytest tests/storage/milvus/
+	RUN_MILVUS_E2E=1 uv run pytest tests/ingestlib/storage/milvus/
 
 # --- opensearch connector — needs an OpenSearch domain/server at OPENSEARCH_URL ---
 
 test-opensearch:
-	RUN_OPENSEARCH_E2E=1 uv run pytest tests/storage/opensearch/
+	RUN_OPENSEARCH_E2E=1 uv run pytest tests/ingestlib/storage/opensearch/
 
 # --- weaviate connector — needs a Weaviate server at WEAVIATE_URL ---
 
 test-weaviate:
-	RUN_WEAVIATE_E2E=1 uv run pytest tests/storage/weaviate/
+	RUN_WEAVIATE_E2E=1 uv run pytest tests/ingestlib/storage/weaviate/
 
-# --- services (ingest + retrieve) — needs the FULL stack ---
+# --- services (ingest + retrieve) — needs the FULL stack + the registry ---
 
 test-services:
-	RUN_SERVICES_E2E=1 uv run pytest tests/services/
+	RUN_SERVICES_E2E=1 RUN_REGISTRY_E2E=1 uv run pytest tests/ingestlib/services/
 
 # --- retrieval quality eval — measurement, not a test (needs the full stack;
 #     first run also needs the VL server to ingest the fixture corpus) ---

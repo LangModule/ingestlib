@@ -12,8 +12,8 @@ Usage:
     uv run python evals/run_eval.py                # ensure corpus ingested, run all configs
     uv run python evals/run_eval.py --skip-ingest  # corpus already ingested
     uv run python evals/run_eval.py --store qdrant   # any of the eight connectors
-    uv run python evals/run_eval.py --store sqlite --backfill   # fresh/wiped store:
-                                   # re-embed stored split artifacts (no VL server)
+    uv run python evals/run_eval.py --store sqlite --reindex    # fresh/wiped store:
+                                   # re-embed each doc's chunks from the registry (no VL server)
     uv run python evals/run_eval.py --top-k 5
 """
 import argparse
@@ -82,7 +82,7 @@ async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
 
     Only checks the artifact store — it cannot see whether the *vector store*
     has the corpus. Pointing at a store the corpus was never upserted into
-    (fresh sqlite file, wiped index) needs --backfill.
+    (fresh sqlite file, wiped index) needs --reindex.
     """
     for pdf in pdfs:
         doc_id = sha256_of_file(pdf)
@@ -93,8 +93,8 @@ async def ensure_ingested(pdfs: list[Path], store: VectorStore) -> None:
         print(f"    -> {result.status}: {result.chunks} chunks in {result.total_seconds:.0f}s")
 
 
-# backfill lives in the library since v1.1 (services.lifecycle.abackfill) —
-# the eval exercises the shipped function instead of carrying its own copy
+# reindex lives in the library (services.lifecycle.areindex) — the eval
+# exercises the shipped function instead of carrying its own copy
 
 
 def is_hit(hit, expected_doc_id: str, pages: list[int], keywords: list[str]) -> bool:
@@ -164,9 +164,9 @@ async def main() -> None:
     parser.add_argument("--top-k", type=int, default=5)
     parser.add_argument("--skip-ingest", action="store_true",
                         help="skip the corpus-completeness check (no VL server needed)")
-    parser.add_argument("--backfill", action="store_true",
-                        help="re-embed stored split artifacts into the selected store — for a "
-                             "store the corpus was never upserted into (no VL server needed)")
+    parser.add_argument("--reindex", action="store_true",
+                        help="re-embed each document's chunks from the registry into the selected "
+                             "store — for a store the corpus was never upserted into (no VL server needed)")
     args = parser.parse_args()
 
     reranker = get_config().reranker
@@ -187,12 +187,12 @@ async def main() -> None:
     if not args.skip_ingest:
         print(f"ensuring corpus is ingested into {args.store} ...")
         await ensure_ingested(sorted(set(pdfs)), store_cls())
-    if args.backfill:
-        from ingestlib.services import abackfill
+    if args.reindex:
+        from ingestlib.services import areindex
 
-        print(f"backfilling {args.store} from stored split artifacts ...")
-        filled = await abackfill(store=store_cls())
-        print(f"  backfilled {filled.documents} document(s), {filled.chunks} chunk(s)")
+        print(f"reindexing {args.store} from the registry ...")
+        filled = await areindex(store=store_cls())
+        print(f"  reindexed {filled.documents} document(s), {filled.chunks} chunk(s)")
 
     results = []
     t0 = time.perf_counter()

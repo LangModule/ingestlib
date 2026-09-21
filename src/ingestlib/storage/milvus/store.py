@@ -160,13 +160,15 @@ class MilvusStore(VectorStore):
             _to_row(document_id, chunk, embedding, category, namespace)
             for chunk, embedding in zip(chunks, embeddings)
         ]
+        inserted = 0
         for i in range(0, len(rows), _UPSERT_BATCH):
-            client.insert(collection, rows[i : i + _UPSERT_BATCH])
+            resp = client.insert(collection, rows[i : i + _UPSERT_BATCH])
+            inserted += int(resp.get("insert_count", len(rows[i : i + _UPSERT_BATCH])))
         logger.info(
             "upserted %d chunk(s) for doc %s in %.1fs",
-            len(rows), document_id[:12], time.perf_counter() - t0,
+            inserted, document_id[:12], time.perf_counter() - t0,
         )
-        return len(rows)
+        return inserted
 
     def query(
         self,
@@ -235,3 +237,16 @@ class MilvusStore(VectorStore):
         count = int(result["delete_count"])
         logger.info("deleted %d chunk(s) for doc %s", count, document_id[:12])
         return count
+
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live row count for a document (count(*) aggregate over the filter)."""
+        client = get_milvus_client()
+        collection = get_milvus_config().collection_name
+        if not client.has_collection(collection):
+            return 0
+        rows = client.query(
+            collection,
+            filter=_expr(namespace, document_id=document_id),
+            output_fields=["count(*)"],
+        )
+        return int(rows[0]["count(*)"]) if rows else 0

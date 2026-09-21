@@ -84,7 +84,7 @@ def build_pages(source: ParseResult | Path | str) -> list[SourcePage]:
             region_texts={},
             images=cp.images,
         )
-        for cp in _load_native_pages(source)
+        for cp in _load_native_pages(source, page_text_limit=PAGE_TEXT_LIMIT)
     ]
 
 

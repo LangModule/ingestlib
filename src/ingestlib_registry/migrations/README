@@ -1,0 +1,30 @@
+Alembic migrations for ingestlib's internal registry DB (Postgres).
+
+The database URL is resolved in env.py from INGESTLIB_REGISTRY_URL; this
+directory has no sqlalchemy.url of its own. One table per migration, 0001→0007.
+
+Applying the schema
+-------------------
+Runtime (what users run):
+
+    ingestlib registry init
+
+builds an Alembic Config programmatically against this directory and runs
+`upgrade head`. It does NOT read alembic.ini, so it works from a plain
+`pip install`. Idempotent: creates the tables on a fresh DB, upgrades a DB
+that is behind head, and no-ops when already current. `ingestlib registry
+status` reports the current revision.
+
+Dev (from the repo):
+
+    alembic upgrade head            # uses the root alembic.ini + env.py
+    alembic revision -m "..."       # author a new migration
+
+Containerized deploy (Docker Compose / Kubernetes): run `ingestlib registry
+init` once as an init-container or a one-shot Job before the app starts —
+migrations are never baked into an image.
+
+Note: the compose `registry` container's init.sql runs at first boot and only
+creates the read-only role `ingestlib_ro`. It does NOT create the tables — the
+tables come from these migrations, applied by `registry init` (or `alembic
+upgrade head`).

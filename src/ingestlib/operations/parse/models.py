@@ -15,6 +15,12 @@ from ingestlib.foundations.ocr.models import Region
 SourceFormat = Literal["pdf", "docx", "pptx", "png", "jpeg", "webp"]
 
 
+def figure_filename(page_num: int, region_id: int, region_type: str) -> str:
+    """Canonical export name for a figure/chart crop — the single source of truth
+    for the names referenced in PageResult.markdown and written by save_images."""
+    return f"page{page_num}_region{region_id}_{region_type}.png"
+
+
 class FigureImage(BaseModel):
     """One visual region extracted from a page as an image.
 
@@ -29,14 +35,14 @@ class FigureImage(BaseModel):
     model_config = ConfigDict(frozen=True)
 
     region_id: int
-    region_type: str
+    region_type: Literal["figure", "chart"]
     image_bytes: bytes
     caption: str = ""
     description: str = ""
 
     def filename(self, page_num: int) -> str:
         """Canonical export name — matches the references in PageResult.markdown."""
-        return f"page{page_num}_region{self.region_id}_{self.region_type}.png"
+        return figure_filename(page_num, self.region_id, self.region_type)
 
 
 class PageResult(BaseModel):

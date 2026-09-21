@@ -9,9 +9,17 @@ import asyncio
 from pathlib import Path
 from typing import Any
 
-from ingestlib.mcp.schema import model_from_json_schema
+from ingestlib.schema import model_from_json_schema
 from ingestlib.operations import aclassify, aextract
-from ingestlib.services import abackfill, aingest, aremove, aretrieve, async_sync
+from ingestlib.services import (
+    aingest,
+    arecollect,
+    areindex,
+    aremove,
+    aretrieve,
+    async_sync,
+    averify,
+)
 from ingestlib.storage import artifacts
 
 _SNIPPET = 400            # per-hit / per-value text cap
@@ -148,6 +156,57 @@ async def list_documents(namespace: str | None = None) -> dict[str, Any]:
     ]}
 
 
+async def get_document(doc_id: str) -> dict[str, Any]:
+    """Fetch one stored document by doc_id — metadata, section names, persisted
+    extractions, and the whole-document markdown. Resolves a search hit's
+    citation to real content."""
+    from ingestlib.services import aget_document
+
+    doc = await aget_document(doc_id)
+    if doc is None:
+        return {"error": f"no document {doc_id!r} in the corpus"}
+    markdown = await asyncio.to_thread(doc.markdown)
+    return {
+        "doc_id": doc.doc_id,
+        "filename": doc.filename,
+        "source_path": doc.source_path,
+        "namespace": doc.namespace,
+        "category": doc.category,
+        "collection": doc.collection,
+        "confidence": doc.classify_confidence,
+        "status": doc.status,
+        "pages": doc.page_count,
+        "sections": [s["name"] for s in doc.sections],
+        "chunks": doc.chunk_count,
+        "extractions": [
+            {"schema": e.get("schema_name"), "value": e.get("value")}
+            for e in doc.extractions
+        ],
+        "markdown": _clip(markdown or "", 4000),
+    }
+
+
+async def collections(namespace: str | None = None) -> dict[str, Any]:
+    """List the corpus collections and their document counts. Omit namespace for
+    all partitions. A collection with an attached extract schema is flagged, and
+    auto_extract=true means that schema is pulled from every doc on ingest."""
+    from ingestlib.storage import registry
+
+    rows = await asyncio.to_thread(registry.list_collections, namespace)
+    declared = {c["name"]: c for c in await asyncio.to_thread(registry.collection_rules)}
+    out = []
+    for row in rows:
+        name = row["collection"] or ""
+        rule = declared.get(name) or {}
+        out.append({
+            "collection": name or "(uncategorized)",
+            "count": row["count"],
+            "has_schema": bool(rule.get("extract_schema")),
+            "auto_extract": bool(rule.get("auto_extract")),
+        })
+    return {"count": len(out), "collections": out}
+
+
 async def remove(target: str, namespace: str = "") -> dict[str, Any]:
     """Erase one document from both stores (vectors and artifacts).
 
@@ -175,13 +234,59 @@ async def sync(
                         for a in r.actions]}
 
 
-async def backfill(namespace: str = "") -> dict[str, Any]:
-    """Rebuild the vector store by re-embedding stored artifacts — no re-parse.
+async def reindex(namespace: str = "") -> dict[str, Any]:
+    """Rebuild the vector store by re-embedding the registry's chunks — no re-parse.
 
     For a provider switch, a new connector, or a wiped index."""
-    r = await abackfill(namespace=namespace)
+    r = await areindex(namespace=namespace)
     return {"documents": r.documents, "chunks": r.chunks,
             "skipped": len(r.skipped)}
+
+
+async def recollect(namespace: str | None = None) -> dict[str, Any]:
+    """Re-classify the stored corpus and re-sort it into collections — no re-parse.
+
+    Run after the classification rules change (rules.yaml): each document is
+    re-classified from the registry (text-only, no OCR) and its category/collection
+    updated. Omit namespace to re-sort every partition. Reports which documents moved."""
+    r = await arecollect(namespace=namespace)
+    return {
+        "recollected": r.recollected,
+        "changed": [
+            {"doc_id": c.doc_id[:12], "filename": c.filename,
+             "from": c.from_category, "to": c.to_category}
+            for c in r.changed
+        ],
+    }
+
+
+async def describe_schema(source: str) -> dict[str, Any]:
+    """Auto-document a SQL source's tables (LLM-generated one-line hints from
+    sampled rows) — the `tables:` hints that drive text2SQL accuracy. Returns a
+    {table: description} map to review before pasting into sources.yaml; does not
+    edit sources.yaml itself. `source` is a SQL source name from sources.yaml."""
+    from ingestlib.cli.describe import _describe_all
+
+    tables = await _describe_all(source)
+    return {"source": source, "table_count": len(tables), "tables": tables}
+
+
+async def verify(namespace: str | None = None) -> dict[str, Any]:
+    """Audit durability across all three stores: each document's expected chunk
+    count (registry) vs what the vector store holds, plus whether its essential
+    blobs (source bytes, document.md) exist. Read-only — reports drifted documents;
+    repair (re-embedding) is a write action, done from the CLI (ingestlib verify --repair)."""
+    r = await averify(namespace=namespace)
+    return {
+        "checked": r.checked,
+        "durable": r.ok,
+        "drifted": [
+            {"doc_id": i.doc_id[:12], "filename": i.filename,
+             "expected": i.expected, "actual": i.actual,
+             "missing_blobs": i.missing_blobs}
+            for i in r.drifted
+        ],
+    }
 
 
 async def doctor() -> dict[str, Any]:
@@ -208,8 +313,85 @@ async def doctor() -> dict[str, Any]:
     return {"healthy": ok, "checks": results}
 
 
-# every tool, and the corpus-modifying subset the server hides under read_only
-# (search/extract/classify/list_documents/doctor only READ — always available)
-ALL_TOOLS = (search, ingest, extract, classify, list_documents, remove, sync,
-             backfill, doctor)
-WRITE_TOOLS = frozenset({"ingest", "remove", "sync", "backfill"})
+async def registry_status() -> dict[str, Any]:
+    """Report the internal registry database's reachability, revision, and whether
+    its schema is up to date. Read-only — the registry is ingestlib's own metadata
+    store (the corpus spine), not user data."""
+    from ingestlib.cli.registry import (
+        _alembic_config, _current_revision, _registry_tables, _target,
+    )
+    from ingestlib_registry.db import ping
+
+    def _run() -> dict[str, Any]:
+        target = _target()
+        if not ping():
+            return {"reachable": False, "target": target}
+        from alembic.script import ScriptDirectory
+
+        current = _current_revision()
+        head = ScriptDirectory.from_config(_alembic_config()).get_current_head()
+        return {
+            "reachable": True, "target": target, "initialized": current is not None,
+            "revision": current, "head": head, "up_to_date": current == head,
+            "tables": _registry_tables() if current else [],
+        }
+
+    return await asyncio.to_thread(_run)
+
+
+async def registry_init() -> dict[str, Any]:
+    """Create or upgrade the internal registry schema to the latest revision
+    (Alembic migrations). Idempotent — a no-op when already current. Run once
+    before the corpus path (ingest/search) on a fresh or upgraded registry."""
+    from alembic import command
+
+    from ingestlib.cli.registry import (
+        _alembic_config, _current_revision, _registry_tables, _target,
+    )
+    from ingestlib_registry.db import ping
+
+    def _run() -> dict[str, Any]:
+        if not ping():
+            raise RuntimeError(
+                f"registry unreachable at {_target()} — start it and check INGESTLIB_REGISTRY_URL"
+            )
+        command.upgrade(_alembic_config(), "head")
+        return {"target": _target(), "revision": _current_revision(), "tables": _registry_tables()}
+
+    return await asyncio.to_thread(_run)
+
+
+async def registry_backup() -> dict[str, Any]:
+    """Back up the registry (pg_dump) into the artifact store and return the stored
+    key + byte size. The manual counterpart to config.yaml's automatic backups."""
+    from ingestlib.cli.registry import backup_registry
+
+    key, size = await asyncio.to_thread(backup_registry)
+    return {"key": key, "bytes": size}
+
+
+async def registry_restore() -> dict[str, Any]:
+    """DESTRUCTIVE: restore the registry from the latest backup — pg_restore --clean
+    DROPS and rewrites every table, discarding all current registry state. Use only
+    to recover a corrupted/wiped registry; the source bytes remain the ultimate
+    truth (reindex/re-ingest can rebuild derived state)."""
+    from ingestlib.cli.registry import restore_registry
+
+    key = await asyncio.to_thread(restore_registry)
+    if key is None:
+        return {"restored": False, "error": "no registry backups found — run registry_backup first"}
+    return {"restored": True, "from": key}
+
+
+# every tool, and the corpus-modifying subset the server hides under read_only.
+# The read tools (search/extract/classify/list_documents/get_document/collections/
+# describe_schema/verify/registry_status/doctor) are always available; registry_init/
+# backup/restore modify the registry (restore is destructive) and hide under read_only.
+ALL_TOOLS = (search, ingest, extract, classify, list_documents, get_document,
+             collections, describe_schema, remove, sync, reindex, recollect,
+             verify, doctor, registry_status, registry_init, registry_backup,
+             registry_restore)
+WRITE_TOOLS = frozenset({
+    "ingest", "remove", "sync", "reindex", "recollect",
+    "registry_init", "registry_backup", "registry_restore",
+})

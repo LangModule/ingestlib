@@ -166,13 +166,23 @@ class WeaviateStore(VectorStore):
             )
             for chunk, embedding in zip(chunks, embeddings)
         ]
+        inserted = 0
         for i in range(0, len(objects), _UPSERT_BATCH):
-            collection.data.insert_many(objects[i : i + _UPSERT_BATCH])
+            batch = objects[i : i + _UPSERT_BATCH]
+            # insert_many does NOT raise on per-object failure — it reports them
+            # in .errors. Count only what the batch acknowledged (the ledger).
+            resp = collection.data.insert_many(batch)
+            inserted += len(batch) - len(getattr(resp, "errors", {}) or {})
+        if inserted < len(objects):
+            logger.warning(
+                "weaviate acknowledged %d of %d object(s) for doc %s",
+                inserted, len(objects), document_id[:12],
+            )
         logger.info(
             "upserted %d object(s) for doc %s in %.1fs",
-            len(objects), document_id[:12], time.perf_counter() - t0,
+            inserted, document_id[:12], time.perf_counter() - t0,
         )
-        return len(objects)
+        return inserted
 
     def query(
         self,
@@ -250,3 +260,14 @@ class WeaviateStore(VectorStore):
         count = int(result.successful)
         logger.info("deleted %d object(s) for doc %s", count, document_id[:12])
         return count
+
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live object count for a document (aggregate total_count over the filter)."""
+        client = get_weaviate_client()
+        name = collection_name()
+        if not client.collections.exists(name):
+            return 0
+        result = client.collections.get(name).aggregate.over_all(
+            total_count=True, filters=_filter(namespace, document_id=document_id)
+        )
+        return int(result.total_count or 0)

@@ -1,4 +1,4 @@
-"""Artifact store — persists every operation's output, keyed by document checksum.
+"""Artifact store — a document's BYTES, keyed by content checksum.
 
 Lives on the backend `artifact_store` selects in config.yaml: an S3 bucket
 (durable, shareable) or a plain local folder (zero cloud). Same layout on
@@ -6,32 +6,22 @@ both, everything under one prefix per document:
 
     documents/{doc_id}/
     ├── source/{filename}                     original file, exact bytes
-    ├── parse/result.json                     ParseResult (image bytes stripped)
     ├── parse/document.md                     whole-document markdown
     ├── parse/pages/page_0001.png ...         page renders
-    ├── parse/figures/{fig.filename} ...      figure/chart crops
-    ├── classify/result.json                  ClassifyResult
-    ├── split/result.json                     SplitResult (chunks with provenance)
-    ├── split/ingest_manifest.json            vector-store sync record
-    └── extract/{SchemaName}.json             ExtractResult per extraction schema
+    └── parse/figures/{fig.filename} ...      figure/chart crops
 
-doc_id is the parse checksum, so re-saving the same file overwrites in place and
-"already ingested?" is a single existence check. The citation chain needs no
-database: a vector hit's {doc_id, pages, region_ids} resolves to page images and
-bboxes straight from this layout.
+The blob store holds bytes only; every queryable field — parse structure,
+classify, split, extractions, lifecycle — lives in the Postgres registry (see
+storage.registry). doc_id is the parse checksum, so re-saving the same file
+overwrites in place. The citation chain needs no extra lookup here: a vector
+hit's {doc_id, pages} resolves to page images straight from this layout.
 """
-import json
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
-
-if TYPE_CHECKING:  # import-time layering stays downward; annotation only
-    from ingestlib.operations.extract.models import ExtractResult
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
-from ingestlib.foundations.ocr.models import BoundingBox, Region
-from ingestlib.operations.classify.models import ClassifyResult
-from ingestlib.operations.parse.models import FigureImage, PageResult, ParseResult
+from ingestlib.operations.parse.models import ParseResult
 from ingestlib.operations.split.models import SplitResult
 from ingestlib.storage.blobs import get_blob_store
 from ingestlib.utils.logger import get_logger
@@ -43,17 +33,13 @@ _PREFIX = "documents"
 
 
 class DocumentMeta(BaseModel):
-    """Lightweight per-document registry entry (stored as meta.json).
+    """Lightweight per-document view — the registry documents-row projected onto
+    the shape lifecycle code expects (logical identity + counts).
 
-    Written at save_parse; category / section counts are patched in by
-    save_classify and save_split. Self-heals from parse/result.json when a
-    document predates this file.
-
-    source_path + namespace are the document's LOGICAL identity — the file
-    this content came from and the corpus partition it lives in. They drive
-    lifecycle: replace-on-reingest, move detection, sync(), prune. Both
-    self-heal for pre-lifecycle documents (source_path from
-    parse/result.json, namespace from the ingest manifest).
+    Assembled from the registry by _meta_from_row; not persisted itself.
+    source_path + namespace are the document's LOGICAL identity — the file the
+    content came from and the corpus partition it lives in — and drive lifecycle:
+    replace-on-reingest, move detection, sync(), prune.
     """
 
     model_config = ConfigDict(frozen=True)
@@ -78,30 +64,6 @@ def _put(key: str, body: bytes, content_type: str) -> None:
     get_blob_store().put(key, body, content_type)
 
 
-def _put_json(key: str, payload: dict[str, Any]) -> None:
-    get_blob_store().put_json(key, payload)
-
-
-def _get(key: str) -> bytes:
-    return get_blob_store().get(key)
-
-
-def _get_required(key: str, doc_id: str, artifact: str, produced_by: str) -> bytes:
-    """Read an artifact that must exist — a missing one names the fix.
-
-    Raises FileNotFoundError (regardless of backend) so callers can catch
-    one exception type instead of botocore's NoSuchKey on s3.
-    """
-    body = _get_or_none(key)
-    if body is None:
-        raise FileNotFoundError(
-            f"no {artifact} artifact stored for doc_id {doc_id[:12]!r}… — run "
-            f"{produced_by} on the document first; list_documents() shows "
-            f"what's stored"
-        )
-    return body
-
-
 def _get_or_none(key: str) -> bytes | None:
     return get_blob_store().get_or_none(key)
 
@@ -110,82 +72,23 @@ def _page_key(doc_id: str, page_num: int) -> str:
     return _key(doc_id, "parse", "pages", f"page_{page_num:04d}.png")
 
 
-def _meta_key(doc_id: str) -> str:
-    return _key(doc_id, "meta.json")
+def missing_blobs(doc_id: str, filename: str) -> list[str]:
+    """Essential blobs that should exist for a stored document but don't — the
+    source bytes (the ultimate truth: the full pipeline is re-runnable from them)
+    and the assembled document.md. The audit half of verify for the blob store."""
+    store = get_blob_store()
+    essential = {"document.md": _key(doc_id, "parse", "document.md")}
+    if filename:  # can only locate the source blob when its name is known
+        essential["source"] = _key(doc_id, "source", filename)
+    return [name for name, key in essential.items() if not store.exists(key)]
 
 
-def _patch_meta(doc_id: str, **fields: Any) -> None:
-    """Merge fields into the document's meta.json (created if absent).
-
-    Read-modify-write without concurrency control — pipeline stages of ONE
-    document save sequentially, so the single-writer assumption holds.
-    """
-    body = _get_or_none(_meta_key(doc_id))
-    current = json.loads(body) if body is not None else {"doc_id": doc_id}
-    current.update(fields)
-    _put_json(_meta_key(doc_id), current)
-
-
-def _load_meta(doc_id: str) -> DocumentMeta:
-    """Load meta.json; rebuild missing pieces from the stage artifacts.
-
-    Two self-heals keep old corpora current with zero migration: a
-    missing/corrupt meta.json is rebuilt from parse/result.json, and a
-    pre-lifecycle meta (no source_path) gains source_path + namespace from
-    the parse artifact and the ingest manifest — every stored document
-    carries its logical identity, however old.
-    """
-    meta: DocumentMeta | None = None
-    body = _get_or_none(_meta_key(doc_id))
-    if body is not None:
-        try:
-            meta = DocumentMeta.model_validate(json.loads(body))
-        except Exception:
-            logger.warning(
-                "meta.json for %s is corrupt — rebuilding from the parse artifact",
-                doc_id[:12],
-            )
-    if meta is not None and meta.source_path:
-        return meta
-
-    parse_body = _get_or_none(_key(doc_id, "parse", "result.json"))
-    if parse_body is None:  # nothing to heal from — a bare/foreign prefix
-        return meta or DocumentMeta(doc_id=doc_id)
-    payload = json.loads(parse_body)
-    # best-effort: a relative path recorded by parse resolves against CWD,
-    # the same rule find_by_path applies to its query
-    source_path = str(Path(payload["source_path"]).resolve())
-    manifest_body = _get_or_none(_key(doc_id, "split", "ingest_manifest.json"))
-    namespace = json.loads(manifest_body).get("namespace", "") if manifest_body else ""
-
-    if meta is not None:
-        # pre-lifecycle meta — patch identity in, keep the stage fields
-        _patch_meta(doc_id, source_path=source_path, namespace=namespace)
-        return meta.model_copy(
-            update={"source_path": source_path, "namespace": namespace}
-        )
-    meta = DocumentMeta(
-        doc_id=doc_id,
-        filename=Path(payload["source_path"]).name,
-        source_format=payload["source_format"],
-        page_count=len(payload["pages"]),
-        created_at=payload["created_at"],
-        source_path=source_path,
-        namespace=namespace,
-    )
-    _put_json(_meta_key(doc_id), meta.model_dump())
-    return meta
-
-
-# ---------- parse ----------
+# ---------- parse (bytes) ----------
 
 
 def save_parse(result: ParseResult) -> str:
-    """Persist a ParseResult and all its binary artifacts. Returns the doc_id.
-
-    The JSON carries every structural field (regions, bboxes, markdown, ...);
-    page renders and figure crops are written as separate PNG objects.
-    """
+    """Persist a ParseResult's BYTES — source file, page renders, figure crops,
+    and the whole-document markdown. Structure + metadata go to the registry."""
     if not result.source_checksum:
         raise ValueError("ParseResult has no source_checksum — cannot derive doc_id")
     doc_id = result.source_checksum
@@ -212,244 +115,108 @@ def save_parse(result: ParseResult) -> str:
             )
             n_figures += 1
 
-    # structure (bytes stripped — they live as the objects above)
-    payload = result.model_dump(
-        mode="json",
-        exclude={
-            "pages": {
-                "__all__": {
-                    "image_bytes": True,
-                    "figures": {"__all__": {"image_bytes"}},
-                }
-            }
-        },
-    )
-    _put_json(_key(doc_id, "parse", "result.json"), payload)
     _put(_key(doc_id, "parse", "document.md"), result.markdown.encode(), "text/markdown")
-    _patch_meta(
-        doc_id,
-        filename=source.name,
-        source_format=result.source_format,
-        page_count=result.page_count,
-        created_at=result.created_at.isoformat(),
-        source_path=str(source.resolve()),
-    )
-
     logger.info(
-        "saved parse artifacts: doc_id=%s pages=%d figures=%d",
+        "saved parse bytes: doc_id=%s pages=%d figures=%d",
         doc_id[:12], result.page_count, n_figures,
     )
     return doc_id
 
 
-def _region_from_dict(data: dict[str, Any]) -> Region:
-    bbox = data["bbox"]
-    return Region(
-        region_type=data["region_type"],
-        bbox=BoundingBox(
-            x=bbox["x"], y=bbox["y"], width=bbox["width"], height=bbox["height"]
-        ),
-        region_id=data["region_id"],
-        text=data["text"],
-        content=data["content"],
-        confidence=data["confidence"],
-    )
-
-
-def load_parse(doc_id: str, *, include_images: bool = False) -> ParseResult:
-    """Load a persisted ParseResult.
-
-    include_images=False (default) returns pages with image_bytes=None and
-    figure crops as empty bytes — cheap, structure-only. include_images=True
-    fetches every PNG back into the result.
-    """
-    payload = json.loads(
-        _get_required(_key(doc_id, "parse", "result.json"), doc_id, "parse", "parse()")
-    )
-
-    pages: list[PageResult] = []
-    for p in payload["pages"]:
-        regions = [_region_from_dict(r) for r in p["regions"]]
-        figures = []
-        for f in p["figures"]:
-            fig = FigureImage(
-                region_id=f["region_id"],
-                region_type=f["region_type"],
-                image_bytes=b"",
-                caption=f["caption"],
-                description=f["description"],
-            )
-            if include_images:  # the model's canonical filename is the single source of truth
-                crop = _get_or_none(
-                    _key(doc_id, "parse", "figures", fig.filename(p["page_num"]))
-                )
-                if crop is not None:
-                    fig = fig.model_copy(update={"image_bytes": crop})
-            figures.append(fig)
-        # pages saved without a render (image_bytes=None) have no PNG object
-        image_bytes = (
-            _get_or_none(_page_key(doc_id, p["page_num"])) if include_images else None
-        )
-        pages.append(PageResult(
-            page_num=p["page_num"],
-            text=p["text"],
-            markdown=p["markdown"],
-            regions=regions,
-            figures=figures,
-            native_text=p["native_text"],
-            image_bytes=image_bytes,
-            image_format=p["image_format"],
-            image_dpi=p["image_dpi"],
-            page_width=p["page_width"],
-            page_height=p["page_height"],
-        ))
-
-    return ParseResult(
-        pages=pages,
-        source_path=payload["source_path"],
-        source_format=payload["source_format"],
-        was_converted=payload["was_converted"],
-        source_metadata=payload["source_metadata"],
-        source_checksum=payload["source_checksum"],
-        created_at=payload["created_at"],
-        parse_duration_seconds=payload["parse_duration_seconds"],
-    )
-
-
-# ---------- classify / split ----------
-
-
-def save_classify(doc_id: str, result: ClassifyResult) -> None:
-    """Persist a ClassifyResult under the document's prefix."""
-    _put_json(_key(doc_id, "classify", "result.json"), result.model_dump(mode="json"))
-    _patch_meta(doc_id, category=result.category)
-    logger.info("saved classify artifact: doc_id=%s category=%s", doc_id[:12], result.category)
-
-
-def load_classify(doc_id: str) -> ClassifyResult:
-    """Load a persisted ClassifyResult."""
-    body = _get_required(
-        _key(doc_id, "classify", "result.json"), doc_id, "classify", "classify() (or ingest())"
-    )
-    return ClassifyResult.model_validate(json.loads(body))
-
-
-def save_split(doc_id: str, result: SplitResult) -> None:
-    """Persist a SplitResult (sections + chunks with full provenance)."""
-    _put_json(_key(doc_id, "split", "result.json"), result.model_dump(mode="json"))
-    _patch_meta(doc_id, sections=len(result.sections), chunks=len(result.chunks))
-    logger.info(
-        "saved split artifact: doc_id=%s sections=%d chunks=%d",
-        doc_id[:12], len(result.sections), len(result.chunks),
-    )
-
-
 def load_split(doc_id: str) -> SplitResult:
-    """Load a persisted SplitResult."""
-    body = _get_required(
-        _key(doc_id, "split", "result.json"), doc_id, "split", "split() (or ingest())"
+    """Load a document's split output, reconstructed from the registry."""
+    from ingestlib.storage import registry
+
+    result = registry.split_result(doc_id)
+    if result is None:
+        raise FileNotFoundError(
+            f"no split data in the registry for doc_id {doc_id[:12]!r}… — run "
+            f"split() (or ingest()) on the document first"
+        )
+    return result
+
+
+# ---------- corpus registry — reads served by the Postgres registry ----------
+
+
+def _meta_from_row(row: dict[str, Any]) -> DocumentMeta:
+    """A registry documents-row dict → the DocumentMeta shape callers expect."""
+    created = row.get("created_at")
+    return DocumentMeta(
+        doc_id=row["doc_id"],
+        filename=row.get("filename", ""),
+        source_format=row.get("source_format", ""),
+        page_count=row.get("page_count", 0),
+        created_at=created.isoformat() if created else "",
+        category=row.get("category", ""),
+        sections=row.get("section_count", 0),
+        chunks=row.get("chunk_count", 0),
+        source_path=row.get("source_path", ""),
+        namespace=row.get("namespace", ""),
     )
-    return SplitResult.model_validate(json.loads(body))
-
-
-def save_ingest_manifest(doc_id: str, manifest: dict[str, Any]) -> None:
-    """Record what was pushed to the vector store (index, namespace, vector IDs)."""
-    _put_json(_key(doc_id, "split", "ingest_manifest.json"), manifest)
-    _patch_meta(doc_id, namespace=manifest.get("namespace", ""))
-
-
-def load_ingest_manifest(doc_id: str) -> dict[str, Any]:
-    """Load the vector-store sync record written by save_ingest_manifest."""
-    body = _get_required(
-        _key(doc_id, "split", "ingest_manifest.json"), doc_id, "ingest manifest", "ingest()"
-    )
-    return json.loads(body)
-
-
-def save_extract(doc_id: str, result: "ExtractResult") -> None:
-    """Persist an ExtractResult, keyed by its schema name — extractions with
-    different schemas against the same document coexist."""
-    _put_json(
-        _key(doc_id, "extract", f"{result.schema_name}.json"),
-        result.model_dump(mode="json"),
-    )
-    logger.info(
-        "saved extract artifact: doc_id=%s schema=%s items=%d",
-        doc_id[:12], result.schema_name, len(result.items),
-    )
-
-
-def load_extract(doc_id: str, schema: type) -> "ExtractResult":
-    """Load a persisted ExtractResult for `schema`, revalidating every item's
-    value back into the schema class (they round-trip as plain dicts)."""
-    from ingestlib.operations.extract.models import ExtractResult
-
-    body = _get_required(
-        _key(doc_id, "extract", f"{schema.__name__}.json"),
-        doc_id, f"extract ({schema.__name__})", "extract()",
-    )
-    result = ExtractResult.model_validate(json.loads(body))
-    items = [
-        item.model_copy(update={"value": schema.model_validate(item.value)})
-        for item in result.items
-    ]
-    return result.model_copy(update={"items": items})
-
-
-# ---------- registry ----------
 
 
 def document_exists(doc_id: str) -> bool:
-    """True when this document was parsed and saved before (dedup check)."""
-    return get_blob_store().exists(_key(doc_id, "parse", "result.json"))
+    """True when this document has a registry row (dedup check)."""
+    from ingestlib.storage import registry
+
+    return registry.document_exists(doc_id)
 
 
 def ingest_complete(doc_id: str) -> bool:
-    """True when the FULL pipeline finished for this document.
+    """True when the FULL pipeline finished (the vector/embed step ran)."""
+    from ingestlib.storage import registry
 
-    Checks the ingest manifest — the last artifact the pipeline writes — so a
-    run that died after parse/classify/split gets retried instead of skipped.
-    """
-    return get_blob_store().exists(_key(doc_id, "split", "ingest_manifest.json"))
+    return registry.ingest_complete(doc_id)
 
 
 def get_document_meta(doc_id: str) -> DocumentMeta:
-    """Registry entry for one document (self-healing, like list_documents)."""
-    return _load_meta(doc_id)
+    """Registry entry for one document (empty meta when unknown)."""
+    from ingestlib.storage import registry
+
+    row = registry.meta_row(doc_id)
+    return _meta_from_row(row) if row is not None else DocumentMeta(doc_id=doc_id)
 
 
 def list_documents() -> list[DocumentMeta]:
-    """Registry of every persisted document — id, filename, pages, category, counts."""
-    doc_ids = get_blob_store().list_top_dirs(_PREFIX)
-    return [_load_meta(d) for d in doc_ids]
+    """Every live document in the registry — id, filename, pages, category, counts."""
+    from ingestlib.storage import registry
+
+    return [_meta_from_row(r) for r in registry.meta_rows()]
 
 
 def find_by_path(path: Path | str, namespace: str = "") -> DocumentMeta | None:
-    """The document currently claiming this source path — logical identity.
+    """The live document currently claiming this source path — logical identity.
 
-    Matches on the resolved absolute path AND the namespace. When a crashed
-    replace left two documents claiming the same path, the newest created_at
-    wins here and sync() repairs the duplicate.
+    Matched on the resolved absolute path AND namespace via an indexed registry
+    query (replaced/tombstoned rows excluded); newest created_at wins.
     """
-    target = str(Path(path).resolve())
-    matches = [
-        m for m in list_documents()
-        if m.source_path == target and m.namespace == namespace
-    ]
-    if not matches:
-        return None
-    return max(matches, key=lambda m: m.created_at)
+    from ingestlib.storage import registry
+
+    row = registry.meta_by_path(str(Path(path).resolve()), namespace)
+    return _meta_from_row(row) if row is not None else None
 
 
 def set_source_path(doc_id: str, path: Path | str) -> None:
     """Re-point a document's logical identity after its file moved.
 
-    The content — and so the doc_id — is unchanged: only the registry's
-    source_path is patched, nothing re-runs. ingest() calls this when the
-    same checksum arrives from a new path.
+    The content — and so the doc_id — is unchanged: only source_path moves,
+    updated in the registry (the read source).
     """
-    _patch_meta(doc_id, source_path=str(Path(path).resolve()))
+    from ingestlib.storage import registry
+
+    resolved = str(Path(path).resolve())
+    registry.set_source_path(doc_id, resolved)
     logger.info("moved: doc_id=%s now at %s", doc_id[:12], path)
+
+
+# ---------- blob reads (page renders, figure crops, whole-doc markdown) ----------
+
+
+def document_markdown(doc_id: str) -> str | None:
+    """The whole-document markdown blob (parse/document.md), or None if absent."""
+    body = _get_or_none(_key(doc_id, "parse", "document.md"))
+    return body.decode() if body is not None else None
 
 
 def page_image_key(doc_id: str, page_num: int) -> str:

@@ -42,12 +42,18 @@ class PageContent(NamedTuple):
     page_num: int = 0
 
 
-def extract_pages(source: ParseResult | Path | str) -> list[PageContent]:
-    """Normalize either input into per-page (text, images, page_num) records."""
+def extract_pages(
+    source: ParseResult | Path | str, page_text_limit: int = PAGE_TEXT_LIMIT
+) -> list[PageContent]:
+    """Normalize either input into per-page (text, images, page_num) records.
+
+    page_text_limit caps each page's text; it defaults to classify's budget but
+    callers (e.g. extract, which needs more detail) can raise it.
+    """
     if isinstance(source, ParseResult):
         return [
             PageContent(
-                text=(p.markdown or p.text or p.native_text)[:PAGE_TEXT_LIMIT],
+                text=(p.markdown or p.text or p.native_text)[:page_text_limit],
                 images=[f.image_bytes for f in p.figures],
                 page_num=p.page_num,
             )
@@ -73,7 +79,7 @@ def extract_pages(source: ParseResult | Path | str) -> list[PageContent]:
             f"pass the ParseResult."
         )
     return [
-        PageContent(text=cp.text[:PAGE_TEXT_LIMIT], images=cp.images, page_num=i)
+        PageContent(text=cp.text[:page_text_limit], images=cp.images, page_num=i)
         for i, cp in enumerate(loaded, start=1)
     ]
 

@@ -20,11 +20,11 @@ class RemoveResult(BaseModel):
     artifacts_deleted: int = 0
 
 
-class BackfillResult(BaseModel):
-    """Outcome of backfill() — a vector store rebuilt from stored artifacts.
+class ReindexResult(BaseModel):
+    """Outcome of reindex() — a vector store rebuilt from the registry.
 
-    skipped — doc_ids that had no split artifact (parsed but never split;
-              they need a real ingest, not a backfill)
+    skipped — doc_ids that had no stored split (parsed but never split;
+              they need a real ingest, not a reindex)
     """
 
     model_config = ConfigDict(frozen=True)
@@ -32,6 +32,30 @@ class BackfillResult(BaseModel):
     documents: int = 0
     chunks: int = 0
     skipped: list[str] = Field(default_factory=list)
+    duration_seconds: float = 0.0
+
+
+class RecollectItem(BaseModel):
+    """One document whose collection changed when the rules were re-applied."""
+
+    model_config = ConfigDict(frozen=True)
+
+    doc_id: str
+    filename: str = ""
+    from_category: str = ""
+    to_category: str = ""
+
+
+class RecollectResult(BaseModel):
+    """Outcome of recollect() — the corpus re-sorted into collections (no OCR).
+
+    recollected — documents re-classified; changed — those whose category moved.
+    """
+
+    model_config = ConfigDict(frozen=True)
+
+    recollected: int = 0
+    changed: list["RecollectItem"] = Field(default_factory=list)
     duration_seconds: float = 0.0
 
 

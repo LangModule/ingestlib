@@ -82,6 +82,30 @@ split:
     notes:                "Footnotes and accounting-policy disclosures"
 ```
 
+## Auto-extract on ingest — collections
+
+A classify rule can carry an `extract_schema` (JSON Schema) and `auto_extract:
+true`. When `ingest()` classifies a document into that category, it also runs the
+extraction and stores it in the registry — no separate `extract()` call:
+
+```yaml
+classify:
+  rules:
+    sec_filing:
+      description: "10-K/10-Q style regulatory filings"
+      auto_extract: true
+      extract_schema:
+        type: object
+        properties:
+          fiscal_year: {type: integer}
+          total_revenue: {type: number}
+        required: [fiscal_year]
+```
+
+Each declared category becomes a **collection** in the registry. After editing
+these rules, [`recollect()`](manage-corpus.md#re-sort-after-a-rules-change-recollect)
+re-sorts the already-ingested corpus into the updated collections.
+
 ## Rules on the pipeline
 
 `ingest()` accepts every rule argument and passes it through with

@@ -140,6 +140,7 @@ async def aparse(path: Path | str, *, dpi: int = 200) -> ParseResult:
         # the OCR semaphore and spending LLM calls
         for task in tasks:
             task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         raise
 
     duration = time.perf_counter() - start

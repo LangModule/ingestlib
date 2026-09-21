@@ -45,18 +45,17 @@ Each hit carries `pages` and `region_ids` — the exact parse regions the
 chunk covers. Resolve them against the stored parse:
 
 ```python
-from ingestlib.storage import artifacts
+from ingestlib.services import get_document
 
 hit = result.hits[0]
 doc_id = hit.chunk.document_id
-
-parse = artifacts.load_parse(doc_id)          # structure only — fast
+doc = get_document(doc_id)                    # structure from the registry
 
 for page_num, region_ids in hit.chunk.region_ids.items():
-    page = next(p for p in parse.pages if p.page_num == page_num)
-    boxes = [r.bbox for r in page.regions if r.region_id in region_ids]
-    print(f"page {page_num}: {[b.as_tuple() for b in boxes]}")
-# page 4: [(72.0, 160.4, 523.1, 380.9), (72.0, 390.0, 523.1, 512.6)]
+    boxes = [r["bbox"] for r in doc.regions
+             if r["page_num"] == page_num and r["region_id"] in region_ids]
+    print(f"page {page_num}: {boxes}")
+# page 4: [{'x': 72.0, 'y': 160.4, 'width': 451.1, 'height': 220.5}, …]
 ```
 
 ## 3. Serve the page image

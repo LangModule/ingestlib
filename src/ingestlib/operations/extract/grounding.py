@@ -54,9 +54,16 @@ def resolve_bare_region(ref: str, window: list[SourcePage]) -> tuple[int, int] |
     return (holders[0], region_id) if len(holders) == 1 else None
 
 
-def _normalize(text: str) -> str:
-    """Comparison form: lowercase, no spaces/commas/currency marks."""
-    return re.sub(r"[\s,€$£%]", "", text.lower())
+def _norm_numeric(text: str) -> str:
+    """Numeric comparison form: lowercase, thousands commas + currency/percent
+    stripped, spaces KEPT (they separate one number from the next)."""
+    return re.sub(r"[,€$£%]", "", text.lower())
+
+
+def _norm_text(text: str) -> str:
+    """Text comparison form: lowercase, currency/percent/thousands marks stripped,
+    whitespace collapsed to single spaces."""
+    return re.sub(r"\s+", " ", re.sub(r"[,€$£%]", "", text.lower())).strip()
 
 
 def _number_forms(value: float) -> list[str]:
@@ -67,17 +74,35 @@ def _number_forms(value: float) -> list[str]:
     return list(forms)
 
 
+def _numeric_grounded(value: float, source_text: str) -> bool:
+    """A number form must appear delimited by non-digit/non-dot chars, so 5.00 is
+    NOT grounded by '15.00' and 20 is NOT grounded by '1200'."""
+    haystack = _norm_numeric(source_text)
+    return any(
+        re.search(rf"(?<![\d.]){re.escape(form)}(?![\d.])", haystack)
+        for form in _number_forms(value)
+    )
+
+
+def _text_grounded(needle: str, source_text: str) -> bool:
+    """A text value must appear delimited by non-alphanumeric chars, so 'John Smith'
+    is NOT grounded by 'Johnsmithson'."""
+    return re.search(
+        rf"(?<![^\W_]){re.escape(needle)}(?![^\W_])", _norm_text(source_text)
+    ) is not None
+
+
 def value_grounded(value: Any, source_text: str) -> bool | None:
-    """Does the value's text appear in the cited source? None = not checkable."""
+    """Is the value present in the cited source as a whole token (not a substring
+    of a larger number/word)? None = not checkable (booleans, empty/None values)."""
     if value is None or isinstance(value, bool):
         return None
-    haystack = _normalize(source_text)
     if isinstance(value, (int, float)):
-        return any(_normalize(f) in haystack for f in _number_forms(float(value)))
-    needle = _normalize(str(value))
+        return _numeric_grounded(float(value), source_text)
+    needle = _norm_text(str(value))
     if not needle:
         return None
-    return needle in haystack
+    return _text_grounded(needle, source_text)
 
 
 def assess_item(

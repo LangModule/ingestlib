@@ -86,6 +86,29 @@ sqlite ships with the core install.
 | `opensearch.index_name` | `ingestlib` |
 | `weaviate.collection_name` | `Ingestlib` — Weaviate capitalizes collection names |
 
+## Registry
+
+ingestlib's internal Postgres metadata DB — required for the corpus path. Its URL
+is a secret (`INGESTLIB_REGISTRY_URL` in `.env`; default = the compose `registry`
+container at `localhost:5433`). Optional automatic backups (`pg_dump` → the
+artifact store) trip on ingest when a threshold is crossed.
+
+| Key | Default |
+|---|---|
+| `registry.backup.enabled` | `false` — turn automatic backups on |
+| `registry.backup.after_docs` | `0` — back up after N new documents since the last (0 = off) |
+| `registry.backup.after_days` | `0` — …or after N days, whichever comes first (0 = off; both ORed) |
+
+## MCP server
+
+Settings for `ingestlib mcp` ([guide](../how-to/mcp-server.md)).
+
+| Key | Default |
+|---|---|
+| `mcp.read_only` | `false` — expose only the read tools |
+| `mcp.host` | `127.0.0.1` — streamable-http bind address |
+| `mcp.port` | `8000` — streamable-http port |
+
 ## Environment variables (`.env`)
 
 Secrets never live in config.yaml. Only the selected backends' variables
@@ -102,6 +125,8 @@ are read.
 | `MILVUS_URL` · `MILVUS_TOKEN` | `vector_store: milvus` (token: Zilliz Cloud) |
 | `OPENSEARCH_URL` | `vector_store: opensearch` — Amazon domains SigV4-sign via `aws.profile` |
 | `WEAVIATE_URL` · `WEAVIATE_API_KEY` | `vector_store: weaviate` (key: cloud only) |
+| `INGESTLIB_REGISTRY_URL` | the internal registry DB (default: the compose `registry` at `localhost:5433`) |
+| `MCP_TOKEN` | `ingestlib mcp --transport http` (bearer auth; stdio needs none) |
 | *(any name)* | a SQL source's connection URL, referenced from `sources.yaml` as `${VAR}` — use a READ-ONLY role ([structured retrieval](../how-to/structured-retrieval.md)) |
 
 Non-secret environment controls:

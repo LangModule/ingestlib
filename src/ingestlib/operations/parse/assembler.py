@@ -5,7 +5,7 @@ every block in the output is traceable to its region_id (the anchor the
 hover-highlight UI maps back to a bbox).
 """
 from ingestlib.foundations.ocr.models import Region
-from ingestlib.operations.parse.models import FigureImage
+from ingestlib.operations.parse.models import FigureImage, figure_filename
 
 
 # Page furniture — kept on the regions list but left out of markdown AND text:
@@ -23,7 +23,7 @@ def _render_visual(region: Region, figure: FigureImage | None, page_num: int) ->
     filename = (
         figure.filename(page_num)
         if figure
-        else f"page{page_num}_region{region.region_id}_{region.region_type}.png"
+        else figure_filename(page_num, region.region_id, region.region_type)
     )
     lines = [f"![{caption or region.region_type}]({filename})"]
     content = (figure.description if figure else region.content).strip()

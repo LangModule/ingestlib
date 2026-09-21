@@ -2,9 +2,8 @@
 
 Hybrid by default: every point carries a named "dense" vector (the configured
 text embedding, passed in by the caller) and a named "sparse" vector (BM25
-term frequencies
-computed locally; the server's IDF modifier supplies document frequencies, so
-there is no corpus state to manage). Queries that carry the original question
+term frequencies computed locally; the server's IDF modifier supplies document
+frequencies, so there is no corpus state to manage). Queries that carry the original question
 text run both signals in ONE call — the server fuses them with Reciprocal Rank
 Fusion — and the caller's reranker produces the final order on top. Sparse
 failures degrade to dense-only with a warning.
@@ -300,3 +299,15 @@ class QdrantStore(VectorStore):
             )
         logger.info("deleted %d point(s) for doc %s", count, document_id[:12])
         return count
+
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live point count for a document (exact server-side count by filter)."""
+        client = get_qdrant_client()
+        collection = get_qdrant_config().collection_name
+        if not client.collection_exists(collection):
+            return 0
+        return client.count(
+            collection_name=collection,
+            count_filter=_filter(namespace, document_id=document_id),
+            exact=True,
+        ).count

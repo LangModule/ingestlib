@@ -233,6 +233,7 @@ async def asplit(
     except BaseException:
         for task in tasks:  # don't leave sibling section builds running
             task.cancel()
+        await asyncio.gather(*tasks, return_exceptions=True)
         raise
     sections = _renumber_chunks(built)
 

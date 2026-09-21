@@ -15,9 +15,9 @@ One index holds both retrieval signals:
                         keyword fields
     payload           — full chunk provenance, returned verbatim on hits
 
-The index is created with zero replicas: the artifact store is the source of
-truth and re-ingesting rebuilds the index, so durability rides on artifacts,
-not on replica copies — and a single-node domain stays green.
+The index is created with zero replicas: the vector index is a DERIVED store —
+`reindex` rebuilds it from the registry's stored chunks — so durability rides on
+the corpus, not on replica copies, and a single-node domain stays green.
 """
 import re
 import threading

@@ -1,21 +1,33 @@
 # Storage model
 
-ingestlib separates **what you might read again** (artifacts) from **what
-you search** (vectors). Two stores, two contracts, independently chosen.
+ingestlib splits a corpus across **three stores** that share one join key —
+the `doc_id` (content checksum): the **registry** holds everything queryable,
+the **artifact store** holds the bytes, and the **vector store** holds the
+search index. Each is chosen independently.
 
-## The artifact store — the source of truth
+## The registry — the source of truth
 
-Every stage's full output, keyed by document checksum, on `s3` or a plain
-`local` folder. Parse results, page renders, figure crops, classify and
-split outputs, and the ingest manifest all live here — one layout on both
-backends, documented in
-[What just happened](../get-started/first-pipeline.md#whats-in-the-artifact-store).
+An internal **Postgres** database (`INGESTLIB_REGISTRY_URL`) that records every
+document's structure, classification, sections, chunks, extractions, and
+lifecycle state. It is authoritative: `get_document(doc_id)` reads a whole
+document back from here, the registry-backed retrieve filters (collection,
+confidence, kind) run against it, and `verify` audits the corpus against it.
+It is ingestlib's own bookkeeping — required for the corpus path, **not** a
+user data store. Bring it up with the bundled compose file plus
+`ingestlib registry init` (see [Manage a corpus](../how-to/manage-corpus.md)).
 
-Because artifacts are the source of truth, the vector store is
-*rebuildable*: [`backfill()`](../how-to/manage-corpus.md#rebuild-the-vector-store-backfill)
-re-embeds every document straight from its stored split artifact — no
-re-parse — so wiping and rebuilding an index costs embedding time, not
-pipeline time.
+## The artifact store — the bytes
+
+A document's **bytes only**, keyed by checksum, on `s3` or a plain `local`
+folder: the source file, page renders, figure crops, and the whole-document
+markdown — one layout on both backends, documented in
+[What just happened](../get-started/first-pipeline.md#whats-in-the-two-stores).
+
+Because the registry keeps the chunks and the artifact store keeps the bytes,
+the vector store is *rebuildable*:
+[`reindex()`](../how-to/manage-corpus.md#rebuild-the-vector-store-reindex)
+re-embeds every document's chunks straight from the registry — no re-parse — so
+wiping and rebuilding an index costs embedding time, not pipeline time.
 
 ## The vector store — the search index
 

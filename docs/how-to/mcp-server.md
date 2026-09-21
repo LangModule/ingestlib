@@ -21,11 +21,18 @@ pip install "ingestlib[mcp]"
 | `extract` | fill a JSON-Schema you provide, with provenance | — |
 | `classify` | document type + confidence | — |
 | `list_documents` | what's stored (id, path, namespace, pages, category) | — |
+| `get_document` | one document's full record + persisted extractions | — |
+| `collections` | the classify collections and their document counts | — |
+| `describe_schema` | LLM-generated table hints for a SQL source | — |
+| `verify` | audit durability (registry vs the vector & blob stores) | — |
+| `registry_status` | registry revision + document count | — |
 | `doctor` | health-check the configured stack | — |
 | `ingest` | add a document | ✎ |
 | `sync` | reconcile a folder (new/replace/move/prune) | ✎ |
-| `remove` | erase a document from both stores | ✎ |
-| `backfill` | rebuild the vector store from artifacts | ✎ |
+| `remove` | erase a document from all three stores | ✎ |
+| `reindex` | rebuild the vector store from the registry | ✎ |
+| `recollect` | re-sort the corpus after a classify-rules change | ✎ |
+| `registry_init` · `registry_backup` · `registry_restore` | manage the registry DB | ✎ |
 
 Read tools are always available; the ✎ (write) tools are hidden when you run
 `--read-only`. Your MCP client also asks for approval before each call.

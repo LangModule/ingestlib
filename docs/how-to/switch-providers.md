@@ -48,12 +48,12 @@ embedding_provider: ollama
     Vectors from different embedding models are mutually meaningless — a
     query embedded by the new model finds garbage among vectors from the
     old one. After switching, re-embed your corpus with
-    [`backfill()`](manage-corpus.md#rebuild-the-vector-store-backfill) —
-    it re-embeds straight from stored artifacts, no re-parse:
+    [`reindex()`](manage-corpus.md#rebuild-the-vector-store-reindex) —
+    it re-embeds straight from the registry, no re-parse:
 
     ```python
-    from ingestlib.services import backfill
-    backfill()                                # whole corpus, embedding time only
+    from ingestlib.services import reindex
+    reindex()                                 # whole corpus, embedding time only
     ```
 
     Alternatively, keep one store or namespace per embedding model and

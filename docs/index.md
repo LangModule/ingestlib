@@ -1,83 +1,147 @@
-# ingestlib
+---
+template: home.html
+title: ingestlib — self-hosted document intelligence for RAG
+hide:
+  - navigation
+  - toc
+---
 
-**Self-hosted document intelligence for RAG.** One library takes a raw
-document — PDF, DOCX, PPTX, or an image — and produces searchable, **cited**,
-retrieval-ready chunks. The territory of LlamaParse, Reducto, and
-Unstructured.io, running entirely on your own stack.
+<p class="hp-lead" markdown>
+The capabilities of LlamaParse, Reducto, and Unstructured.io — layout-aware parsing,
+schema-driven extraction, hybrid retrieval, and text-to-SQL — as one open-source
+Python library that runs **entirely on your own stack**. No document ever leaves
+your network.
+</p>
+
+<p class="section-eyebrow">The pipeline</p>
+<h2 class="section-title">Eight capabilities, one call each</h2>
+
+<div class="grid cards" markdown>
+
+-   :material-file-document-outline:{ .lg .middle } __Parse__
+
+    Layout-aware markdown per page — tables as HTML, formulas as LaTeX, charts as
+    data tables, figures as PNG crops with AI descriptions. Every block traces to a
+    bounding box on the page.
+
+-   :material-tag-outline:{ .lg .middle } __Classify__
+
+    A document-type label — open-ended or constrained to your own categories — with
+    confidence and ranked alternatives. Works standalone, no OCR.
+
+-   :material-scissors-cutting:{ .lg .middle } __Split__
+
+    Sections grouped by role, containing natural chunks: boundaries follow the
+    content, tables never split, each chunk carries a context breadcrumb.
+
+-   :material-format-list-checks:{ .lg .middle } __Extract__
+
+    Your Pydantic schema, filled and cited — every field grounded against the source
+    text with honest, verification-capped confidence.
+
+-   :material-database-import-outline:{ .lg .middle } __Ingest__
+
+    The whole pipeline in one call — queryable output to the registry, bytes to the
+    artifact store, vectors upserted, deduplicated by content checksum.
+
+-   :material-text-search:{ .lg .middle } __Retrieve__
+
+    Hybrid search (dense + lexical) → rerank → cited hits with scores and a
+    prompt-ready context block.
+
+-   :material-database-search-outline:{ .lg .middle } __Query databases__
+
+    The same `retrieve()` also answers from your SQL databases — read-only generated
+    SQL behind a permission boundary, merged with document results.
+
+-   :material-robot-outline:{ .lg .middle } __Serve to agents__
+
+    `ingestlib mcp` exposes the whole loop as MCP tools — point Claude Desktop or
+    Cursor at your self-hosted corpus.
+
+</div>
+
+<p class="section-eyebrow">Provenance</p>
+<h2 class="section-title">Every answer knows where it came from</h2>
+
+<p class="hp-lead" markdown>
+Not just the document — the page, and the bounding-box regions on that page. That
+provenance chain, not just parsing quality, is what ingestlib is built around.
+</p>
 
 ```python
-from ingestlib.services import ingest, retrieve
+from ingestlib.services import retrieve
 
-ingest("finance-10k.pdf")        # parse → classify → split → embed → vector store
 result = retrieve("what were the total revenues?")
-
 for hit in result.hits:
     print(hit.citation, "→", hit.chunk.heading)
 # doc 3f9c2ab81e04 · p.42 · financial_statements → Consolidated Revenues
 ```
 
-Every answer knows exactly where it came from: the document, the page, and
-the bounding-box regions on that page. That provenance chain — not just
-parsing quality — is what ingestlib is built around.
+<p class="section-eyebrow">Your stack, your choices</p>
+<h2 class="section-title">Everything pluggable, one config file</h2>
+
+- **AI providers** — Amazon Bedrock (Nova), OpenAI (GPT-5), or a local
+  [Ollama](https://ollama.com) server. Mix them: one for chat, another for embeddings.
+- **Eight vector stores** — SQLite (zero setup, the default), Pinecone, Qdrant,
+  Postgres/pgvector, MongoDB, Milvus, OpenSearch, Weaviate — all hybrid dense + lexical.
+- **Artifacts** — S3 or a plain local folder. **Registry** — the built-in Postgres
+  metadata hub that makes the whole corpus queryable.
+- **OCR** — PaddleOCR-VL (0.9B), served from your own GPU.
+
+<div class="logos">
+  <span>Bedrock Nova</span>
+  <span>OpenAI GPT-5</span>
+  <span>Ollama</span>
+  <span>Pinecone</span>
+  <span>Qdrant</span>
+  <span>pgvector</span>
+  <span>MongoDB</span>
+  <span>Milvus</span>
+  <span>OpenSearch</span>
+  <span>Weaviate</span>
+  <span>SQLite</span>
+</div>
+
+<div class="compare" markdown>
+**Why self-hosted?** Hosted parsing APIs mean your documents — contracts, filings,
+patient records — leave your network and meter by the page. ingestlib runs the same
+class of pipeline on infrastructure you control: your GPU for OCR, your provider (or
+a fully local Ollama) for the LLM, your vector store, your object storage. ~$0.002 a
+page in LLM spend, or nothing at all on the local stack.
+</div>
+
+<hr class="brand-rule">
 
 ## Where to go
 
 <div class="grid cards" markdown>
 
-- **New here?**
+-   __New here?__
 
-    Install, run one document through the pipeline, and get a cited answer
-    in about five minutes.
+    Install, run one document through the pipeline, and get a cited answer in about
+    five minutes.
 
     [:octicons-arrow-right-24: Quickstart](get-started/quickstart.md)
 
-- **Keeping data in-house?**
+-   __Keeping data in-house?__
 
-    LLM, embeddings, vectors, and artifacts all on your machine — no API
-    keys, nothing leaves your network.
+    LLM, embeddings, vectors, and artifacts all on your machine — no API keys,
+    nothing leaves your network.
 
     [:octicons-arrow-right-24: Run fully local](how-to/local-stack.md)
 
-- **Building on top?**
+-   __Building on top?__
 
-    Task-focused guides: your own categories, namespaces and filters,
-    progress callbacks, and building a citations UI.
+    Task-focused guides: your own categories, namespaces and filters, corpus
+    lifecycle, and building a citations UI.
 
     [:octicons-arrow-right-24: How-to guides](how-to/parse-documents.md)
 
-- **Looking something up?**
+-   __Looking something up?__
 
     Every function, every config key, every CLI flag — with defaults.
 
     [:octicons-arrow-right-24: Reference](reference/configuration.md)
 
 </div>
-
-## What you get
-
-| Stage | Output |
-|---|---|
-| **Parse** | Layout-aware markdown per page: tables as HTML (merged cells intact), formulas as LaTeX, charts converted to data tables, figures as PNG crops with AI descriptions — every block traceable to a bounding box |
-| **Classify** | A document-type label (`invoice`, `research_paper`, …) — open-ended or constrained to your own categories — with confidence and ranked alternatives |
-| **Split** | Sections (pages grouped by role) containing natural chunks: boundaries follow the content, tables never split, every chunk carries a `[category › section › heading]` breadcrumb |
-| **Extract** | Your Pydantic schema filled from the document — one instance or every instance in a batch — each field citing its page and regions, grounded against the source text, with honest confidence |
-| **Ingest** | The whole pipeline in one call — every stage persisted to the artifact store, vectors upserted, documents deduplicated by content checksum |
-| **Retrieve** | Question → hybrid search (dense + lexical) → rerank → hits with scores, citations, and a prompt-ready context block |
-| **Query databases** | The same `retrieve()` call also answers from your SQL databases — natural language → read-only generated SQL behind a permission boundary (read-only role + allowlist + limits), with verified-query overrides, merged with document results |
-| **Manage** | Re-ingest replaces the old version, `sync()` reconciles a folder (add/replace/move/prune), `backfill()` rebuilds the index — from the library or the `ingestlib` CLI |
-| **Serve** | `ingestlib mcp` exposes the whole loop as MCP tools — point Claude Desktop / Cursor at your self-hosted corpus (`ingestlib[mcp]`) |
-
-## Your stack, your choices
-
-Everything pluggable, selected in one config file:
-
-- **AI providers** — Amazon Bedrock (Nova), OpenAI (GPT-5), or a local
-  [Ollama](https://ollama.com) server. Mix them: one for chat, another for
-  embeddings.
-- **Eight vector stores** — sqlite (zero setup, the default), Pinecone,
-  Qdrant, Postgres/pgvector, MongoDB, Milvus, OpenSearch, Weaviate — all
-  with hybrid dense + lexical search.
-- **Artifacts** — S3 or a plain local folder.
-- **OCR** — PaddleOCR-VL (0.9B), served from your own GPU.
-
-Ready? Start with [Installation](get-started/installation.md).

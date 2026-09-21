@@ -6,12 +6,17 @@
     ingestlib ingest PATH...  index files or folders into the corpus
     ingestlib sync DIR        reconcile a folder with the corpus
     ingestlib list            show every stored document
+    ingestlib show TARGET     print everything stored about one document
+    ingestlib collections     list the collections and their document counts
+    ingestlib recollect       re-classify the corpus after changing rules.yaml
+    ingestlib verify          audit durability across the three stores
     ingestlib remove TARGET   erase a document (by path or doc_id)
-    ingestlib backfill        rebuild the vector store from stored artifacts
+    ingestlib reindex         rebuild the vector store from the registry
     ingestlib search "..."    cited retrieval from the shell
     ingestlib describe-schema NAME   auto-document a SQL source's tables
     ingestlib eval-sql NAME   measure text2SQL accuracy on your own schema
     ingestlib mcp             serve the corpus to agents over MCP
+    ingestlib registry init | status | backup | restore   manage the registry DB
 """
 import argparse
 
@@ -69,16 +74,46 @@ def main(argv: list[str] | None = None) -> int:
         "--namespace", default=None, help="only this partition (default: all)"
     )
 
+    show_parser = sub.add_parser(
+        "show", help="print everything stored about one document"
+    )
+    show_parser.add_argument("target", help="source path, or doc_id (full or prefix)")
+
+    collections_parser = sub.add_parser(
+        "collections", help="list the collections in the corpus and their counts"
+    )
+    collections_parser.add_argument(
+        "--namespace", default=None, help="only this partition (default: all)"
+    )
+
+    recollect_parser = sub.add_parser(
+        "recollect", help="re-classify the stored corpus after changing rules.yaml"
+    )
+    recollect_parser.add_argument(
+        "--namespace", default=None, help="only this partition (default: all)"
+    )
+
+    verify_parser = sub.add_parser(
+        "verify", help="audit durability (registry vs vector store vs blob store)"
+    )
+    verify_parser.add_argument(
+        "--namespace", default=None, help="only this partition (default: all)"
+    )
+    verify_parser.add_argument(
+        "--repair", action="store_true",
+        help="re-embed vector-drifted documents from their registry chunks",
+    )
+
     remove_parser = sub.add_parser(
         "remove", help="erase a document from both stores (by path or doc_id)"
     )
     remove_parser.add_argument("target", help="source path, or doc_id (full or prefix)")
     _add_namespace(remove_parser)
 
-    backfill_parser = sub.add_parser(
-        "backfill", help="rebuild the vector store from stored artifacts"
+    reindex_parser = sub.add_parser(
+        "reindex", help="rebuild the vector store from the registry (re-embed, no re-parse)"
     )
-    _add_namespace(backfill_parser)
+    _add_namespace(reindex_parser)
 
     search_parser = sub.add_parser("search", help="cited retrieval from the shell")
     search_parser.add_argument("question", help="the query")
@@ -120,7 +155,24 @@ def main(argv: list[str] | None = None) -> int:
     mcp_parser.add_argument("--port", type=int, default=None, help="http port (default 8000)")
     mcp_parser.add_argument(
         "--read-only", action="store_true",
-        help="expose only read tools (hide ingest/remove/sync/backfill)",
+        help="expose only read tools (hide ingest/remove/sync/reindex)",
+    )
+
+    registry_parser = sub.add_parser(
+        "registry", help="manage the internal registry database (schema migrations)"
+    )
+    registry_sub = registry_parser.add_subparsers(dest="registry_command", required=True)
+    registry_sub.add_parser(
+        "init", help="create or upgrade the registry schema to the latest revision"
+    )
+    registry_sub.add_parser(
+        "status", help="show the registry's current revision and reachability"
+    )
+    registry_sub.add_parser(
+        "backup", help="pg_dump the registry into the blob store"
+    )
+    registry_sub.add_parser(
+        "restore", help="restore the registry from the latest blob-store backup"
     )
 
     args = parser.parse_args(argv)
@@ -165,14 +217,30 @@ def _dispatch(args: argparse.Namespace) -> int:
         from ingestlib.cli.corpus import run_list
 
         return run_list(namespace=args.namespace)
+    if args.command == "show":
+        from ingestlib.cli.corpus import run_show
+
+        return run_show(args.target)
+    if args.command == "collections":
+        from ingestlib.cli.corpus import run_collections
+
+        return run_collections(namespace=args.namespace)
+    if args.command == "recollect":
+        from ingestlib.cli.corpus import run_recollect
+
+        return run_recollect(namespace=args.namespace)
+    if args.command == "verify":
+        from ingestlib.cli.corpus import run_verify
+
+        return run_verify(namespace=args.namespace, repair=args.repair)
     if args.command == "remove":
         from ingestlib.cli.corpus import run_remove
 
         return run_remove(args.target, namespace=args.namespace)
-    if args.command == "backfill":
-        from ingestlib.cli.corpus import run_backfill
+    if args.command == "reindex":
+        from ingestlib.cli.corpus import run_reindex
 
-        return run_backfill(namespace=args.namespace)
+        return run_reindex(namespace=args.namespace)
     if args.command == "search":
         from ingestlib.cli.search import run_search
 
@@ -195,4 +263,22 @@ def _dispatch(args: argparse.Namespace) -> int:
         serve(transport=args.transport, host=args.host, port=args.port,
               read_only=args.read_only or None)
         return 0
+    if args.command == "registry":
+        if args.registry_command == "init":
+            from ingestlib.cli.registry import run_registry_init
+
+            return run_registry_init()
+        if args.registry_command == "status":
+            from ingestlib.cli.registry import run_registry_status
+
+            return run_registry_status()
+        if args.registry_command == "backup":
+            from ingestlib.cli.registry import run_registry_backup
+
+            return run_registry_backup()
+        if args.registry_command == "restore":
+            from ingestlib.cli.registry import run_registry_restore
+
+            return run_registry_restore()
+        raise ValueError(f"unknown registry command {args.registry_command!r}")
     raise ValueError(f"unknown command {args.command!r}")

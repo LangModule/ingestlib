@@ -19,9 +19,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0            # git-revision-date-localized needs full history
       - uses: astral-sh/setup-uv@v5
+      # social-card image generation needs the cairo/pango system libraries
+      - run: >-
+          sudo apt-get update &&
+          sudo apt-get install -y libcairo2-dev libpango1.0-dev libfreetype6-dev libffi-dev libjpeg-dev
       - run: uv sync --group docs
-      - run: uv run --group docs mkdocs build --strict
+      - run: SOCIAL_CARDS=true uv run --group docs mkdocs build --strict
       - uses: actions/upload-pages-artifact@v3
         with:
           path: site

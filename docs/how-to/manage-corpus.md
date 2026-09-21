@@ -63,8 +63,9 @@ remove("report.pdf")          # by source path
 remove("7b6b95d79149")        # or by doc_id (full or a unique prefix)
 ```
 
-Erases the document from **both** stores — vectors first, then every artifact
-(parse, renders, split, manifest). Returns a `RemoveResult` with the counts.
+Erases the document from **all three** stores — vectors first, then the blob
+objects (source, page renders, figure crops), then the registry row last.
+Returns a `RemoveResult` with the counts.
 
 ## Sync a folder
 
@@ -121,17 +122,17 @@ sync("corpus/", namespace="tenant-a")       # one partition
 One bad file (a corrupt PDF) becomes an `error` action and sync continues —
 `result.errors` collects them.
 
-## Rebuild the vector store — `backfill()`
+## Rebuild the vector store — `reindex()`
 
-Artifacts are the source of truth; the vector store is an index over them.
-`backfill()` re-embeds every stored document's chunks straight from the split
-artifacts — **no re-parse, no OCR server** — so a corpus re-indexes in embedding
+The registry keeps every document's chunks; the vector store is a derived index
+over them. `reindex()` re-embeds every stored document's chunks straight from the
+registry — **no re-parse, no OCR server** — so a corpus re-indexes in embedding
 time, not pipeline time.
 
 ```python
-from ingestlib.services import backfill
+from ingestlib.services import reindex
 
-backfill()                                  # into the configured store
+reindex()                                   # into the configured store
 ```
 
 Reach for it when you:
@@ -141,8 +142,38 @@ Reach for it when you:
 - **point at a new `vector_store`** connector
 - **rebuild a wiped index**
 
-Upserts are idempotent, so running it twice is safe. Documents parsed but never
+Upserts are idempotent, so running it twice is safe. Documents with no stored
 split are skipped (they need a real ingest) and listed in the result.
+
+## Re-sort after a rules change — `recollect()`
+
+Edit your classify rules in `rules.yaml` and the already-ingested corpus still
+carries the *old* labels. `recollect()` re-runs classify on every stored document
+— rebuilt text-only from the registry, **no OCR, no re-parse** — and updates each
+document's category and collection in place. The cheap re-labelling pass; the
+`reindex` sibling.
+
+```python
+from ingestlib.services import recollect
+
+result = recollect()                        # re-classify from the registry
+result.recollected, result.changed          # how many re-sorted, and which moved
+```
+
+## Audit durability — `verify()`
+
+`verify()` checks the corpus against the registry: that every document's expected
+chunk count matches what the vector store actually holds, and that its essential
+blobs (source, `document.md`) still exist. Pass `repair=True` to re-embed any
+vector-drifted document from the registry.
+
+```python
+from ingestlib.services import verify
+
+report = verify()                           # audit every live document
+report.ok, report.drifted                   # all durable? which drifted?
+verify(repair=True)                         # re-embed drifted vectors from the registry
+```
 
 ## From the command line
 
@@ -154,7 +185,9 @@ ingestlib sync corpus/ --prune --dry-run   # preview
 ingestlib sync corpus/ --prune             # execute
 ingestlib list                             # the registry
 ingestlib remove report.pdf                # erase one
-ingestlib backfill                         # rebuild the index
+ingestlib reindex                          # rebuild the index
+ingestlib recollect                        # re-sort after a rules change
+ingestlib verify                           # audit durability (--repair to fix)
 ingestlib search "what were the risks?"    # cited retrieval
 ```
 
@@ -165,7 +198,7 @@ second namespace isn't supported — artifacts are keyed by content, so the two
 would share one artifact prefix. Use a namespace per corpus/tenant and let each
 hold its own documents.
 
-On the CLI, `ingest`, `remove`, `sync`, `backfill`, and `search` all act on
+On the CLI, `ingest`, `remove`, `sync`, `reindex`, and `search` all act on
 **one** namespace — the `--namespace` you pass, or the unnamed default when you
 omit it. `ingestlib list` is the exception: with no flag it shows **every**
 namespace (pass `--namespace` to scope it). So if `ingest --namespace tenant-a`

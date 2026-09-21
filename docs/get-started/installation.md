@@ -1,7 +1,8 @@
 # Installation
 
 ingestlib needs Python 3.12+, one system dependency for Office formats, and
-an OCR inference server for parsing. This page gets all three in place.
+an OCR inference server for parsing — plus, optionally, the PostgreSQL client
+tools for registry backups. This page gets them in place.
 
 ## 1. Install the package
 
@@ -92,6 +93,24 @@ seconds.
 
 A second, smaller layout model (PP-DocLayoutV3, ~126 MB) downloads
 automatically on your first parse.
+
+## 4. PostgreSQL client tools (registry backup only)
+
+`ingestlib registry backup` and `restore` shell out to `pg_dump` /
+`pg_restore`. Install them only if you use those commands (or event-driven
+auto-backup) — the rest of the pipeline never calls them.
+
+=== "macOS"
+
+    ```bash
+    brew install libpq
+    ```
+
+=== "Linux"
+
+    ```bash
+    sudo apt install postgresql-client
+    ```
 
 ## Disk footprint
 

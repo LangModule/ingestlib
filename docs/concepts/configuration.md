@@ -1,12 +1,12 @@
 # Configuration model
 
-Three files with a strict separation of concerns, all discovered at call
-time — never at import.
+A small set of files with a strict separation of concerns, all discovered at
+call time — never at import.
 
 | File | Holds | Secret? |
 |---|---|---|
 | `config.yaml` | **Choices** — providers, stores, model ids | No |
-| `.env` | **Secrets** — API keys, connection URLs | Yes — never commit |
+| `.env` | **Secrets** — API keys, connection URLs, the registry URL | Yes — never commit |
 | `rules.yaml` | **Content rules** — your categories & section vocabulary | No; optional |
 | `sources.yaml` | **Structured-retrieval sources** — SQL databases & corpora to query | No; optional |
 

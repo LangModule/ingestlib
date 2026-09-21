@@ -168,10 +168,9 @@ with ports matching the tabs below, and encodes the startup gotchas
     OPENSEARCH_URL=http://localhost:9200
     ```
 
-    For a real Amazon domain, the repo ships a CloudFormation template
-    for the cheapest k-NN-capable configuration (~$0.10/hour, delete
-    when idle):
-    [`infra/opensearch.yaml`](https://github.com/LangModule/ingestlib/blob/main/infra/opensearch.yaml).
+    For production, bring your own Amazon OpenSearch Service domain (or any
+    k-NN-capable OpenSearch) and point `OPENSEARCH_URL` at it — AWS domains
+    SigV4-sign with your `aws.profile`.
 
 === "Weaviate"
 
@@ -217,6 +216,6 @@ uv run ingestlib doctor        # includes a reachability check for the selected 
 ## Migrating between stores
 
 Moving stores is a rebuild, not an export: change `vector_store`, then run
-[`backfill()`](manage-corpus.md#rebuild-the-vector-store-backfill) (or
-`ingestlib backfill`), which re-embeds every document straight from its
-stored split artifact — no re-parse — into the new connector.
+[`reindex()`](manage-corpus.md#rebuild-the-vector-store-reindex) (or
+`ingestlib reindex`), which re-embeds every document straight from the
+registry — no re-parse — into the new connector.

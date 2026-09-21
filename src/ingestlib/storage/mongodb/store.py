@@ -250,3 +250,9 @@ class MongodbStore(VectorStore):
         )
         logger.info("deleted %d chunk(s) for doc %s", result.deleted_count, document_id[:12])
         return result.deleted_count
+
+    def count_vectors(self, document_id: str, namespace: str = "") -> int:
+        """Live document-chunk count (one Mongo document per stored vector)."""
+        return get_collection().count_documents(
+            {"namespace": namespace, "document_id": document_id}
+        )

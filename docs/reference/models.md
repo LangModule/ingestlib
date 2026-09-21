@@ -54,7 +54,17 @@ serializable with `.model_dump()` / reconstructable with
 
 ::: ingestlib.services.lifecycle.models.SyncAction
 
-::: ingestlib.services.lifecycle.models.BackfillResult
+::: ingestlib.services.lifecycle.models.ReindexResult
+
+::: ingestlib.services.lifecycle.models.RecollectResult
+
+::: ingestlib.services.lifecycle.models.RecollectItem
+
+## Verify
+
+::: ingestlib.services.verify.VerifyResult
+
+::: ingestlib.services.verify.VerifyItem
 
 ## OCR primitives
 

@@ -27,15 +27,25 @@ document corpus and/or SQL databases and returns normalized
 
 ## Lifecycle
 
-Manage the corpus as files change — replace, remove, sync, backfill. See
+Manage the corpus as files change — replace, remove, sync, reindex, recollect. See
 [Manage a corpus](../how-to/manage-corpus.md) for the guide.
 
 ```python
-from ingestlib.services import remove, sync, backfill
+from ingestlib.services import remove, sync, reindex, recollect
 ```
 
 ::: ingestlib.services.lifecycle.remover.remove
 
 ::: ingestlib.services.lifecycle.syncer.sync
 
-::: ingestlib.services.lifecycle.backfiller.backfill
+::: ingestlib.services.lifecycle.reindexer.reindex
+
+::: ingestlib.services.lifecycle.recollector.recollect
+
+## Verify durability
+
+Audit the corpus against the registry — that every document's vectors and
+essential blobs are still present, and re-embed drifted documents with
+`--repair`.
+
+::: ingestlib.services.verify.verify

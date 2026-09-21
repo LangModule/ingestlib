@@ -170,7 +170,9 @@ def _extract_embedded_images(page: Any) -> list[bytes]:
         try:
             bitmap = obj.get_bitmap(render=False)
             try:
-                pil = bitmap.to_pil()
+                # to_pil() shares the bitmap buffer for L/RGBA/RGBX — copy off it
+                # before close() frees the buffer under the PIL image.
+                pil = bitmap.to_pil().copy()
             finally:
                 bitmap.close()
         except Exception:  # malformed/unsupported image object — skip it

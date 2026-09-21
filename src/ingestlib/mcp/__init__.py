@@ -4,7 +4,7 @@
     ingestlib mcp --transport http --port 8000   # remote; needs MCP_TOKEN
 
 An interface layer over the existing services (like the CLI): the tools in
-`tools.py` wrap ingest/search/extract/sync/remove/backfill/…; `server.py`
+`tools.py` wrap ingest/search/extract/sync/remove/reindex/…; `server.py`
 registers them with FastMCP and runs the transport. Loaded lazily so the
 core library never imports the `mcp` SDK unless the server is started.
 """

@@ -1,10 +1,11 @@
 """remove() / aremove() — erase one document from both stores.
 
-The one honest delete: vectors first (so a failure can never leave ghost
-vectors whose artifacts are gone — artifacts are the source of truth and
-survive until the very end), then every artifact under the document's
-prefix. Accepts the file path (how users think) or a doc_id, full or a
-unique prefix (how `ingestlib list` prints them).
+The one honest delete, torn down most-derived first: vectors, then the blob
+objects under the document's prefix, then the registry row LAST — so a crash
+can never leave ghost vectors whose authoritative record is already gone, and
+a half-done delete still shows the document as live for verify/reindex to
+recover. Accepts the file path (how users think) or a doc_id, full or a unique
+prefix (how `ingestlib list` prints them).
 """
 import asyncio
 from pathlib import Path
@@ -46,23 +47,28 @@ def _resolve_target(target: str, namespace: str) -> str:
     )
 
 
-def _remove(doc_id: str, namespace: str, store: VectorStore | None) -> RemoveResult:
+def _remove(
+    doc_id: str, namespace: str, store: VectorStore | None, tombstone: bool = False
+) -> RemoveResult:
+    from ingestlib.storage import registry
+
     meta = artifacts.get_document_meta(doc_id)
 
-    # vectors first — the manifest records where they actually went
+    # vectors first — deleted under the namespace the registry recorded
     vectors = 0
-    manifest = None
     if artifacts.ingest_complete(doc_id):
-        manifest = artifacts.load_ingest_manifest(doc_id)
-    if manifest is not None:
         store = store or default_store()
-        vectors = store.delete_document(
-            doc_id, namespace=manifest.get("namespace", namespace)
-        )
+        vec_ns = meta.namespace or namespace
+        vectors = store.delete_document(doc_id, namespace=vec_ns)
 
     objects = artifacts.delete_document(doc_id)
+    if tombstone:
+        registry.set_status(doc_id, "replaced")   # keep the row as a lineage tombstone
+    else:
+        registry.delete_document(doc_id)           # full delete — children cascade
     logger.info(
-        "removed %s (%s): %d vector(s), %d artifact object(s)",
+        "%s %s (%s): %d vector(s), %d artifact object(s)",
+        "tombstoned" if tombstone else "removed",
         doc_id[:12], meta.filename or "?", vectors, objects,
     )
     return RemoveResult(
@@ -78,17 +84,21 @@ async def aremove(
     *,
     namespace: str = "",
     store: VectorStore | None = None,
+    tombstone: bool = False,
 ) -> RemoveResult:
     """Erase one document — vectors AND artifacts (async).
 
     target    — the document's source path, or its doc_id (full or a unique
                 prefix as printed by `ingestlib list`)
     namespace — scopes path resolution; the vector deletion itself uses the
-                namespace recorded in the ingest manifest
+                namespace the registry recorded for the document
     store     — vector store connector; defaults to config.yaml's selection
+    tombstone — keep the registry row as status='replaced' instead of deleting
+                it (the replace path uses this for lineage); vectors + blobs
+                are deleted either way
     """
     doc_id = await asyncio.to_thread(_resolve_target, str(target), namespace)
-    return await asyncio.to_thread(_remove, doc_id, namespace, store)
+    return await asyncio.to_thread(_remove, doc_id, namespace, store, tombstone)
 
 
 def remove(
