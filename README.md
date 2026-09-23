@@ -27,7 +27,7 @@ guides for every stage, the full configuration reference, and the API docs.
 | **Classify** | Document-type label (`invoice`, `research_paper`, …) — open-ended, or constrained to your rules (per call or preset in `rules.yaml`, with page targeting) — confidence and ranked alternatives included. Works standalone with **no OCR** |
 | **Split** | Sections (pages grouped by role: `methods`, `results`, … — LLM-discovered, or **your own categories** via rules) containing **natural chunks** — boundaries follow the content, tables never split, each chunk carries a `[category › section › heading]` breadcrumb in its `embedding_text` |
 | **Extract** | **Your Pydantic schema, filled from the document** — one instance (`mode="one"`) or every instance in a batch (`mode="many"`, e.g. all receipts in a scanned expense bundle). Every field carries **verified provenance**: page + region citations checked against the parse, values grounded in the cited source text, and honest confidence — uncited or ungrounded answers are capped, hallucinated citations dropped |
-| **Ingest** | The whole pipeline in one call — every stage's queryable output recorded in the internal **registry** (Postgres), its bytes (source, page images, figure crops, whole-doc markdown) in the artifact store (S3 or a local folder), vectors upserted, deduplicated by content checksum |
+| **Ingest** | The whole pipeline in one call — every stage's queryable output recorded in the internal **registry** (Postgres), its bytes (source, page images, figure crops, whole-doc markdown) in the artifact store (S3, a self-hosted MinIO, or a local folder), vectors upserted, deduplicated by content checksum |
 | **Retrieve** | Question → **hybrid search** (dense embeddings + lexical sparse, merged) → **rerank** (Jina by default; Amazon Rerank or none via `reranker:` in config.yaml) → hits with scores and citations, plus a prompt-ready context block |
 | **Query databases** | The same `retrieve()` call also answers from your **SQL databases** — natural language → read-only generated SQL behind a permission boundary (read-only role + statement allowlist + LIMIT + timeout), with **verified-query** overrides for answers that must be exact. Postgres, MySQL, SQLite, DuckDB, Snowflake — merged with document results |
 
@@ -35,8 +35,9 @@ Engines: **PaddleOCR-VL-1.6** (0.9B VLM, runs on your GPU) for layout + recognit
 **Amazon Nova 2 Lite** for judgment (chart reading, review, classification,
 chunk boundaries), **Nova multimodal embeddings**, **eight vector stores**
 (Pinecone, Qdrant, SQLite, Postgres/pgvector, MongoDB, Milvus, OpenSearch,
-Weaviate — all hybrid dense + sparse), **S3 or a local folder** for
-artifacts (`artifact_store: s3 | local`). ~$0.002/page in LLM spend. An
+Weaviate — all hybrid dense + sparse), **S3, a self-hosted MinIO, or a local
+folder** for artifacts (`artifact_store: s3 | local`; `s3.endpoint_url` points
+S3 at a self-hosted MinIO — object storage with no AWS). ~$0.002/page in LLM spend. An
 **OpenAI backend** (GPT-5 vision-capable chat + text-embedding-3) ships
 alongside Bedrock — flip `llm_provider: openai` / `embedding_provider:
 openai` to run the whole pipeline on it instead — or `ollama` to keep
@@ -113,7 +114,7 @@ Parse runs PaddleOCR-VL-1.6 behind an inference server. First launch downloads
 uv run python -m mlx_vlm.server --port 8111 --model PaddlePaddle/PaddleOCR-VL-1.6
 
 # NVIDIA (then set paddle_vl.backend: vllm-server in config.yaml)
-vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111
+vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code --port 8111
 ```
 
 The layout model (PP-DocLayoutV3, ~126 MB) auto-downloads on the first parse.
@@ -137,8 +138,9 @@ Edit `config.yaml`: pick your providers, vector store, reranker, and
 artifact store — everything else has working defaults (`vector_store:
 sqlite` needs no server and no keys) — and fill `.env` with the keys your
 choices need (Jina for the default reranker; `--local` needs none). The `aws` section is required only
-while a choice uses AWS (the default bedrock provider, s3 artifacts, the
-aws reranker, an Amazon OpenSearch domain) — delete it otherwise and the
+while a choice uses AWS (the default bedrock provider, s3 artifacts on AWS, the
+aws reranker, an Amazon OpenSearch domain — a self-hosted MinIO `s3` store uses
+static keys, not a profile) — delete it otherwise and the
 config loader will tell you if something still needs it. **The S3 bucket
 (default `ingestlib-{account_id}`) and the vector indexes/collections are
 created automatically on first use** — no manual setup. Prefer no cloud
@@ -187,7 +189,7 @@ from ingestlib.services import ingest, sync, remove, reindex
 
 ingest("report.pdf")                       # edited file → status="replaced"
 sync("corpus/", prune=True)                # add new, replace changed, drop deleted
-remove("old.pdf")                          # erase one doc from both stores
+remove("old.pdf")                          # erase one doc from all three stores
 reindex()                                  # rebuild the vector store from the registry
 ```
 
@@ -254,6 +256,11 @@ ingestlib mcp --transport http --port 8000   # remote; needs MCP_TOKEN (bearer a
 Read tools (`search`/`extract`/`classify`/`list`/`doctor`) are always on; the
 write tools hide under `--read-only`. Guide:
 [Serve to agents (MCP)](https://langmodule.github.io/ingestlib/how-to/mcp-server/).
+
+**Run the whole stack in containers** — the app (MCP front-end), the registry, a
+vector store, and a MinIO artifact store come up with one `docker compose`. See
+[Deploy with Docker](https://langmodule.github.io/ingestlib/how-to/deploy-docker/)
+for the full walkthrough.
 
 ## Using the operations directly
 
@@ -475,7 +482,7 @@ suites are opt-in via env gates. The sqlite connector's full suite runs
 ungated in `make test` — there is no server, so in-process IS the real thing.
 
 ```bash
-make test                  # fast suite (~630 tests, ~2min; e2e groups skip)
+make test                  # fast suite (~640 tests, ~2min; e2e groups skip)
 make test-openai           # OpenAI backend       (skips without OPENAI_API_KEY)
 make test-ollama           # Ollama backend       (needs a local Ollama + models)
 make test-parse            # parse e2e            (needs VL server + LLM provider)
@@ -483,6 +490,7 @@ make test-classify         # classify e2e         (needs the LLM provider)
 make test-split            # split e2e            (needs the LLM provider)
 make test-extract          # extract e2e          (needs the LLM provider; scans need the VL server)
 make test-s3               # artifact store e2e   (needs AWS)
+make test-minio            # artifact store e2e   (vs a local MinIO — no AWS)
 make test-pinecone         # vector connector e2e (needs Pinecone + embeddings)
 make test-qdrant           # vector connector e2e (needs a Qdrant server + embeddings)
 make test-sqlite           # vector connector suite (no gate — nothing to need)

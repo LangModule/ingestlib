@@ -44,6 +44,13 @@ class _BearerAuth:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        if scope.get("path") == "/health":
+            # Unauthenticated liveness probe for container / K8s health checks —
+            # answered here so it never needs the bearer token.
+            await send({"type": "http.response.start", "status": 200,
+                        "headers": [(b"content-type", b"text/plain")]})
+            await send({"type": "http.response.body", "body": b"ok"})
+            return
         headers = dict(scope.get("headers") or [])
         if headers.get(b"authorization") != self._expected:
             await send({"type": "http.response.start", "status": 401,

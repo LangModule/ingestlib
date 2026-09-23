@@ -1,0 +1,69 @@
+# The full deployment stack — the whole ingestlib app, pre-wired, one command:
+#
+#   MCP_TOKEN=... OPENAI_API_KEY=... JINA_API_KEY=... \
+#     docker compose -f infra/docker-compose.stack.yml --profile stack up
+#
+# Brings up: the ingestlib app (MCP server on :8000) + registry Postgres + a
+# vector store (qdrant) + MinIO artifact store, on the shared `ingestlib`
+# network. On an NVIDIA host add `--profile gpu` to also run the OCR model
+# server (needed only for parse); without a GPU, parse is unavailable but
+# classify/split/extract/retrieve/SQL/MCP all still work.
+#
+# registry/qdrant/minio are defined once in the sibling docker-compose.yml and
+# pulled in here via `include` — they carry the `stack` profile there.
+
+name: ingestlib
+
+include:
+  - docker-compose.yml
+
+services:
+  app:
+    container_name: ingestlib_app
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    image: ingestlib-app:local
+    profiles: ["stack"]
+    depends_on:
+      registry:
+        condition: service_healthy
+      qdrant:
+        condition: service_started    # qdrant is distroless → no healthcheck
+      minio:
+        condition: service_healthy
+    environment:
+      INGESTLIB_CONFIG: /config/config.yaml
+      INGESTLIB_REGISTRY_URL: postgresql://ingestlib:pw@registry:5432/ingestlib
+      QDRANT_URL: http://qdrant:6333
+      AWS_ACCESS_KEY_ID: minioadmin        # MinIO root creds (see docker-compose.yml)
+      AWS_SECRET_ACCESS_KEY: minioadmin
+      MCP_TOKEN: ${MCP_TOKEN:?set MCP_TOKEN (any strong random string)}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:?set OPENAI_API_KEY}
+      JINA_API_KEY: ${JINA_API_KEY:?set JINA_API_KEY (the jina reranker)}
+    ports:
+      - "8000:8000"                        # MCP streamable-http (bearer: MCP_TOKEN)
+    volumes:
+      - ./deploy:/config:ro                # the container config.yaml
+
+  ocr:
+    container_name: ingestlib_ocr
+    build:
+      context: ..
+      dockerfile: docker/ocr.Dockerfile
+    image: ingestlib-ocr:local
+    profiles: ["gpu"]                      # NVIDIA host only
+    ports:
+      - "8111:8111"
+    volumes:
+      - hf-cache:/root/.cache/huggingface  # ~1.8 GB weights, downloaded once
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: ["gpu"]
+
+volumes:
+  hf-cache:

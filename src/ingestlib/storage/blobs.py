@@ -107,15 +107,26 @@ class S3BlobStore(BlobStore):
         return names
 
     def delete_prefix(self, prefix: str) -> int:
+        from ingestlib.config import get_s3_config
         from ingestlib.storage.s3.client import ensure_bucket, get_s3_client
 
         client = get_s3_client()
         bucket = ensure_bucket()
+        # Bulk DeleteObjects carries an integrity header that older S3-compatible
+        # stores (MinIO) still expect as Content-MD5, but boto3 now sends as a
+        # trailer checksum they reject — so against a custom endpoint delete one
+        # object at a time (single DeleteObject needs no such header).
+        per_object = get_s3_config().endpoint_url is not None
         deleted = 0
         paginator = client.get_paginator("list_objects_v2")
         for page in paginator.paginate(Bucket=bucket, Prefix=prefix):
             keys = [{"Key": obj["Key"]} for obj in page.get("Contents", [])]
             if not keys:
+                continue
+            if per_object:
+                for key in keys:
+                    client.delete_object(Bucket=bucket, Key=key["Key"])
+                deleted += len(keys)
                 continue
             response = client.delete_objects(Bucket=bucket, Delete={"Objects": keys})
             errors = response.get("Errors", [])

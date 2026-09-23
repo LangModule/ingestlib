@@ -18,10 +18,12 @@ user data store. Bring it up with the bundled compose file plus
 
 ## The artifact store — the bytes
 
-A document's **bytes only**, keyed by checksum, on `s3` or a plain `local`
-folder: the source file, page renders, figure crops, and the whole-document
-markdown — one layout on both backends, documented in
+A document's **bytes only**, keyed by checksum, on `s3` (AWS, or a self-hosted
+S3-compatible MinIO via `s3.endpoint_url`) or a plain `local` folder: the source
+file, page renders, figure crops, and the whole-document markdown — one layout on
+every backend, documented in
 [What just happened](../get-started/first-pipeline.md#whats-in-the-two-stores).
+Choosing between them: [artifact stores](../how-to/artifact-stores.md).
 
 Because the registry keeps the chunks and the artifact store keeps the bytes,
 the vector store is *rebuildable*:

@@ -1,4 +1,4 @@
-.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-sources test-registry test-infra test-cli test-lifecycle test-mcp eval eval-sql
+.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-minio test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-sources test-registry test-infra test-cli test-lifecycle test-mcp eval eval-sql
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -102,6 +102,12 @@ test-extract:
 
 test-s3:
 	RUN_S3_E2E=1 uv run pytest tests/ingestlib/storage/
+
+# --- storage (S3 artifacts) against a self-hosted MinIO — no AWS account ---
+# needs the minio container: docker compose -f infra/docker-compose.yml --profile minio up -d
+
+test-minio:
+	RUN_MINIO_E2E=1 uv run pytest tests/ingestlib/storage/s3/
 
 # --- pinecone connector — needs PINECONE_API_KEY + the embedding provider ---
 

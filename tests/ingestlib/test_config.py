@@ -71,6 +71,39 @@ def test_aws_only_config_loads_with_all_defaults(scratch_config):
     assert cfg.embedding_provider == "bedrock"
 
 
+def test_s3_endpoint_url_defaults_to_none(scratch_config):
+    _write(scratch_config, _AWS_ONLY)
+    assert get_config().s3.endpoint_url is None
+
+
+def test_s3_endpoint_url_read_from_config(scratch_config):
+    _write(scratch_config, _AWS_ONLY + "s3:\n  endpoint_url: http://localhost:9000\n")
+    assert get_config().s3.endpoint_url == "http://localhost:9000"
+
+
+def test_s3_endpoint_url_from_env_overrides(scratch_config, monkeypatch):
+    monkeypatch.setenv("S3_ENDPOINT_URL", "http://minio:9000")
+    _write(scratch_config, _AWS_ONLY)
+    assert get_config().s3.endpoint_url == "http://minio:9000"
+
+
+def test_s3_endpoint_relaxes_the_aws_requirement(scratch_config):
+    """artifact_store: s3 normally forces an aws section; a self-hosted endpoint
+    (MinIO, static creds) must NOT — it is not an AWS identity."""
+    _write(
+        scratch_config,
+        "artifact_store: s3\n"
+        "llm_provider: openai\n"
+        "embedding_provider: openai\n"
+        "reranker: none\n"
+        "s3:\n  bucket: ingestlib\n  endpoint_url: http://localhost:9000\n",
+    )
+    cfg = get_config()
+    assert cfg.artifact_store == "s3"
+    assert cfg.s3.endpoint_url == "http://localhost:9000"
+    assert cfg.aws.profile == ""  # placeholder identity, never sent anywhere
+
+
 def test_artifacts_path_anchors_beside_config(scratch_config):
     _write(scratch_config, _AWS_ONLY + "artifact_store: local\n")
     cfg = get_config()

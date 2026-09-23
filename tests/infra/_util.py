@@ -5,7 +5,7 @@ version, required capability, right config) — distinct from the storage tests,
 which verify the connector round-trip. Three layers:
 
   - test_compose_lint.py        static checks on docker-compose.yml (no containers)
-  - test_registry / _vector_stores / _sql_sources   service-contract checks (live)
+  - test_registry / _vector_stores / _sql_sources / _artifact_store   service-contract checks (live)
   - test_runtime_integrity.py   docker-level: health status, image==pin, persistence
 
 Live layers are opt-in via RUN_INFRA_E2E=1 and skip per-service when a service

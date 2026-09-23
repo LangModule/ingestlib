@@ -24,9 +24,10 @@ default shown here — the file only needs your choices
 
 ## `aws` — conditional
 
-Required only while a choice uses AWS (bedrock provider, s3 artifacts, aws
-reranker, Amazon OpenSearch domain). No defaults — all three keys required
-when the section exists.
+Required only while a choice uses AWS (bedrock provider, s3 artifacts on AWS, aws
+reranker, Amazon OpenSearch domain) — a self-hosted MinIO `s3` store
+(`s3.endpoint_url`) uses static keys, not a profile, so it needs none. No
+defaults — all three keys required when the section exists.
 
 | Key | Meaning |
 |---|---|
@@ -63,6 +64,7 @@ when the section exists.
 | Key | Default |
 |---|---|
 | `s3.bucket` | `ingestlib-{aws.account_id}` — names are global across AWS |
+| `s3.endpoint_url` | none — an S3-compatible endpoint (MinIO, e.g. `http://localhost:9000`); unset = AWS S3 |
 | `artifacts.path` | `artifacts` — local mode's folder; relative paths anchor beside config.yaml |
 
 ## Vector stores
@@ -125,6 +127,7 @@ are read.
 | `MILVUS_URL` · `MILVUS_TOKEN` | `vector_store: milvus` (token: Zilliz Cloud) |
 | `OPENSEARCH_URL` | `vector_store: opensearch` — Amazon domains SigV4-sign via `aws.profile` |
 | `WEAVIATE_URL` · `WEAVIATE_API_KEY` | `vector_store: weaviate` (key: cloud only) |
+| `AWS_ACCESS_KEY_ID` · `AWS_SECRET_ACCESS_KEY` | `artifact_store: s3` with an `s3.endpoint_url` (MinIO) — its access keys (AWS S3 uses `aws.profile` instead) |
 | `INGESTLIB_REGISTRY_URL` | the internal registry DB (default: the compose `registry` at `localhost:5433`) |
 | `MCP_TOKEN` | `ingestlib mcp --transport http` (bearer auth; stdio needs none) |
 | *(any name)* | a SQL source's connection URL, referenced from `sources.yaml` as `${VAR}` — use a READ-ONLY role ([structured retrieval](../how-to/structured-retrieval.md)) |

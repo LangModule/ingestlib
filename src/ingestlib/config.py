@@ -83,6 +83,7 @@ class PaddleVLConfig:
 @dataclass(frozen=True)
 class S3Config:
     bucket: str                 # globally unique bucket name for pipeline artifacts
+    endpoint_url: str | None     # S3-compatible endpoint (e.g. MinIO); None = AWS S3
 
 
 @dataclass(frozen=True)
@@ -312,6 +313,10 @@ def _load_config() -> IngestConfig:
     llm_provider = data.get("llm_provider", "bedrock")
     embedding_provider = data.get("embedding_provider", "bedrock")
 
+    # A custom S3 endpoint (MinIO) is self-hosted — the s3 artifact store then
+    # uses static creds, not an AWS identity, so it doesn't force an aws section.
+    s3_endpoint = (data.get("s3") or {}).get("endpoint_url") or os.environ.get("S3_ENDPOINT_URL")
+
     aws_data = data.get("aws")
     if aws_data is None:
         needs = [
@@ -319,7 +324,7 @@ def _load_config() -> IngestConfig:
             for used, reason in (
                 (llm_provider == "bedrock", "llm_provider: bedrock (the default)"),
                 (embedding_provider == "bedrock", "embedding_provider: bedrock (the default)"),
-                (artifact_store == "s3", "artifact_store: s3 (the default)"),
+                (artifact_store == "s3" and not s3_endpoint, "artifact_store: s3 (the default)"),
                 (reranker == "aws", "reranker: aws"),
                 (vector_store == "opensearch"
                  and "amazonaws.com" in os.environ.get("OPENSEARCH_URL", ""),
@@ -424,9 +429,10 @@ def _load_config() -> IngestConfig:
         api_model_name=paddle_vl_data.get("api_model_name", "PaddlePaddle/PaddleOCR-VL-1.6"),
     )
 
-    s3_data = data.get("s3", {})
+    s3_data = data.get("s3") or {}
     s3_config = S3Config(
         bucket=s3_data.get("bucket", f"ingestlib-{aws_config.account_id}"),
+        endpoint_url=s3_endpoint,
     )
 
     artifacts_data = data.get("artifacts", {})

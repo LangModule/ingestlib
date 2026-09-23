@@ -11,7 +11,7 @@ is the configuration the self-hosted pitch is actually about.
 | OCR | PaddleOCR-VL on your GPU (already local in every setup) |
 | LLM + embeddings | [Ollama](https://ollama.com) serving Qwen models |
 | Vectors | sqlite — one local file |
-| Artifacts | a local folder |
+| Artifacts | a local folder, or self-hosted [MinIO](artifact-stores.md#self-hosted-s3-minio) |
 | Reranker | none |
 
 ## Set it up

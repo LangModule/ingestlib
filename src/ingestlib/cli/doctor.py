@@ -114,14 +114,16 @@ def check_artifact_store() -> Check:
     from ingestlib.storage.s3.client import get_s3_client, s3_error_hint
 
     bucket = get_s3_config().bucket
+    endpoint = get_s3_config().endpoint_url
+    where = f"S3 ({endpoint})" if endpoint else "S3"
     try:
         get_s3_client().head_bucket(Bucket=bucket)
     except Exception as exc:
         code = exc.response["Error"]["Code"] if isinstance(exc, ClientError) else ""
         if code in ("404", "NoSuchBucket"):
-            return "ok", f"S3 bucket {bucket!r} will be created on first use"
+            return "ok", f"{where} bucket {bucket!r} will be created on first use"
         return "fail", f"artifact_store s3: {s3_error_hint(exc, bucket) or exc}"
-    return "ok", f"artifacts in S3 bucket {bucket!r}"
+    return "ok", f"artifacts in {where} bucket {bucket!r}"
 
 
 def check_vector_store() -> Check:

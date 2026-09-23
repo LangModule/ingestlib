@@ -161,6 +161,7 @@ nav:
           - Serve to agents (MCP): how-to/mcp-server.md
       - Setup:
           - Run fully local: how-to/local-stack.md
+          - Deploy with Docker: how-to/deploy-docker.md
           - Connect a vector store: how-to/vector-stores.md
           - Choose an artifact store: how-to/artifact-stores.md
           - Switch AI providers: how-to/switch-providers.md

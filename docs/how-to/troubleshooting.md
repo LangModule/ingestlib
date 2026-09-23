@@ -39,6 +39,13 @@ searching.
 | `IAM denied the call — attach bedrock:InvokeModel permission…` | The profile's identity lacks the permission (this one *is* IAM). |
 | `S3 bucket 'x' already exists in another AWS account (bucket names are global)…` | S3 names are global across **all** accounts. Pick a unique `s3.bucket` in config.yaml. |
 
+## Artifact store — self-hosted S3 (MinIO)
+
+| You see | It means / do this |
+|---|---|
+| `S3-compatible endpoint … unreachable — is the store up?` | The MinIO your `s3.endpoint_url` points at isn't running. Start it: `docker compose -f infra/docker-compose.yml --profile minio up -d`. |
+| `S3-compatible endpoint … rejected the credentials — set AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY` | MinIO authenticates with static access keys, not an `aws.profile`. Put `AWS_ACCESS_KEY_ID`/`AWS_SECRET_ACCESS_KEY` in `.env`. |
+
 ## OpenAI & Jina
 
 | You see | It means / do this |

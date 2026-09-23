@@ -42,8 +42,10 @@ async def test_tools_expose_input_schemas():
 # ---------- http bearer auth (ASGI middleware) ----------
 
 
-async def _drive(mw, headers):
+async def _drive(mw, headers, path=None):
     scope = {"type": "http", "headers": headers}
+    if path is not None:
+        scope["path"] = path
     sent = []
 
     async def receive():
@@ -79,6 +81,20 @@ async def test_bearer_auth_passes_correct_token():
     mw = _BearerAuth(inner, "sekret")
     await _drive(mw, [(b"authorization", b"Bearer sekret")])
     assert inner_ran == [True]
+
+
+async def test_health_endpoint_is_unauthenticated():
+    """The container/K8s liveness probe hits /health with no bearer token."""
+    inner_ran = []
+
+    async def inner(scope, receive, send):
+        inner_ran.append(True)
+
+    mw = _BearerAuth(inner, "sekret")
+    sent = await _drive(mw, [], path="/health")  # no Authorization header
+    assert sent[0]["status"] == 200
+    assert sent[1]["body"] == b"ok"
+    assert not inner_ran  # answered by the middleware, never reached the MCP app
 
 
 async def test_non_http_scope_passes_through():

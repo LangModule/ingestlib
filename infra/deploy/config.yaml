@@ -1,0 +1,16 @@
+# Container config for the self-hosted stack (docker-compose.stack.yml). Secrets
+# and service URLs are injected by the compose file as env vars, not written here.
+
+llm_provider: openai
+embedding_provider: openai
+vector_store: qdrant
+artifact_store: s3
+reranker: jina
+
+s3:
+  bucket: ingestlib
+  endpoint_url: http://minio:9000
+
+paddle_vl:
+  backend: vllm-server
+  server_url: http://ocr:8111/

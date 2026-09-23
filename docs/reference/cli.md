@@ -154,7 +154,7 @@ ingestlib collections --namespace tenant-a   # one partition (default: all)
 
 ## `ingestlib remove`
 
-Erase one document from **both** stores (vectors, then artifacts).
+Erase one document from **all three** stores — vectors, then artifacts, then the registry row.
 
 ```bash
 ingestlib remove report.pdf                # by source path

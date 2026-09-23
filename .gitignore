@@ -228,6 +228,8 @@ CLAUDE.md
 config.yaml
 rules.yaml
 sources.yaml
+# the deployment stack's container config ships — secrets come from env, not this file
+!infra/deploy/config.yaml
 
 # Eval score snapshots — local measurement history
 evals/results/

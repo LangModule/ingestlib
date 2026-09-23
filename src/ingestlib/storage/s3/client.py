@@ -24,14 +24,32 @@ def _build_client() -> None:
     aws = get_aws_config()
     _session = aws_session(aws.profile, aws.region)
 
+    endpoint_url = get_s3_config().endpoint_url
+    # S3-compatible endpoints (MinIO) need path-style addressing, and older
+    # releases reject boto3's newer default trailer checksums on DeleteObjects
+    # ("MissingContentMD5") — fall back to computing checksums only when the
+    # operation requires it. Both are scoped to a custom endpoint so AWS is
+    # untouched.
+    endpoint_opts = (
+        {
+            "s3": {"addressing_style": "path"},
+            "request_checksum_calculation": "when_required",
+            "response_checksum_validation": "when_required",
+        }
+        if endpoint_url
+        else {}
+    )
     retry_cfg = Config(
         retries={"total_max_attempts": 6, "mode": "standard"},
         connect_timeout=10,
         # Artifacts are small JSON files and page PNGs — a stuck read should
         # surface in minutes, not stall a pipeline stage for an hour.
         read_timeout=120,
+        **endpoint_opts,
     )
-    _s3_client = _session.client("s3", region_name=aws.region, config=retry_cfg)
+    _s3_client = _session.client(
+        "s3", region_name=aws.region, endpoint_url=endpoint_url, config=retry_cfg
+    )
 
 
 def get_s3_client():
@@ -49,6 +67,16 @@ def s3_error_hint(exc: Exception, bucket: str) -> str | None:
     if isinstance(exc, ClientError):
         code = exc.response.get("Error", {}).get("Code", "")
 
+    endpoint = get_s3_config().endpoint_url
+    if endpoint and name in (
+        "EndpointConnectionError", "ConnectTimeoutError",
+        "ConnectionError", "ConnectionClosedError",
+    ):
+        return (
+            f"S3-compatible endpoint {endpoint} unreachable — is the store up? "
+            f"(docker compose -f infra/docker-compose.yml --profile minio up -d)"
+        )
+
     if code in ("403", "Forbidden", "AccessDenied", "BucketAlreadyExists"):
         # S3 bucket names are global across ALL accounts — the usual cause of
         # a 403 on a bucket you never created is someone else owning the name.
@@ -61,6 +89,11 @@ def s3_error_hint(exc: Exception, bucket: str) -> str | None:
                 "InvalidClientTokenId") or name in (
             "NoCredentialsError", "UnauthorizedSSOTokenError",
             "SSOTokenLoadError", "TokenRetrievalError"):
+        if endpoint:
+            return (
+                f"S3-compatible endpoint {endpoint} rejected the credentials — set "
+                f"AWS_ACCESS_KEY_ID / AWS_SECRET_ACCESS_KEY to its access keys"
+            )
         profile = (get_aws_config().profile or "<profile>").strip() or "<profile>"
         return (
             f"AWS session expired or no credentials — run "
@@ -98,7 +131,9 @@ def ensure_bucket() -> str:
 
     logger.info("creating S3 bucket %r in %s (first use)", bucket, region)
     try:
-        if region == "us-east-1":
+        # us-east-1 rejects a LocationConstraint, and S3-compatible endpoints
+        # (MinIO) don't model AWS regions — both take the plain create form.
+        if region == "us-east-1" or get_s3_config().endpoint_url:
             client.create_bucket(Bucket=bucket)
         else:
             client.create_bucket(

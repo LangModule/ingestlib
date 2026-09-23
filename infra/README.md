@@ -17,10 +17,11 @@ docker compose -f infra/docker-compose.yml --profile qdrant down
 Profiles — INTERNAL: `registry` (ingestlib's own DB, described below). USER
 data: `qdrant` | `pgvector` | `mongodb` | `milvus` (three services — the
 official standalone shape) | `opensearch` | `weaviate`, plus `mysql` for the
-structured-retrieval SQL source; and `all` for contributors running
-`make test-all`. Ports and credentials match what `.env.example` documents;
-data persists in named volumes (`down -v` wipes it). Every vector-store profile
-is verified against its connector's full e2e suite.
+structured-retrieval SQL source and `minio` for the S3-compatible artifact
+store; and `all` for contributors running `make test-all`. Ports and
+credentials match what `.env.example` documents; data persists in named
+volumes (`down -v` wipes it). Every vector-store profile is verified against
+its connector's full e2e suite.
 Three hard-won details live in the file so you never hit them: pg18 images
 changed their volume mount point, mongodb's atlas-local needs both data
 AND configdb mounted or restarts crash-loop, and weaviate needs a pinned
@@ -29,6 +30,15 @@ CLUSTER_HOSTNAME or a recreated container can't reopen its volume.
 `mysql` is the one SQL-source server (not a vector store) — the other
 structured-retrieval backends need no container here: sqlite and duckdb
 are serverless, and the postgres source reuses the `pgvector` container.
+
+`minio` is an S3-compatible object store for the USER's artifact bytes — a
+third `artifact_store` backend beside `local` (plain files) and cloud `s3`,
+not an internal store like the registry. S3 API on 9000, web console on 9001,
+root creds `minioadmin`/`minioadmin`. ingestlib reaches it through the same
+`s3` code path pointed at a local endpoint (`artifact_store: s3` +
+`s3.endpoint_url`), so the whole S3 path — including the registry
+backup/restore — is testable
+with no AWS account.
 
 `registry` is the one INTERNAL server — ingestlib's own metadata DB, not a
 user data store. Plain Postgres on host port 5433 (5432 is pgvector). ingestlib

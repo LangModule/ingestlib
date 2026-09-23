@@ -1,16 +1,19 @@
-# Local servers for ingestlib's vector-store connectors and structured-retrieval
-# SQL sources — one profile per backend, so you start exactly the one you need:
+# Local servers for ingestlib's vector-store connectors, structured-retrieval
+# SQL sources, and the S3-compatible artifact store — one profile per backend,
+# so you start exactly the one you need:
 #
 #   docker compose -f infra/docker-compose.yml --profile qdrant up -d
 #   docker compose -f infra/docker-compose.yml --profile qdrant down
 #
 # Profiles: `registry` (INTERNAL — ingestlib's own DB) · qdrant | pgvector | mongodb
-# | milvus | opensearch | weaviate | mysql (USER data), plus `all`. Ports and credentials
-# match the formats .env.example documents. Data persists in named volumes;
-# `down -v` wipes it.
+# | milvus | opensearch | weaviate | mysql | minio (USER data — minio is the
+# S3-compatible artifact store, the rest are vector stores + the SQL source),
+# plus `all`. Ports and credentials match the formats .env.example documents.
+# Data persists in named volumes; `down -v` wipes it.
 #
-# Not here by nature: sqlite and duckdb (no server) and pinecone (cloud-only).
-# The postgres SQL source reuses the pgvector container (it's plain Postgres).
+# Not here by nature: sqlite and duckdb (no server), the `local` artifact store
+# (plain files), and pinecone (cloud-only). The postgres SQL source reuses the
+# pgvector container (it's plain Postgres).
 #
 # Image tags: everything is pinned for reproducibility — the milvus trio to the
 # exact versions milvus's own compose validates (it is version-sensitive; minio
@@ -29,7 +32,7 @@ services:
   registry:
     container_name: ingestlib_registry
     image: postgres:17
-    profiles: ["registry", "all"]
+    profiles: ["registry", "all", "stack"]   # stack = the full deploy (stack.yml)
     environment:
       POSTGRES_USER: ingestlib
       POSTGRES_PASSWORD: pw
@@ -50,7 +53,7 @@ services:
   qdrant:
     container_name: ingestlib_qdrant
     image: qdrant/qdrant:v1.18.2
-    profiles: ["qdrant", "all"]
+    profiles: ["qdrant", "all", "stack"]
     # No healthcheck: the qdrant image is distroless (no shell/curl/wget), so
     # there is no in-container command for one to run.
     ports:
@@ -235,6 +238,31 @@ services:
       - mysql-data:/var/lib/mysql
     # sources.yaml DSN: mysql+pymysql://root:pw@localhost:3306/ingestlib
 
+  # ─── USER artifact store — S3-compatible object storage for document bytes; a
+  #     3rd artifact_store beside `local` and cloud `s3`, distinct from the
+  #     milvus-internal minio above. quay.io: MinIO left Docker Hub. ───
+  minio:
+    container_name: ingestlib_minio
+    image: quay.io/minio/minio:RELEASE.2024-05-28T17-19-04Z
+    profiles: ["minio", "all", "stack"]
+    environment:
+      MINIO_ROOT_USER: minioadmin
+      MINIO_ROOT_PASSWORD: minioadmin
+    command: server /data --console-address :9001
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # web console
+    healthcheck:
+      # this minio release ships no curl — use its own client (mc) instead
+      test: ["CMD", "mc", "ready", "local"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    volumes:
+      - minio-data:/data
+    # config.yaml: artifact_store: s3 + s3.endpoint_url: http://localhost:9000
+    # .env: AWS_ACCESS_KEY_ID/SECRET_ACCESS_KEY=minioadmin (ensure_bucket auto-creates)
+
 networks:
   default:
     name: ingestlib
@@ -252,3 +280,4 @@ volumes:
   opensearch-data:
   weaviate-data:
   mysql-data:
+  minio-data:

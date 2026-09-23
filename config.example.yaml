@@ -23,7 +23,8 @@ artifact_store: s3
 
 # Your AWS profile from ~/.aws/credentials. Only needed while a choice
 # above uses AWS (bedrock provider, s3 artifacts, aws reranker, Amazon
-# OpenSearch) — delete this whole section otherwise.
+# OpenSearch) — delete this whole section otherwise. A self-hosted S3 store
+# (s3.endpoint_url below) uses static keys, not a profile, so it needs no aws.
 aws:
   profile: your-aws-profile
   region: us-east-1
@@ -39,6 +40,9 @@ paddle_vl:
 
 # s3:
 #   bucket: ingestlib-{aws.account_id}   # bucket names are global across AWS
+#   endpoint_url: http://localhost:9000  # a self-hosted S3-compatible store
+#                                        # (MinIO) instead of AWS — creds come
+#                                        # from AWS_ACCESS_KEY_ID/SECRET in .env
 # artifacts:
 #   path: artifacts                      # local mode's folder; relative → beside this file
 

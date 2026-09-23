@@ -72,7 +72,7 @@ mongodb = ["pymongo>=4.10"]
 milvus = ["pymilvus>=2.6"]
 opensearch = ["opensearch-py>=2.8"]
 weaviate = ["weaviate-client>=4.9"]
-mcp = ["mcp>=1.28"]
+mcp = ["mcp>=1.28,<2"]   # code targets the v1 FastMCP API; 2.x renamed it
 sql = ["sqlalchemy>=2.0"]
 postgres = ["ingestlib[sql]", "psycopg[binary]>=3.2"]
 mysql = ["ingestlib[sql]", "pymysql>=1.1"]
@@ -114,7 +114,7 @@ connectors = [
     "pymilvus>=2.6",
     "opensearch-py>=2.8",
     "weaviate-client>=4.9",
-    "mcp>=1.28",
+    "mcp>=1.28,<2",
     "sqlalchemy>=2.0",
     "pymysql>=1.1",
     "duckdb>=1.1",

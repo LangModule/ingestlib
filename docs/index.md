@@ -85,7 +85,7 @@ for hit in result.hits:
   [Ollama](https://ollama.com) server. Mix them: one for chat, another for embeddings.
 - **Eight vector stores** — SQLite (zero setup, the default), Pinecone, Qdrant,
   Postgres/pgvector, MongoDB, Milvus, OpenSearch, Weaviate — all hybrid dense + lexical.
-- **Artifacts** — S3 or a plain local folder. **Registry** — the built-in Postgres
+- **Artifacts** — AWS S3, a self-hosted MinIO, or a plain local folder. **Registry** — the built-in Postgres
   metadata hub that makes the whole corpus queryable.
 - **OCR** — PaddleOCR-VL (0.9B), served from your own GPU.
 

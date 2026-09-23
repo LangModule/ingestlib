@@ -1,7 +1,8 @@
 # Choose an artifact store
 
-Artifacts — parses, page renders, figure crops, stage outputs — live on one
-of two backends. Same layout, same API, one config key.
+Artifacts — parses, page renders, figure crops, stage outputs — live on `s3`
+(AWS, or a self-hosted MinIO) or a plain `local` folder. Same layout, same API,
+one config key.
 
 ```yaml
 artifact_store: s3      # or: local
@@ -54,6 +55,31 @@ A least-privilege IAM policy for the default stack (Bedrock + the
 artifact bucket + Amazon Rerank) lives in the repo's
 [`infra/` folder](https://github.com/LangModule/ingestlib/tree/main/infra)
 — replace the placeholders and attach.
+
+### Self-hosted S3 (MinIO)
+
+The same `s3` backend can point at a self-hosted, S3-compatible store like
+[MinIO](https://min.io) instead of AWS — no cloud account, and the bytes never
+leave your box. Set an endpoint and use static keys instead of an AWS profile:
+
+```yaml
+artifact_store: s3
+s3:
+  bucket: ingestlib
+  endpoint_url: http://localhost:9000    # your MinIO
+```
+
+```bash
+# .env — MinIO access keys (no aws.profile needed when an endpoint is set)
+AWS_ACCESS_KEY_ID=minioadmin
+AWS_SECRET_ACCESS_KEY=minioadmin
+```
+
+Bring up a MinIO with the bundled compose:
+`docker compose -f infra/docker-compose.yml --profile minio up -d` (S3 API on
+9000, web console on 9001). This makes the whole S3 path — including
+`ingestlib registry backup`/`restore` — testable with no AWS account, and it's
+the artifact store used by the [Docker deployment](deploy-docker.md).
 
 ## One API over both
 

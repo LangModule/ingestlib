@@ -80,6 +80,10 @@ ingestlib mcp --transport http --port 8000
 Clients send `Authorization: Bearer <MCP_TOKEN>`. Add `--read-only` to expose
 only the read tools on a shared endpoint.
 
+The HTTP server also answers `GET /health` with `200 ok` and **no token** — a
+liveness probe for containers and load balancers (the [Docker
+deployment](deploy-docker.md) uses it).
+
 ## Extract over MCP
 
 `extract`'s schema is defined by the **agent** as a JSON Schema — no Python

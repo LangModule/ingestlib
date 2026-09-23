@@ -80,7 +80,7 @@ seconds.
     Served by [vLLM](https://docs.vllm.ai):
 
     ```bash
-    vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111
+    vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code --port 8111
     ```
 
     Then set `paddle_vl.backend: vllm-server` in your config.yaml.

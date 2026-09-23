@@ -104,7 +104,7 @@ def _check_server(server_url: str, backend: str) -> None:
         httpx.get(f"{server_url.rstrip('/')}/v1/models", timeout=3.0).raise_for_status()
     except httpx.HTTPError as exc:
         hint = (
-            "  vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --port 8111"
+            "  vllm serve PaddlePaddle/PaddleOCR-VL-1.6 --trust-remote-code --port 8111"
             if backend == "vllm-server"
             else "  python -m mlx_vlm.server --port 8111 "
                  "--model PaddlePaddle/PaddleOCR-VL-1.6"

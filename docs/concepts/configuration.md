@@ -56,8 +56,9 @@ ids, URLs, and names — see the
 ## The `aws` section is conditional
 
 `aws: {profile, region, account_id}` is required **only while a choice
-uses AWS** — the bedrock provider, s3 artifacts, the aws reranker, or an
-Amazon OpenSearch domain. Delete it otherwise. If something still needs
+uses AWS** — the bedrock provider, s3 artifacts on AWS, the aws reranker, or an
+Amazon OpenSearch domain (a self-hosted MinIO `s3` store uses static keys, not an
+AWS profile). Delete it otherwise. If something still needs
 it, the config loader's error names the exact choice that does.
 
 ## Secrets stay in the environment
