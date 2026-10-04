@@ -1,21 +1,19 @@
-# Text2SQL eval ground truth over Snowflake's built-in TPC-H sample data
-# (SNOWFLAKE_SAMPLE_DATA.TPCH_SF1) — a rich, join-heavy schema with fully
-# deterministic answers, the same family of schema the Spider/BIRD benchmarks use.
+# Example dataset for `ingestlib eval-sql <source>` — measures text2SQL
+# generation accuracy on one of YOUR declared sources (sources.yaml). Copy this
+# to `<source>_eval.yaml` beside sources.yaml, or pass it with --dataset.
 #
 # Ground truth is (question, expect) — the value(s) that MUST appear in the
-# executed query's result. A question is a hit when SqlSource.answer() runs a
+# executed query's result. A question is a hit when the source's answer() runs a
 # query (generated or verified) whose rows contain the expected value:
-#   - numeric expect  → an exact cell match (so "5" never matches "25")
-#   - text expect     → case-insensitive substring of a cell
+#   - numeric expect    → an exact cell match (so "5" never matches "25")
+#   - text expect       → case-insensitive substring of a cell
 #   - a list of expects → ANY one appearing counts (for "list the …" questions)
 #
-# Mix by design: plain counts (easy), joins across REGION/NATION (medium), and
-# filtered joins (the accuracy stressor). Some questions have a verified query
-# behind them (see run_sql_eval.py) so the report shows the verified vs generated
-# split — the generated-only match rate is the honest production number.
-#
-# This is a measurement harness, not a test: generation accuracy drifts with the
-# model and the schema hints — a report tells you, a red CI run would just block you.
+# The example below targets Snowflake's built-in TPC-H sample data
+# (SNOWFLAKE_SAMPLE_DATA.TPCH_SF1) — a join-heavy schema with deterministic
+# answers, the family the Spider/BIRD benchmarks use. Mix by design: plain
+# counts (easy), joins across REGION/NATION (medium), filtered joins (the
+# accuracy stressor).
 
 source: snowflake_tpch
 

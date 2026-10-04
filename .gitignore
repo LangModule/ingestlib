@@ -233,6 +233,8 @@ sources.yaml
 
 # Eval score snapshots — local measurement history
 evals/results/
+# Downloaded public eval datasets — fetched per evals/README.md, never committed
+evals/data/
 
 # Local sqlite vector store (+ WAL sidecars)
 ingestlib.db*

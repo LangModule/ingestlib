@@ -1,4 +1,4 @@
-.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-minio test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-sources test-registry test-infra test-cli test-lifecycle test-mcp eval eval-sql
+.PHONY: docs docs-build test test-all test-llm test-nova test-embedding test-rerank test-rerank-aws test-rerank-jina test-openai test-ollama test-ocr test-parse test-classify test-split test-extract test-s3 test-minio test-pinecone test-qdrant test-sqlite test-pgvector test-mongodb test-milvus test-opensearch test-weaviate test-services test-sources test-registry test-infra test-cli test-lifecycle test-mcp eval-chart eval-parse eval-table eval-formula eval-sql eval-report
 
 # fast suite — every opt-in e2e group skips (RUN_* gates unset)
 test:
@@ -154,17 +154,26 @@ test-weaviate:
 test-services:
 	RUN_SERVICES_E2E=1 RUN_REGISTRY_E2E=1 uv run pytest tests/ingestlib/services/
 
-# --- retrieval quality eval — measurement, not a test (needs the full stack;
-#     first run also needs the VL server to ingest the fixture corpus) ---
+# --- evaluation suite (measures, never asserts) — see evals/README.md.
+#     chart→table is GPU-free (LLM only); parse/table/formula need the VL server. ---
 
-eval:
-	uv run python evals/run_eval.py
+eval-chart:
+	uv run python -m evals.run_chart_eval --dataset evals/data/chartx/manifest.jsonl
 
-# --- text2SQL accuracy eval — measurement over Snowflake TPC-H (needs
-#     SNOWFLAKE_DSN + a live LLM); measures generated-SQL correctness ---
+eval-parse:
+	uv run python -m evals.run_parse_eval --dataset evals/data/omnidocbench/manifest.jsonl
+
+eval-table:
+	uv run python -m evals.run_table_eval --dataset evals/data/fintabnet/manifest.jsonl
+
+eval-formula:
+	uv run python -m evals.run_formula_eval --dataset evals/data/unimer/manifest.jsonl
 
 eval-sql:
-	uv run python evals/run_sql_eval.py
+	uv run python -m evals.run_sql_eval --dataset evals/data/spider/dataset.yaml
+
+eval-report:
+	uv run python -m evals.report
 
 # --- documentation — live preview and the strict build CI runs ---
 

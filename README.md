@@ -505,7 +505,6 @@ make test-cli              # CLI: init/doctor + corpus commands (no gate)
 make test-lifecycle        # remove/sync/reindex/recollect + replace-aware ingest (gates on the registry)
 make test-mcp              # MCP server: tools, read_only, http auth (no gate)
 make test-all              # everything
-make eval                  # retrieval quality eval (see below)
 make docs                  # live-preview the documentation site
 ```
 
@@ -515,18 +514,6 @@ one), document images incl. WebP, and real DOCX/PPTX files. The
 server-backed connector suites need their servers:
 `docker compose -f infra/docker-compose.yml --profile all up -d` starts
 every local store (or `--profile qdrant` etc. for just one).
-
-### Retrieval quality
-
-Beyond pass/fail tests, `evals/` measures retrieval quality: 22 ground-truth
-questions over the fixture corpus, run through the real `retrieve()` flow
-under dense/hybrid × rerank on/off, scored by hit@k and MRR. Measured so far
-(consistent across all eight connectors): **with reranking, every answer
-lands in the top 3 hits (hit@3 = 1.00)**; hit@1 ranges 0.86–1.00 across runs.
-The fully-local stack holds the same bar — Ollama embeddings scored a
-perfect 1.00 across hit@1/3/5 and MRR on dense+rerank.
-Each run saves a timestamped snapshot to `evals/results/`, so quality changes
-are visible over time.
 
 ## Disk footprint
 

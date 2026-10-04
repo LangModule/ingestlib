@@ -16,7 +16,7 @@ Dataset (YAML): a list under `questions:` of {question, expect[, id]} — expect
 one value or a list; a run hits when any expected value appears in the result
 (numbers matched exactly so "5" never matches "25"; text case-insensitive
 substring). Defaults to <source>_eval.yaml beside sources.yaml; override with
---dataset. See evals/sql_dataset.yaml for the format.
+--dataset. See sql_eval.example.yaml for the format.
 """
 from ingestlib.utils.logger import get_logger
 
@@ -119,7 +119,7 @@ def _load_dataset(source_name: str, dataset: str | None) -> list[dict]:
     if not path.is_file():
         raise ValueError(
             f"no eval dataset at {path} — pass --dataset PATH, or create it as a YAML "
-            f"list under `questions:` of {{question, expect}} (see evals/sql_dataset.yaml)"
+            f"list under `questions:` of {{question, expect}} (see sql_eval.example.yaml)"
         )
     data = yaml.safe_load(path.read_text()) or {}
     questions = data.get("questions") or []

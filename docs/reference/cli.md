@@ -270,8 +270,8 @@ ingestlib eval-sql prescriptions --dataset questions.yaml
 
 The dataset is a list under `questions:` of `{question, expect}` — `expect` is a
 value or list; a run hits when any expected value appears in the result. See
-[`evals/sql_dataset.yaml`](https://github.com/LangModule/ingestlib/blob/main/evals/sql_dataset.yaml)
-for the format. Like the retrieval eval, it measures — it never asserts.
+[`sql_eval.example.yaml`](https://github.com/LangModule/ingestlib/blob/main/sql_eval.example.yaml)
+for the format. It measures — it never asserts.
 
 ## `ingestlib mcp`
 
